@@ -90,6 +90,102 @@ impl App {
                 ..Default::default()
             });
 
+        let api_key_field_height = 34.0;
+
+        let api_key_field: Element<'_, Message> = if self.wakatime_api_key_hovered {
+            text_input("waka_xxxxx", &self.wakatime.api_key)
+                .on_input(Message::WakaTimeApiKeyChanged)
+                .secure(false)
+                .size(13)
+                .padding(iced::Padding {
+                    top: 8.0,
+                    right: 12.0,
+                    bottom: 8.0,
+                    left: 12.0,
+                })
+                .style(search_input_style)
+                .width(Length::Fill)
+                .into()
+        } else {
+            let panel_bg = Color::from_rgba(
+                theme().bg_secondary.r * 0.94 + ACCENT_BLUE.r * 0.06,
+                theme().bg_secondary.g * 0.94 + ACCENT_BLUE.g * 0.06,
+                theme().bg_secondary.b * 0.94 + ACCENT_BLUE.b * 0.06,
+                0.96,
+            );
+            let top_line = Color::from_rgba(
+                ACCENT_SOFT_BLUE.r,
+                ACCENT_SOFT_BLUE.g,
+                ACCENT_SOFT_BLUE.b,
+                0.55,
+            );
+            let glow = Color::from_rgba(
+                ACCENT_SOFT_BLUE.r,
+                ACCENT_SOFT_BLUE.g,
+                ACCENT_SOFT_BLUE.b,
+                0.42,
+            );
+
+            let top_highlight = container(Space::new().width(Length::Fill).height(Length::Fixed(1.0)))
+                .style(move |_theme| container::Style {
+                    background: Some(Background::Color(top_line)),
+                    ..Default::default()
+                });
+
+            let blur_streak = container(Space::new().width(Length::Fill).height(Length::Fixed(4.0)))
+                .style(move |_theme| container::Style {
+                    background: Some(Background::Color(glow)),
+                    border: iced::Border {
+                        color: Color::TRANSPARENT,
+                        width: 0.0,
+                        radius: 999.0.into(),
+                    },
+                    shadow: iced::Shadow {
+                        color: Color::from_rgba(
+                            ACCENT_SOFT_BLUE.r,
+                            ACCENT_SOFT_BLUE.g,
+                            ACCENT_SOFT_BLUE.b,
+                            0.55,
+                        ),
+                        offset: iced::Vector::new(0.0, 0.0),
+                        blur_radius: 16.0,
+                    },
+                    ..Default::default()
+                });
+
+            container(
+                column![
+                    top_highlight,
+                    container(blur_streak)
+                        .padding(iced::Padding {
+                            top: 0.0,
+                            right: 16.0,
+                            bottom: 0.0,
+                            left: 16.0,
+                        })
+                ]
+                .spacing(8),
+            )
+            .padding(iced::Padding {
+                top: 0.0,
+                right: 12.0,
+                bottom: 9.0,
+                left: 12.0,
+            })
+            .style(move |_theme| container::Style {
+                background: Some(Background::Color(panel_bg)),
+                border: iced::Border {
+                    color: Color::from_rgba(ACCENT_BLUE.r, ACCENT_BLUE.g, ACCENT_BLUE.b, 0.14),
+                    width: 1.0,
+                    radius: 8.0.into(),
+                },
+                ..Default::default()
+            })
+            .height(Length::Fixed(api_key_field_height))
+            .width(Length::Fill)
+            .into()
+        };
+
         let api_key_row = row![
             column![
                 text("API Key").size(13).color(theme().text_muted),
@@ -99,17 +195,13 @@ impl App {
             ]
             .spacing(2)
             .width(Length::FillPortion(2)),
-            text_input("waka_xxxxx", &self.wakatime.api_key)
-                .on_input(Message::WakaTimeApiKeyChanged)
-                .size(13)
-                .padding(iced::Padding {
-                    top: 8.0,
-                    right: 12.0,
-                    bottom: 8.0,
-                    left: 12.0
-                })
-                .style(search_input_style)
-                .width(Length::FillPortion(3)),
+            container(
+                mouse_area(api_key_field)
+                    .on_enter(Message::WakaTimeApiKeyHoverStart)
+                    .on_exit(Message::WakaTimeApiKeyHoverEnd)
+            )
+            .height(Length::Fixed(api_key_field_height))
+            .width(Length::FillPortion(3)),
         ]
         .spacing(16)
         .align_y(iced::Alignment::Center);

@@ -687,6 +687,14 @@ impl App {
                 self.wakatime.api_key = key;
                 iced::Task::none()
             }
+            Message::WakaTimeApiKeyHoverStart => {
+                self.wakatime_api_key_hovered = true;
+                iced::Task::none()
+            }
+            Message::WakaTimeApiKeyHoverEnd => {
+                self.wakatime_api_key_hovered = false;
+                iced::Task::none()
+            }
             Message::WakaTimeApiUrlChanged(url) => {
                 self.wakatime.api_url = url;
                 iced::Task::none()
