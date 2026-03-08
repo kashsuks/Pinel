@@ -77,6 +77,8 @@ pub enum Message {
     SaveAs,
     /// WakaTime
     WakaTimeApiKeyChanged(String),
+    WakaTimeApiKeyHoverStart,
+    WakaTimeApiKeyHoverEnd,
     WakaTimeApiUrlChanged(String),
     SaveWakaTimeSettings,
 
