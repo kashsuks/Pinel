@@ -9,6 +9,7 @@ use iced::widget::{
 };
 use iced::window;
 use iced::{Background, Color, Element, Length, Subscription};
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::time::Instant;
 
@@ -108,6 +109,8 @@ pub struct App {
     last_wakatime_sent_at: Option<Instant>,
     notification: Option<Notification>,
     update_banner: Option<UpdateInfo>,
+    lsp: crate::features::lsp::LspBridge,
+    lsp_diagnostics: HashMap<PathBuf, Vec<crate::features::lsp::InlineDiagnostic>>,
 }
 
 impl Default for App {
@@ -178,6 +181,8 @@ impl Default for App {
             last_wakatime_sent_at: None,
             notification: None,
             update_banner: None,
+            lsp: crate::features::lsp::LspBridge::new(None),
+            lsp_diagnostics: HashMap::new(),
         }
     }
 }

@@ -1,4 +1,5 @@
 use super::*;
+use std::time::Duration;
 
 impl App {
     /// Registers global event listeners and maps them to [`Message`] values.
@@ -6,6 +7,7 @@ impl App {
         Subscription::batch(vec![
             crate::subscriptions::keyboard::shortcuts(),
             crate::subscriptions::mouse::sidebar_resize(),
+            iced::time::every(Duration::from_millis(150)).map(|_| Message::LspTick),
         ])
     }
 }

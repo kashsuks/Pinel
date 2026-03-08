@@ -67,6 +67,8 @@ impl App {
                                 self.last_wakatime_entity = Some(entity);
                                 self.last_wakatime_sent_at = Some(Instant::now());
                             }
+
+                            self.lsp.change_document(tab.path.clone(), content.text());
                         }
                     }
                 }
@@ -100,6 +102,9 @@ impl App {
             }
             Message::TabClosed(idx) => {
                 if idx < self.tabs.len() {
+                    let path = self.tabs[idx].path.clone();
+                    self.lsp.close_document(path.clone());
+                    self.lsp_diagnostics.remove(&path);
                     self.tabs.remove(idx);
                     if self.tabs.is_empty() {
                         self.active_tab = None;
@@ -115,6 +120,9 @@ impl App {
             }
             Message::CloseActiveTab => {
                 if let Some(idx) = self.active_tab {
+                    let path = self.tabs[idx].path.clone();
+                    self.lsp.close_document(path.clone());
+                    self.lsp_diagnostics.remove(&path);
                     self.tabs.remove(idx);
                     if self.tabs.is_empty() {
                         self.active_tab = None;
@@ -141,6 +149,8 @@ impl App {
                     .unwrap_or_default()
                     .to_string_lossy()
                     .to_string();
+                let opened_path = path.clone();
+                let opened_text = content.clone();
                 self.tabs.push(Tab {
                     path,
                     name,
@@ -151,6 +161,8 @@ impl App {
                     },
                 });
                 self.active_tab = Some(self.tabs.len() - 1);
+
+                self.lsp.open_document(opened_path, opened_text);
                 iced::Task::none()
             }
             Message::TabSelected(idx) => {
@@ -188,7 +200,8 @@ impl App {
             Message::FolderOpened(path) => {
                 self.file_tree = Some(FileTree::new(path.clone()));
                 self.all_workspace_files = crate::features::search::collect_all_files(&path);
-                self.fuzzy_finder.set_folder(path);
+                self.fuzzy_finder.set_folder(path.clone());
+                self.lsp.set_workspace_root(path);
                 iced::Task::none()
             }
             Message::SaveFile => {
@@ -201,6 +214,7 @@ impl App {
                             self.last_wakatime_sent_at = Some(Instant::now());
 
                             let path = tab.path.clone();
+                            self.lsp.save_document(path.clone());
                             let content = content.text();
                             return iced::Task::perform(
                                 async move { std::fs::write(&path, content).map_err(|e| e.to_string()) },
@@ -697,6 +711,12 @@ impl App {
             }
             Message::DismissNotification => {
                 self.notification = None;
+                iced::Task::none()
+            }
+            Message::LspTick => {
+                for update in self.lsp.drain_updates() {
+                    self.lsp_diagnostics.insert(update.path, update.diagnostics);
+                }
                 iced::Task::none()
             }
             Message::CheckForUpdate => {

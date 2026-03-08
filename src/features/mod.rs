@@ -6,6 +6,7 @@ pub mod file_tree;
 pub mod find_replace;
 pub mod fuzzy_finder;
 pub mod icons;
+pub mod lsp;
 pub mod resources;
 pub mod search;
 pub mod syntax;

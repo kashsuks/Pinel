@@ -145,7 +145,18 @@ impl App {
                         ..
                     } => {
                         let ext = tab.path.extension().and_then(|e| e.to_str()).unwrap_or("");
-                        return create_editor(content, ext, self.cursor_line, *scroll_line);
+                        let diagnostics = self
+                            .lsp_diagnostics
+                            .get(&tab.path)
+                            .map(Vec::as_slice)
+                            .unwrap_or(&[]);
+                        return create_editor(
+                            content,
+                            ext,
+                            self.cursor_line,
+                            *scroll_line,
+                            diagnostics,
+                        );
                     }
                     TabKind::Preview { md_items } => {
                         return scrollable(
@@ -177,7 +188,28 @@ impl App {
             .spacing(8)
             .align_y(iced::Alignment::Center);
 
+        let (errors, warnings) = self
+            .active_tab
+            .and_then(|idx| self.tabs.get(idx))
+            .map(|tab| tab.path.clone())
+            .and_then(|path| self.lsp_diagnostics.get(&path))
+            .map(|items| {
+                let errors = items
+                    .iter()
+                    .filter(|d| d.severity == lsp_types::DiagnosticSeverity::ERROR)
+                    .count();
+                let warnings = items
+                    .iter()
+                    .filter(|d| d.severity == lsp_types::DiagnosticSeverity::WARNING)
+                    .count();
+                (errors, warnings)
+            })
+            .unwrap_or((0, 0));
+
         let right = row![
+            text(format!("E:{errors} W:{warnings}"))
+                .size(10)
+                .color(theme().text_placeholder),
             text(format!("Ln {}, Col {}", self.cursor_line, self.cursor_col))
                 .size(10)
                 .color(theme().text_placeholder),

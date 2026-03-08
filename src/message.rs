@@ -81,6 +81,7 @@ pub enum Message {
     SaveWakaTimeSettings,
 
     DismissNotification,
+    LspTick,
 
     // Updater
     CheckForUpdate,
