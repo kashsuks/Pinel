@@ -2,58 +2,46 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Getting Started — src</title>
-<meta name="description" content="Learn how to install and set up src.">
-<link rel="stylesheet" href="/assets/css/style.css">
-
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Getting Started — Pinel</title>
+  <meta name="description" content="Learn how to install and set up Pinel.">
+  <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
   <nav class="navbar">
-  <a href="/" class="navbar-brand">
-    Pinel
-  </a>
-  <ul class="navbar-links">
-    <li><a href="/" >Home</a></li>
-    <li><a href="/docs/getting-started/" class="active">Documentation</a></li>
-  </ul>
-  <div class="navbar-search" onclick="openSearch()">
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
-    <input type="text" placeholder="Search..." readonly>
-    <kbd>⌘K</kbd>
-  </div>
-</nav>
+    <a href="/" class="navbar-brand">Pinel</a>
+    <ul class="navbar-links">
+      <li><a href="/">Home</a></li>
+      <li><a href="/docs/getting-started/" class="active">Documentation</a></li>
+    </ul>
+    <div class="navbar-search" onclick="openSearch()">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+      <input type="text" placeholder="Search..." readonly>
+      <kbd>⌘K</kbd>
+    </div>
+  </nav>
 
   <main>
     <div class="docs-wrapper">
   <aside class="docs-sidebar" id="docsSidebar">
     
-    
     <div class="sidebar-section">
       <h4>Basics</h4>
       <ul>
-        
-        
         <li><a href="/docs/getting-started/" class="active">Getting Started</a></li>
-        
       </ul>
     </div>
-    
+
   </aside>
   <article class="docs-content">
     <h1>Getting Started</h1>
-    
-    <div class="docs-meta">Learn how to install and set up src.</div>
-    
-    <h2 id="installation">Installation</h2>
-
-<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Add your install instructions here</span>
-</code></pre></div></div>
-
-<h2 id="quick-start">Quick Start</h2>
-
-<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Add your quick start steps here</span>
-</code></pre></div></div>
+    <div class="docs-meta">Learn how to install and set up Pinel.</div>
+    <h2>Installation</h2>
+<pre><code class="language-bash"># Add your install instructions here
+</code></pre>
+<h2>Quick Start</h2>
+<pre><code class="language-bash"># Add your quick start steps here
+</code></pre>
 
   </article>
 </div>
@@ -63,96 +51,89 @@
 </button>
 
   </main>
+
   <footer class="footer">
-  <p>&copy; 2026 src. Built with Jekyll.</p>
-</footer>
+    <p>&copy; 2026 Pinel.</p>
+  </footer>
 
   <div class="search-overlay" id="searchOverlay">
-  <div class="search-modal">
-    <div class="search-input-wrapper">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
-      <input type="text" id="searchInput" placeholder="Search documentation..." autofocus>
-      <kbd>esc</kbd>
-    </div>
-    <div class="search-results" id="searchResults">
-      <div class="search-empty">Start typing to search...</div>
+    <div class="search-modal">
+      <div class="search-input-wrapper">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+        <input type="text" id="searchInput" placeholder="Search documentation..." autofocus>
+        <kbd>esc</kbd>
+      </div>
+      <div class="search-results" id="searchResults">
+        <div class="search-empty">Start typing to search...</div>
+      </div>
     </div>
   </div>
-</div>
 
-<script>
-(function() {
-  var searchData = [];
-  
-  searchData.push({
-    title: "Getting Started",
-    url: "/docs/getting-started/",
-    content: "Installation\n\n# Add your install instructions here\n\n\nQuick Start\n\n# Add your quick start steps here\n\n",
-    category: "Basics"
-  });
-  
+  <script>
+  (function() {
+    var searchData = [];
+    searchData.push({"title":"Getting Started","url":"/docs/getting-started/","content":"Installation\n\n Add your install instructions here\n\n\n Quick Start\n\n Add your quick start steps here","category":"Basics"});
 
-  var overlay = document.getElementById('searchOverlay');
-  var input = document.getElementById('searchInput');
-  var results = document.getElementById('searchResults');
+    var overlay = document.getElementById('searchOverlay');
+    var input = document.getElementById('searchInput');
+    var results = document.getElementById('searchResults');
 
-  window.openSearch = function() {
-    overlay.classList.add('active');
-    setTimeout(function() { input.focus(); }, 100);
-  };
+    window.openSearch = function() {
+      overlay.classList.add('active');
+      setTimeout(function() { input.focus(); }, 100);
+    };
 
-  window.closeSearch = function() {
-    overlay.classList.remove('active');
-    input.value = '';
-    results.innerHTML = '<div class="search-empty">Start typing to search...</div>';
-  };
-
-  overlay.addEventListener('click', function(e) {
-    if (e.target === overlay) closeSearch();
-  });
-
-  document.addEventListener('keydown', function(e) {
-    if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
-      e.preventDefault();
-      if (overlay.classList.contains('active')) {
-        closeSearch();
-      } else {
-        openSearch();
-      }
-    }
-    if (e.key === 'Escape') closeSearch();
-  });
-
-  input.addEventListener('input', function() {
-    var query = this.value.toLowerCase().trim();
-    if (!query) {
+    window.closeSearch = function() {
+      overlay.classList.remove('active');
+      input.value = '';
       results.innerHTML = '<div class="search-empty">Start typing to search...</div>';
-      return;
-    }
-    var matches = searchData.filter(function(item) {
-      return item.title.toLowerCase().indexOf(query) !== -1 ||
-             item.content.toLowerCase().indexOf(query) !== -1;
-    });
-    if (matches.length === 0) {
-      results.innerHTML = '<div class="search-empty">No results found for "' + query.replace(/[<>&"]/g, '') + '"</div>';
-      return;
-    }
-    results.innerHTML = matches.map(function(item) {
-      var idx = item.content.toLowerCase().indexOf(query);
-      var preview = '';
-      if (idx !== -1) {
-        var start = Math.max(0, idx - 40);
-        var end = Math.min(item.content.length, idx + query.length + 60);
-        preview = (start > 0 ? '...' : '') + item.content.substring(start, end) + (end < item.content.length ? '...' : '');
-      }
-      return '<a class="search-result-item" href="' + item.url + '">' +
-        '<div class="result-title">' + item.title + '</div>' +
-        (preview ? '<div class="result-preview">' + preview + '</div>' : '') +
-        '</a>';
-    }).join('');
-  });
-})();
-</script>
+    };
 
+    overlay.addEventListener('click', function(e) {
+      if (e.target === overlay) closeSearch();
+    });
+
+    document.addEventListener('keydown', function(e) {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        if (overlay.classList.contains('active')) {
+          closeSearch();
+        } else {
+          openSearch();
+        }
+      }
+      if (e.key === 'Escape') closeSearch();
+    });
+
+    input.addEventListener('input', function() {
+      var query = this.value.toLowerCase().trim();
+      if (!query) {
+        results.innerHTML = '<div class="search-empty">Start typing to search...</div>';
+        return;
+      }
+      var matches = searchData.filter(function(item) {
+        return item.title.toLowerCase().indexOf(query) !== -1 ||
+               item.content.toLowerCase().indexOf(query) !== -1;
+      });
+      if (matches.length === 0) {
+        results.innerHTML = '<div class="search-empty">No results found for "' + query.replace(/[<>&"]/g, '') + '"</div>';
+        return;
+      }
+      results.innerHTML = matches.map(function(item) {
+        var idx = item.content.toLowerCase().indexOf(query);
+        var preview = '';
+        if (idx !== -1) {
+          var start = Math.max(0, idx - 40);
+          var end = Math.min(item.content.length, idx + query.length + 60);
+          preview = (start > 0 ? '...' : '') + item.content.substring(start, end) + (end < item.content.length ? '...' : '');
+        }
+        return '<a class="search-result-item" href="' + item.url + '">' +
+          '<div class="result-title">' + item.title + '</div>' +
+          (preview ? '<div class="result-preview">' + preview + '</div>' : '') +
+          '</a>';
+      }).join('');
+    });
+  })();
+  </script>
 </body>
 </html>

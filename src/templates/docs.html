@@ -1,0 +1,14 @@
+<div class="docs-wrapper">
+  <aside class="docs-sidebar" id="docsSidebar">
+    {{ sidebar }}
+  </aside>
+  <article class="docs-content">
+    <h1>{{ docTitle }}</h1>
+    {{ docMeta }}
+    {{ docContent }}
+  </article>
+</div>
+
+<button class="sidebar-toggle" onclick="document.getElementById('docsSidebar').classList.toggle('open')">
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+</button>

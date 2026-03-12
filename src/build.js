@@ -1,0 +1,217 @@
+const fs = require("fs");
+const path = require("path");
+const matter = require("gray-matter");
+const { marked } = require("marked");
+
+const SITE_DIR = path.join(__dirname, "_site");
+const DOCS_DIR = path.join(__dirname, "docs");
+const PUBLIC_DIR = path.join(__dirname, "public");
+const PAGES_DIR = path.join(__dirname, "pages");
+
+const siteConfig = {
+  title: "Pinel",
+  description: "Blazingly fast code editor in Rust",
+};
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function ensureDir(dir) {
+  fs.mkdirSync(dir, { recursive: true });
+}
+
+function copyDirSync(src, dest) {
+  ensureDir(dest);
+  for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
+    const srcPath = path.join(src, entry.name);
+    const destPath = path.join(dest, entry.name);
+    if (entry.isDirectory()) {
+      copyDirSync(srcPath, destPath);
+    } else {
+      fs.copyFileSync(srcPath, destPath);
+    }
+  }
+}
+
+function readTemplate(name) {
+  return fs.readFileSync(path.join(__dirname, "templates", name), "utf-8");
+}
+
+function escapeHtml(str) {
+  return str.replace(/[<>&"]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;" }[c]));
+}
+
+function slugify(str) {
+  return str.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+}
+
+// ---------------------------------------------------------------------------
+// Load docs from markdown
+// ---------------------------------------------------------------------------
+
+function loadDocs() {
+  if (!fs.existsSync(DOCS_DIR)) return [];
+  const files = fs.readdirSync(DOCS_DIR).filter((f) => f.endsWith(".md"));
+  return files
+    .map((file) => {
+      const raw = fs.readFileSync(path.join(DOCS_DIR, file), "utf-8");
+      const { data, content } = matter(raw);
+      const slug = slugify(path.basename(file, ".md"));
+      const html = marked.parse(content);
+      // Strip HTML tags for search content
+      const plainText = content.replace(/```[\s\S]*?```/g, (m) => m.replace(/```\w*\n?/g, "")).replace(/[#*`>\-\[\]()]/g, "").trim();
+      return {
+        slug,
+        title: data.title || slug,
+        description: data.description || "",
+        category: data.category || "General",
+        order: data.order || 999,
+        html,
+        plainText,
+        url: `/docs/${slug}/`,
+      };
+    })
+    .sort((a, b) => a.order - b.order);
+}
+
+// ---------------------------------------------------------------------------
+// Build sidebar HTML
+// ---------------------------------------------------------------------------
+
+function buildSidebar(docs, activeSlug) {
+  const categories = {};
+  for (const doc of docs) {
+    if (!categories[doc.category]) categories[doc.category] = [];
+    categories[doc.category].push(doc);
+  }
+
+  let html = "";
+  for (const [cat, items] of Object.entries(categories)) {
+    html += `\n    <div class="sidebar-section">\n      <h4>${escapeHtml(cat)}</h4>\n      <ul>\n`;
+    for (const item of items) {
+      const active = item.slug === activeSlug ? ' class="active"' : "";
+      html += `        <li><a href="${item.url}"${active}>${escapeHtml(item.title)}</a></li>\n`;
+    }
+    html += `      </ul>\n    </div>\n`;
+  }
+  return html;
+}
+
+// ---------------------------------------------------------------------------
+// Build search data JS
+// ---------------------------------------------------------------------------
+
+function buildSearchData(docs) {
+  return docs
+    .map(
+      (d) =>
+        `  searchData.push(${JSON.stringify({
+          title: d.title,
+          url: d.url,
+          content: d.plainText,
+          category: d.category,
+        })});`
+    )
+    .join("\n");
+}
+
+// ---------------------------------------------------------------------------
+// Render templates
+// ---------------------------------------------------------------------------
+
+function renderBase(vars) {
+  let tpl = readTemplate("base.html");
+  for (const [k, v] of Object.entries(vars)) {
+    tpl = tpl.replace(new RegExp(`{{\\s*${k}\\s*}}`, "g"), v);
+  }
+  return tpl;
+}
+
+// ---------------------------------------------------------------------------
+// Build
+// ---------------------------------------------------------------------------
+
+function build() {
+  console.log("Building site...");
+
+  // Clean
+  if (fs.existsSync(SITE_DIR)) {
+    fs.rmSync(SITE_DIR, { recursive: true });
+  }
+  ensureDir(SITE_DIR);
+
+  // Copy public assets
+  if (fs.existsSync(PUBLIC_DIR)) {
+    copyDirSync(PUBLIC_DIR, SITE_DIR);
+  }
+
+  const docs = loadDocs();
+  const searchDataJs = buildSearchData(docs);
+  const firstDocUrl = docs.length > 0 ? docs[0].url : "#";
+
+  // --- Home page ---
+  const homeBody = fs.readFileSync(path.join(PAGES_DIR, "index.html"), "utf-8");
+  const homeHtml = renderBase({
+    pageTitle: siteConfig.title,
+    metaDescription: siteConfig.description,
+    navHomeActive: ' class="active"',
+    navDocsActive: "",
+    body: homeBody,
+    searchData: searchDataJs,
+    firstDocUrl,
+    siteTitle: siteConfig.title,
+  });
+  fs.writeFileSync(path.join(SITE_DIR, "index.html"), homeHtml);
+
+  // --- Doc pages ---
+  const docTemplate = readTemplate("docs.html");
+  for (const doc of docs) {
+    const sidebar = buildSidebar(docs, doc.slug);
+    let docBody = docTemplate
+      .replace("{{ sidebar }}", sidebar)
+      .replace("{{ docTitle }}", escapeHtml(doc.title))
+      .replace("{{ docMeta }}", doc.description ? `<div class="docs-meta">${escapeHtml(doc.description)}</div>` : "")
+      .replace("{{ docContent }}", doc.html);
+
+    const html = renderBase({
+      pageTitle: `${doc.title} — ${siteConfig.title}`,
+      metaDescription: doc.description || siteConfig.description,
+      navHomeActive: "",
+      navDocsActive: ' class="active"',
+      body: docBody,
+      searchData: searchDataJs,
+      firstDocUrl,
+      siteTitle: siteConfig.title,
+    });
+
+    const outDir = path.join(SITE_DIR, "docs", doc.slug);
+    ensureDir(outDir);
+    fs.writeFileSync(path.join(outDir, "index.html"), html);
+  }
+
+  console.log(`Built ${docs.length} doc(s) → _site/`);
+}
+
+// ---------------------------------------------------------------------------
+// Watch mode (--watch)
+// ---------------------------------------------------------------------------
+
+if (process.argv.includes("--watch")) {
+  build();
+  console.log("Watching for changes...");
+  const watchDirs = [DOCS_DIR, PAGES_DIR, PUBLIC_DIR, path.join(__dirname, "templates")];
+  for (const dir of watchDirs) {
+    if (fs.existsSync(dir)) {
+      fs.watch(dir, { recursive: true }, () => {
+        try {
+          build();
+        } catch (e) {
+          console.error("Build error:", e.message);
+        }
+      });
+    }
+  }
+} else {
+  build();
+}

@@ -1,6 +1,6 @@
 ---
 title: Getting Started
-description: Learn how to install and set up src.
+description: Learn how to install and set up Pinel.
 category: Basics
 order: 1
 ---

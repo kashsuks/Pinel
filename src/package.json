@@ -1,0 +1,15 @@
+{
+  "name": "pinel-site",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Pinel documentation site",
+  "scripts": {
+    "build": "node build.js",
+    "dev": "node build.js --watch",
+    "clean": "rm -rf _site"
+  },
+  "dependencies": {
+    "gray-matter": "^4.0.3",
+    "marked": "^15.0.0"
+  }
+}
