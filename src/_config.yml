@@ -1,0 +1,18 @@
+title: src
+description: "A short tagline for your product."
+url: ""
+baseurl: ""
+
+theme: pinel-theme
+
+collections:
+  docs:
+    output: true
+    permalink: /docs/:path/
+
+defaults:
+  - scope:
+      path: ""
+      type: "docs"
+    values:
+      layout: "docs"

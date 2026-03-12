@@ -1,0 +1,57 @@
+---
+layout: home
+---
+
+<section class="hero">
+  <h1>Welcome to <span>src</span></h1>
+  <div class="hero-buttons">
+    <a href="#" class="btn btn-primary" id="downloadBtn">Download Now</a>
+    <a href="{{ '/docs/getting-started/' | relative_url }}" class="btn btn-secondary">Documentation</a>
+  </div>
+</section>
+
+<script>
+(function() {
+  var btn = document.getElementById('downloadBtn');
+  if (!btn) return;
+  var ua = navigator.userAgent;
+  if (/Mac/i.test(ua)) {
+    btn.textContent = 'Download for macOS';
+    btn.href = '#download-macos';
+  } else if (/Win/i.test(ua)) {
+    btn.textContent = 'Download for Windows';
+    btn.href = '#download-windows';
+  } else if (/Linux/i.test(ua)) {
+    btn.textContent = 'Download for Linux';
+    btn.href = '#download-linux';
+  }
+})();
+</script>
+
+<section class="features">
+  <div class="features-col">
+    <h2>Features</h2>
+
+    <div class="feature-group">
+      <h3>Fast</h3>
+      <ul>
+        <li>Blazing fast performance out of the box</li>
+        <li>Zero-config setup to get started in seconds</li>
+      </ul>
+    </div>
+
+    <div class="feature-group">
+      <h3>Flexible</h3>
+      <ul>
+        <li>Works with your existing tools and workflows</li>
+        <li>Deploy anywhere you want</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="features-video">
+    <div class="video-placeholder" style="width:100%;aspect-ratio:16/9;background:#262637;border:2px dashed #3a3a52;border-radius:12px;display:flex;align-items:center;justify-content:center;color:#9399b2;">
+      Replace with your video embed
+    </div>
+  </div>
+</section>
