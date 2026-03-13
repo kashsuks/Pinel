@@ -368,6 +368,51 @@ img {
   color: #00ffd2;
 }
 
+/* Indented docs sidebar tree */
+
+.sidebar-tree {
+  padding: 0 1.5rem;
+}
+
+.sidebar-tree ul {
+  list-style: none;
+}
+
+.sidebar-tree li + li {
+  margin-top: 2px;
+}
+
+.sidebar-link {
+  display: block;
+  padding: 0.4rem 0.75rem;
+  border-radius: 6px;
+  color: #9399b2;
+  font-size: 0.9rem;
+  transition: all 0.15s;
+}
+
+.sidebar-link:hover {
+  background: #28283d;
+  color: #b4befe;
+}
+
+.sidebar-link-level-1 {
+  padding-left: 0.75rem;
+  font-weight: 600;
+  color: #b4befe;
+}
+
+.sidebar-link-level-2 {
+  padding-left: 1.5rem;
+  font-size: 0.88rem;
+}
+
+.sidebar-link-level-3 {
+  padding-left: 2.25rem;
+  font-size: 0.85rem;
+  color: #a6adc8;
+}
+
 /* ── Docs content ──────────────────────────────────────────────────────── */
 
 .docs-content {

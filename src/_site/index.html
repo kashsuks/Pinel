@@ -12,7 +12,7 @@
     <a href="/" class="navbar-brand">Pinel</a>
     <ul class="navbar-links">
       <li><a href="/" class="active">Home</a></li>
-      <li><a href="/docs/getting-started/">Documentation</a></li>
+      <li><a href="/docs/">Documentation</a></li>
     </ul>
     <div class="navbar-search" onclick="openSearch()">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
@@ -26,7 +26,7 @@
   <h1>Welcome to <span>Pinel</span></h1>
   <div class="hero-buttons">
     <a href="#" class="btn btn-primary" id="downloadBtn">Download Now</a>
-    <a href="/docs/getting-started/" class="btn btn-secondary">Documentation</a>
+    <a href="/docs/" class="btn btn-secondary">Documentation</a>
   </div>
 </section>
 
@@ -98,7 +98,7 @@
   <script>
   (function() {
     var searchData = [];
-    searchData.push({"title":"Getting Started","url":"/docs/getting-started/","content":"Installation\n\n Add your install instructions here\n\n\n Quick Start\n\n Add your quick start steps here","category":"Basics"});
+    searchData.push({"title":"Pinel Documentation","url":"/docs/","content":"1. Introduction\n\n 1.1 What is Pinel?\n\nExplain at a high level what Pinel is, what problems it solves, and who it is for.\n\nYou can cover things like:\n\n The core idea or philosophy behind Pinel.\n The main features that make it different from other editors.\n Typical workflows or use cases.\n\n 1.2 Why use it / key concepts\n\nOutline the core concepts a new user should know before diving in.\n\nExamples:\n\n How projects are organized.\n How configuration works.\n Any important terminology you’ll use throughout the docs.\n\n 1.3 Architecture optional\n\nIf useful, briefly describe the high‑level architecture: important components, how they interact, and any constraints or design goals.\n\n 2. Getting Started\n\nGive a short overview of what’s required to install and run Pinel supported OS versions, dependencies, etc..\n\n 2.1 macOS\n\nDescribe how to install and run Pinel on macOS.\n\nYou might include:\n\n System requirements.\n Install via direct download, Homebrew, or source if applicable.\n First‑run steps and where config files live.\n\n Example replace with real commands\nbrew install pinel\npinel\n\n\n 2.2 Windows\n\nDescribe how to install and run Pinel on Windows.\n\nYou might include:\n\n Supported Windows versions.\n Installer vs. portable ZIP.\n Any extra steps e.g. enabling developer mode, adding to PATH.\n\n Example replace with real commands\nwinget install Pinel\npinel.exe\n\n\n 2.3 Linux\n\nDescribe how to install and run Pinel on Linux distributions.\n\nYou might include:\n\n Generic tarball/ AppImage instructions.\n Distro‑specific notes Debian/Ubuntu, Fedora, Arch, etc..\n\n Example replace with real commands\ncurl L https://example.com/pinel.tar.gz o pinel.tar.gz\ntar xzf pinel.tar.gz\n./pinel\n\n\n 2.4 Package managers\n\nSummarize how to install Pinel with different package managers across platforms.\n\nYou can group by ecosystem:\n\n Homebrew macOS / Linux\n winget / Chocolatey Windows\n apt / dnf / pacman Linux\n\n Homebrew macOS / Linux\nbrew install pinel\n\n Debian / Ubuntu\nsudo apt install pinel\n\n Fedora\nsudo dnf install pinel\n\n Arch\nsudo pacman S pinel","category":"Docs"});
 
     var overlay = document.getElementById('searchOverlay');
     var input = document.getElementById('searchInput');

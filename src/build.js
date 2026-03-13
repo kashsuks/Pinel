@@ -117,6 +117,59 @@ function buildSearchData(docs) {
 }
 
 // ---------------------------------------------------------------------------
+// Single docs file helpers (headings + sidebar)
+// ---------------------------------------------------------------------------
+
+function loadSingleDoc() {
+  const file = path.join(DOCS_DIR, "docs.md");
+  if (!fs.existsSync(file)) return null;
+  const raw = fs.readFileSync(file, "utf-8");
+  const { data, content } = matter(raw);
+
+  const headings = [];
+  const renderer = new marked.Renderer();
+  renderer.heading = (text, level, raw) => {
+    const baseText =
+      typeof raw === "string" && raw.length
+        ? raw
+        : typeof text === "string"
+        ? text
+        : String(text ?? "");
+    const plain = baseText.replace(/<[^>]+>/g, "");
+    const id = slugify(plain);
+    headings.push({ level, text: plain, id });
+    return `<h${level} id="${id}">${escapeHtml(plain)}</h${level}>\n`;
+  };
+
+  const html = marked.parse(content, { renderer });
+  const plainText = content
+    .replace(/```[\s\S]*?```/g, (m) => m.replace(/```\w*\n?/g, ""))
+    .replace(/[#*`>\-\[\]()]/g, "")
+    .trim();
+
+  return {
+    title: data.title || "Documentation",
+    description: data.description || "",
+    html,
+    plainText,
+    headings,
+    url: "/docs/",
+    category: "Docs",
+  };
+}
+
+function buildSidebarFromHeadings(headings) {
+  if (!headings || headings.length === 0) return "";
+  let html = '\n    <nav class="sidebar-tree">\n      <ul>\n';
+  for (const h of headings) {
+    const level = Math.min(Math.max(h.level, 1), 4);
+    html += `        <li><a class="sidebar-link sidebar-link-level-${level}" href="#${h.id}">${escapeHtml(h.text)}</a></li>\n`;
+  }
+  html += "      </ul>\n    </nav>\n";
+  return html;
+}
+
+// ---------------------------------------------------------------------------
 // Render templates
 // ---------------------------------------------------------------------------
 
@@ -146,9 +199,10 @@ function build() {
     copyDirSync(PUBLIC_DIR, SITE_DIR);
   }
 
-  const docs = loadDocs();
-  const searchDataJs = buildSearchData(docs);
-  const firstDocUrl = docs.length > 0 ? docs[0].url : "#";
+  const singleDoc = loadSingleDoc();
+  const docsForSearch = singleDoc ? [singleDoc] : [];
+  const searchDataJs = buildSearchData(docsForSearch);
+  const firstDocUrl = singleDoc ? singleDoc.url : "#";
 
   // --- Home page ---
   const homeBody = fs.readFileSync(path.join(PAGES_DIR, "index.html"), "utf-8");
@@ -164,19 +218,19 @@ function build() {
   });
   fs.writeFileSync(path.join(SITE_DIR, "index.html"), homeHtml);
 
-  // --- Doc pages ---
-  const docTemplate = readTemplate("docs.html");
-  for (const doc of docs) {
-    const sidebar = buildSidebar(docs, doc.slug);
+  // --- Docs page ---
+  if (singleDoc) {
+    const docTemplate = readTemplate("docs.html");
+    const sidebar = buildSidebarFromHeadings(singleDoc.headings);
     let docBody = docTemplate
       .replace("{{ sidebar }}", sidebar)
-      .replace("{{ docTitle }}", escapeHtml(doc.title))
-      .replace("{{ docMeta }}", doc.description ? `<div class="docs-meta">${escapeHtml(doc.description)}</div>` : "")
-      .replace("{{ docContent }}", doc.html);
+      .replace("{{ docTitle }}", escapeHtml(singleDoc.title))
+      .replace("{{ docMeta }}", singleDoc.description ? `<div class="docs-meta">${escapeHtml(singleDoc.description)}</div>` : "")
+      .replace("{{ docContent }}", singleDoc.html);
 
     const html = renderBase({
-      pageTitle: `${doc.title} — ${siteConfig.title}`,
-      metaDescription: doc.description || siteConfig.description,
+      pageTitle: `${singleDoc.title} — ${siteConfig.title}`,
+      metaDescription: singleDoc.description || siteConfig.description,
       navHomeActive: "",
       navDocsActive: ' class="active"',
       body: docBody,
@@ -185,12 +239,12 @@ function build() {
       siteTitle: siteConfig.title,
     });
 
-    const outDir = path.join(SITE_DIR, "docs", doc.slug);
+    const outDir = path.join(SITE_DIR, "docs");
     ensureDir(outDir);
     fs.writeFileSync(path.join(outDir, "index.html"), html);
   }
 
-  console.log(`Built ${docs.length} doc(s) → _site/`);
+  console.log("Built docs → _site/docs/");
 }
 
 // ---------------------------------------------------------------------------
