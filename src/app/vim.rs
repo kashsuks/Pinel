@@ -3,6 +3,17 @@ use iced_code_editor::{ArrowDirection, Message as EditorMessage};
 
 impl App {
     pub(super) fn vim_refresh_cursor_style(&mut self) {
+        if self.terminal_open {
+            if let Some(idx) = self.active_tab {
+                if let Some(tab) = self.tabs.get_mut(idx) {
+                    if let TabKind::Editor { ref mut code_editor, .. } = tab.kind {
+                        code_editor.lose_focus();
+                    }
+                }
+            }
+            return;
+        }
+
         // With iced-code-editor, vim normal mode removes focus from
         // the canvas so the user cannot type. Insert mode restores it.
         match self.vim_mode {
@@ -74,6 +85,7 @@ impl App {
             && !self.file_finder_visible
             && !self.search_visible
             && !self.command_input.open
+            && !self.terminal_open
     }
 
     fn vim_handle_char(&mut self, ch: char) -> iced::Task<Message> {

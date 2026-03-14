@@ -20,6 +20,27 @@ impl App {
         )
     }
 
+    pub(super) fn toggle_terminal_panel(&mut self) -> iced::Task<Message> {
+        if self.terminal_pane.is_none() {
+            if let Some(ref tree) = self.file_tree {
+                self.terminal.set_directory(tree.root.clone());
+            }
+            self.terminal.toggle();
+            return iced::Task::none();
+        }
+
+        self.terminal_open = !self.terminal_open;
+        self.vim_refresh_cursor_style();
+
+        if self.terminal_open {
+            if let Some(term) = &self.terminal_pane {
+                return iced::widget::operation::focus(term.widget_id().clone());
+            }
+        }
+
+        iced::Task::none()
+    }
+
     /// Applies a single application message and returns follow-up async work.
     ///
     /// # Arguments
@@ -611,11 +632,18 @@ impl App {
                 self.command_palette_selected = next;
                 iced::Task::none()
             }
-            Message::ToggleTerminal => {
-                if let Some(ref tree) = self.file_tree {
-                    self.terminal.set_directory(tree.root.clone());
+            Message::ToggleTerminal => self.toggle_terminal_panel(),
+            Message::TerminalEvent(iced_term::Event::BackendCall(id, cmd)) => {
+                if let Some(term) = self.terminal_pane.as_mut() {
+                    if term.id == id {
+                        match term.handle(iced_term::Command::ProxyToBackend(cmd)) {
+                            iced_term::actions::Action::Shutdown => {
+                                self.terminal_open = false;
+                            }
+                            _ => {}
+                        }
+                    }
                 }
-                self.terminal.toggle();
                 iced::Task::none()
             }
             Message::ToggleFindReplace => {

@@ -51,7 +51,7 @@ impl Default for CommandPalette {
             },
             Command {
                 name: "Toggle Terminal".to_string(),
-                description: "Open system terminal".to_string(),
+                description: "Toggle embedded terminal panel".to_string(),
             },
             Command {
                 name: "Find and Replace".to_string(),

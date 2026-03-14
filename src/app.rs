@@ -9,6 +9,7 @@ use iced::widget::{
 };
 use iced::window;
 use iced::{Background, Color, Element, Length, Subscription};
+use iced_term::Terminal as IcedTerminal;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::time::Instant;
@@ -99,53 +100,75 @@ pub struct VimFindState {
 pub struct App {
     tabs: Vec<Tab>,
     active_tab: Option<usize>,
+
     cursor_line: usize,
     cursor_col: usize,
+
     file_tree: Option<FileTree>,
+
     sidebar_visible: bool,
     sidebar_width: f32,
+
     resizing_sidebar: bool,
     resize_start_x: Option<f32>,
     resize_start_width: f32,
+
     search_visible: bool,
     search_query: String,
     search_results: Vec<crate::features::search::SearchResult>,
     search_input_id: iced::widget::Id,
+
     file_finder_visible: bool,
     file_finder_query: String,
     file_finder_results: Vec<(i64, String, PathBuf)>,
     file_finder_selected: usize,
+
     all_workspace_files: Vec<(String, PathBuf)>,
     recent_files: Vec<PathBuf>,
+
     file_finder_input_id: iced::widget::Id,
     fuzzy_finder: FuzzyFinder,
+
     command_palette: CommandPalette,
     command_palette_selected: usize,
     command_palette_input_id: iced::widget::Id,
+
     terminal: Terminal,
+    terminal_pane: Option<IcedTerminal>,
+    terminal_open: bool,
+    terminal_panel_height: f32,
+
     find_replace: FindReplace,
     find_input_id: iced::widget::Id,
     replace_input_id: iced::widget::Id,
+
     command_input: CommandInput,
     command_input_id: iced::widget::Id,
+
     settings_open: bool,
     settings_section: String,
     editor_preferences: EditorPreferences,
     active_theme_name: String,
     theme_dropdown_open: bool,
+
     wakatime: WakaTimeConfig,
     wakatime_api_key_hovered: bool,
     last_wakatime_entity: Option<String>,
     last_wakatime_sent_at: Option<Instant>,
+
     notification: Option<Notification>,
     update_banner: Option<UpdateInfo>,
+
     lsp: crate::features::lsp::LspBridge,
     lsp_diagnostics: HashMap<PathBuf, Vec<crate::features::lsp::InlineDiagnostic>>,
+
     pending_sensitive_open: Option<PathBuf>,
+
     vim_mode: VimMode,
     vim_pending: String,
     vim_count: String,
     vim_last_find: Option<VimFindState>,
+
     autocomplete: Autocomplete,
 }
 
@@ -198,10 +221,39 @@ impl Default for App {
             recent_files: Vec::new(),
             file_finder_input_id: iced::widget::Id::unique(),
             fuzzy_finder: FuzzyFinder::default(),
+
             command_palette: CommandPalette::default(),
             command_palette_selected: 0,
             command_palette_input_id: iced::widget::Id::unique(),
+
             terminal: Terminal::default(),
+            terminal_pane: {
+                let shell = if cfg!(target_os = "windows") {
+                    std::env::var("COMSPEC").unwrap_or_else(|_| "cmd.exe".to_string())
+                } else {
+                    std::env::var("SHELL").unwrap_or_else(|_| "/bin/bash".to_string())
+                };
+
+                let settings = iced_term::settings::Settings {
+                    backend: iced_term::settings::BackendSettings {
+                        program: shell,
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                };
+
+
+                match IcedTerminal::new(0, settings) {
+                    Ok(term) => Some(term),
+                    Err(err) => {
+                        eprintln!("Failed to initialize embedded terminal: {err}");
+                        None
+                    }
+                }
+            },
+            terminal_open: false,
+            terminal_panel_height: 240.0,
+
             find_replace: FindReplace::default(),
             find_input_id: iced::widget::Id::unique(),
             replace_input_id: iced::widget::Id::unique(),

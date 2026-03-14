@@ -16,8 +16,12 @@ impl App {
             if self.find_replace.open {
                 editor_col_items.push(self.view_find_replace_panel());
             }
+
             editor_col_items.push(tab_bar);
             editor_col_items.push(editor_widget);
+            if self.terminal_open {
+                editor_col_items.push(self.view_terminal_panel());
+            }
             if self.command_input.open {
                 editor_col_items.push(self.view_command_input_bar());
             }

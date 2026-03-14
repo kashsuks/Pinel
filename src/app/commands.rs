@@ -8,10 +8,7 @@
 //!
 //! ```rust
 //! "Toggle Terminal" => {
-//!     if let Some(ref tree) = self.file_tree {
-//!         self.terminal.set_directory(tree.root.clone());
-//!     }
-//!     self.terminal.toggle();
+//!     return self.toggle_terminal_panel();
 //! }
 //! ```
 //!
@@ -30,10 +27,7 @@ impl App {
                 return iced::Task::perform(async {}, |_| Message::OpenFolderDialog);
             }
             "Toggle Terminal" => {
-                if let Some(ref tree) = self.file_tree {
-                    self.terminal.set_directory(tree.root.clone());
-                }
-                self.terminal.toggle();
+                return self.toggle_terminal_panel();
             }
             "Find and Replace" => {
                 self.find_replace.toggle();

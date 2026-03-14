@@ -1,4 +1,5 @@
 use crate::features::search::SearchResult;
+use iced_term::Event as TerminalEvent;
 use std::path::PathBuf;
 
 #[derive(Debug, Clone, Copy)]
@@ -60,7 +61,9 @@ pub enum Message {
     CommandPaletteQueryChanged(String),
     CommandPaletteSelect(String),
     CommandPaletteNavigate(i32),
-    /// Terminal launcher (Cmd+J)
+    /// Embedded terminal events
+    TerminalEvent(TerminalEvent),
+    /// Terminal panel (Cmd/Ctrl+J)
     ToggleTerminal,
     /// Find and Replace (Cmd+F)
     ToggleFindReplace,

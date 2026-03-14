@@ -314,6 +314,61 @@ impl App {
         empty_editor()
     }
 
+    pub(super) fn view_terminal_panel(&self) -> Element<'_, Message> {
+        let height = Length::Fixed(self.terminal_panel_height);
+
+        if let Some(term) = &self.terminal_pane {
+            let header = container(
+                row![
+                    text("Terminal").size(12).color(theme().text_muted),
+                    iced::widget::Space::new().width(Length::Fill),
+                    button(text("x").size(12).color(theme().text_dim))
+                        .style(tab_close_button_style)
+                        .on_press(Message::ToggleTerminal),
+                ]
+                .align_y(iced::Alignment::Center),
+            )
+            .padding(iced::Padding {
+                top: 6.0,
+                right: 8.0,
+                bottom: 6.0,
+                left: 10.0,
+            })
+            .style(|_theme| container::Style {
+                background: Some(Background::Color(theme().bg_secondary)),
+                border: iced::Border {
+                    color: theme().border_subtle,
+                    width: 1.0,
+                    radius: 0.0.into(),
+                },
+                ..Default::default()
+            });
+
+            let body = container(iced_term::TerminalView::show(term).map(Message::TerminalEvent))
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .style(|_theme| container::Style {
+                    background: Some(Background::Color(theme().bg_editor)),
+                    ..Default::default()
+                });
+
+            return container(column![header, body].spacing(0))
+                .width(Length::Fill)
+                .height(height)
+                .into();
+        }
+
+        container(
+            text("Embedded terminal unavailable")
+                .size(12)
+                .color(theme().text_dim),
+        )
+        .padding(10)
+        .width(Length::Fill)
+        .height(height)
+        .into()
+    }
+
     pub(super) fn view_status_bar(&self) -> Element<'_, Message> {
         let file_info = self
             .active_tab

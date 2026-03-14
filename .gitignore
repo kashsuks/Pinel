@@ -23,3 +23,6 @@ target
 *.DS_Store
 
 /dist
+src/node_modules
+src/_site
+.vercel/
