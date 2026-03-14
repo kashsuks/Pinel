@@ -244,7 +244,7 @@ async fn run_server(
 ) {
     let Some(program_path) = resolve_executable(config.program) else {
         eprintln!(
-            "LSP: executable not found for '{}'. Install it or ensure Rode can access your PATH.",
+            "LSP: executable not found for '{}'. Install it or ensure Pinel can access your PATH.",
             config.program
         );
         return;
@@ -345,7 +345,7 @@ async fn run_server(
                             request.id,
                             None,
                             Some(tokio_lsp::error::ResponseError::method_not_found(
-                                "Unsupported by Rode client",
+                                "Unsupported by Pinel client",
                             )),
                         )
                         .await;

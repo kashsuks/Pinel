@@ -12,7 +12,7 @@ fn unique_abs_path(ext: &str) -> PathBuf {
         .expect("system time before UNIX_EPOCH")
         .as_nanos();
 
-    std::env::temp_dir().join(format!("rode_lsp_test_{nanos}.{ext}"))
+    std::env::temp_dir().join(format!("pinel_lsp_test_{nanos}.{ext}"))
 }
 
 fn wait_for_updates(bridge: &LspBridge, timeout: Duration) -> Vec<lsp::DiagnosticUpdate> {

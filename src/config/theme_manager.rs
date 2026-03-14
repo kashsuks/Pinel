@@ -68,7 +68,7 @@ impl Default for ThemeColors {
 impl ThemeColors {
     pub fn to_lua(&self) -> String {
         format!(
-            r#"-- Rode Theme Configuration
+            r#"-- Pinel Theme Configuration
 -- Edit these hex color values to customize your theme
 
 return {{
@@ -185,7 +185,7 @@ return {{
 
 pub fn get_config_dir() -> PathBuf {
     let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
-    PathBuf::from(home).join(".config").join("rode")
+    PathBuf::from(home).join(".config").join("pinel")
 }
 
 pub fn get_theme_path() -> PathBuf {

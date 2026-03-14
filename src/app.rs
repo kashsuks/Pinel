@@ -1,4 +1,4 @@
-//! Application state and UI composition for Rode.
+//! Application state and UI composition for Pinel.
 //!
 //! This module defines [`App`] and splits its behavior into focused submodules:
 //! event updates, subscriptions, commands, and view builders.

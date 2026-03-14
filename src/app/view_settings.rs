@@ -189,7 +189,7 @@ impl App {
                 .size(13)
                 .color(theme().text_muted)
                 .width(Length::Fixed(140.0)),
-            text("Rode Editor").size(13).color(theme().text_primary),
+            text("Pinel Editor").size(13).color(theme().text_primary),
         ]
         .spacing(12)
         .align_y(iced::Alignment::Center);

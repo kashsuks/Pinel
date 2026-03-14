@@ -87,7 +87,7 @@ impl App {
             return iced::widget::Space::new().into();
         };
 
-        let label = text(format!("Rode {} is available", info.version))
+        let label = text(format!("Pinel {} is available", info.version))
             .size(13)
             .color(Color::from_rgb(0.85, 0.93, 1.0));
 

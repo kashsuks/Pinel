@@ -1,6 +1,6 @@
 /// Find and Replace - In-editor find and replace with case-sensitive toggle,
 /// match navigation, replace-one, and replace-all.
-/// Ported from rode's hotkey/find_replace.rs, adapted for iced.
+/// Ported from pinel's hotkey/find_replace.rs, adapted for iced.
 
 pub struct FindReplace {
     pub open: bool,

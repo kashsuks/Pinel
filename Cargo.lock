@@ -4247,6 +4247,43 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8b870d8c151b6f2fb93e84a13146138f05d02ed11c7e7c54f8826aaaf7c9f184"
 
 [[package]]
+name = "pinel-editor"
+version = "0.4.3"
+dependencies = [
+ "dirs",
+ "eframe",
+ "egui",
+ "fuzzy-matcher",
+ "iced",
+ "iced-code-editor",
+ "iced_term",
+ "ignore",
+ "image 0.24.9",
+ "include_dir",
+ "lsp-types",
+ "once_cell",
+ "regex",
+ "reqwest",
+ "resvg 0.29.0",
+ "rfd",
+ "ropey",
+ "serde",
+ "serde_json",
+ "syntect",
+ "tiny-skia 0.11.4",
+ "tokio",
+ "tokio-lsp",
+ "tree-sitter",
+ "tree-sitter-highlight",
+ "tree-sitter-javascript",
+ "tree-sitter-python",
+ "tree-sitter-rust",
+ "tree-sitter-typescript",
+ "url",
+ "usvg 0.29.0",
+]
+
+[[package]]
 name = "piper"
 version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4917,43 +4954,6 @@ dependencies = [
  "libc",
  "untrusted",
  "windows-sys 0.52.0",
-]
-
-[[package]]
-name = "rode-editor"
-version = "0.4.3"
-dependencies = [
- "dirs",
- "eframe",
- "egui",
- "fuzzy-matcher",
- "iced",
- "iced-code-editor",
- "iced_term",
- "ignore",
- "image 0.24.9",
- "include_dir",
- "lsp-types",
- "once_cell",
- "regex",
- "reqwest",
- "resvg 0.29.0",
- "rfd",
- "ropey",
- "serde",
- "serde_json",
- "syntect",
- "tiny-skia 0.11.4",
- "tokio",
- "tokio-lsp",
- "tree-sitter",
- "tree-sitter-highlight",
- "tree-sitter-javascript",
- "tree-sitter-python",
- "tree-sitter-rust",
- "tree-sitter-typescript",
- "url",
- "usvg 0.29.0",
 ]
 
 [[package]]

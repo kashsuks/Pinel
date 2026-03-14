@@ -35,7 +35,7 @@ impl App {
                 left: 18.0,
             });
 
-        let reload_desc = text("Or reload a custom theme.lua from ~/.config/rode/")
+        let reload_desc = text("Or reload a custom theme.lua from ~/.config/pinel/")
             .size(11)
             .color(theme().text_dim);
 

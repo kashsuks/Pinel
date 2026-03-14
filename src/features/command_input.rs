@@ -1,5 +1,5 @@
 /// Vim-style `:` command input bar
-/// Ported from rode's hotkey/command_input.rs, adapted for iced.
+/// Ported from pinel's hotkey/command_input.rs, adapted for iced.
 
 pub struct CommandInput {
     pub open: bool,

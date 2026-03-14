@@ -17,7 +17,7 @@ fn main() -> iced::Result {
     let icon = window::icon::from_file_data(icon_data, None).expect("Failed to load icon.");
 
     iced::application(app::App::new, app::App::update, app::App::view)
-        .title("Rode")
+        .title("Pinel")
         .subscription(|app| app.subscription())
         .font(FIRA_CODE)
         .default_font(iced::Font {

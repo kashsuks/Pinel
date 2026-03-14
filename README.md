@@ -6,7 +6,7 @@
 
 # Installation
 
-Rode is shipped across multiple platforms, mainly *Github Releases* and [crates.io](https://crates.io). Note that nightly builds are an ongoing process and are planned to arrive in the near future.
+Pinel is shipped across multiple platforms, mainly *Github Releases* and [crates.io](https://crates.io). Note that nightly builds are an ongoing process and are planned to arrive in the near future.
 
 ## Compiling from Source
 
@@ -17,12 +17,12 @@ If you would like to compile from source, please follow the instructions below.
 1. Clone the repository:
 
 ```
-git clone https://github.com/kashsuks/rode
+git clone https://github.com/kashsuks/pinel
 ```
 
 2. Change directory
 ```
-cd rode
+cd pinel
 ```
 
 3. Run the startup command:
@@ -39,12 +39,12 @@ You will see that the required packages will get installed and the application m
 
 ## Mac Installation
 
-- For Mac Silicon (any of the M series chips), please use `rode-editor-apple-silicon`
+- For Mac Silicon (any of the M series chips), please use `pinel-editor-apple-silicon`
 
 Once you've installed it:
 - Copy the path of the install (either through finder or whatever method)
 - Go to your terminal of choice and type in `chmod +x <the path to the install>`
-- Then run `rode-editor-apple-silicon`
+- Then run `pinel-editor-apple-silicon`
 
 If apple says that the install cannot be verified:
 - Go to settings
@@ -53,7 +53,7 @@ If apple says that the install cannot be verified:
 - Press allow and give any other permission
 - The app _should_ open!
 
-If you would like to use [crates.io](https://crates.io) to use the application please refer to the [published version](https://crates.io/crates/rode-editor)
+If you would like to use [crates.io](https://crates.io) to use the application please refer to the [published version](https://crates.io/crates/pinel-editor)
 
 ---
 
@@ -70,4 +70,4 @@ If you would like to use [crates.io](https://crates.io) to use the application p
 
 # License
 
-Copyright (c) 2025-Present [Kashyap](https://github.com/kashsuks) and [Contributors](https://github.com/kashsuks/Rode/graphs/contributors). `Rode` is a free and open-source software licensed under the [GNU General Public License Version 3](https://www.gnu.org/licenses/gpl-3.0.en.html). Official logo was created by [Kashyap Sukshavasi](https://github.com/kashsuks).
+Copyright (c) 2025-Present [Kashyap](https://github.com/kashsuks) and [Contributors](https://github.com/kashsuks/Pinel/graphs/contributors). `Pinel` is a free and open-source software licensed under the [GNU General Public License Version 3](https://www.gnu.org/licenses/gpl-3.0.en.html). Official logo was created by [Kashyap Sukshavasi](https://github.com/kashsuks).

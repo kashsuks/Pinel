@@ -1,7 +1,7 @@
 use serde::Deserialize;
 
 const CURRENT_VERSION: &str = env!("CARGO_PKG_VERSION");
-const RELEASES_URL: &str = "https://api.github.com/repos/kashsuks/rode/releases/latest";
+const RELEASES_URL: &str = "https://api.github.com/repos/kashsuks/pinel/releases/latest";
 
 #[derive(Debug, Clone)]
 pub struct UpdateInfo {

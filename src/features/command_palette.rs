@@ -1,5 +1,5 @@
 /// Command Palette - VS Code-style overlay command palette (Cmd+Shift+P)
-/// Ported from rode's command_palette.rs, adapted for iced.
+/// Ported from pinel's command_palette.rs, adapted for iced.
 
 #[derive(Clone, Debug)]
 pub struct Command {

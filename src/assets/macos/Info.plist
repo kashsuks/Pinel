@@ -3,16 +3,16 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleIdentifier</key>
-    <string>com.kashsuks.rode</string>
+    <string>com.kashsuks.pinel</string>
 
     <key>CFBundleName</key>
-    <string>Rode</string>
+    <string>Pinel</string>
 
     <key>CFBundleDisplayName</key>
-    <string>Rode</string>
+    <string>Pinel</string>
 
     <key>CFBundleExecutable</key>
-    <string>rode-editor</string>
+    <string>pinel-editor</string>
 
     <key>CFBundlePackageType</key>
     <string>APPL</string>
