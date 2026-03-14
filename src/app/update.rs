@@ -798,6 +798,12 @@ impl App {
                 self.command_input.close();
                 iced::Task::none()
             }
+            Message::WindowResized(width, height) => {
+                self.editor_preferences.window_width = (width as f32).max(640.0);
+                self.editor_preferences.window_height = (height as f32).max(480.0);
+                let _ = prefs::save_preferences(&self.editor_preferences);
+                iced::Task::none()
+            }
             Message::NewFile => {
                 let new_path = PathBuf::from("untitled");
                 let mut editor = iced_code_editor::CodeEditor::new("", "txt");

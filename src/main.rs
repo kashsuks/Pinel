@@ -15,6 +15,9 @@ const FIRA_CODE: &[u8] = include_bytes!("assets/fonts/FiraCode-Regular.ttf");
 fn main() -> iced::Result {
     let icon_data = include_bytes!("assets/icon.png");
     let icon = window::icon::from_file_data(icon_data, None).expect("Failed to load icon.");
+    let prefs = config::preferences::load_preferences();
+    let window_width = prefs.window_width.max(640.0);
+    let window_height = prefs.window_height.max(480.0);
 
     iced::application(app::App::new, app::App::update, app::App::view)
         .title("Pinel")
@@ -24,9 +27,9 @@ fn main() -> iced::Result {
             family: iced::font::Family::Name("Fira Code"),
             ..iced::Font::DEFAULT
         })
-        .window_size((1200.0, 800.0))
+        .window_size((window_width, window_height))
         .window(window::Settings {
-            size: [1200.0, 800.0].into(),
+            size: [window_width, window_height].into(),
             icon: Some(icon),
             ..Default::default()
         })

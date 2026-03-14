@@ -184,6 +184,9 @@ return {{
 }
 
 pub fn get_config_dir() -> PathBuf {
+    if let Some(dir) = dirs::config_dir() {
+        return dir.join("pinel");
+    }
     let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
     PathBuf::from(home).join(".config").join("pinel")
 }

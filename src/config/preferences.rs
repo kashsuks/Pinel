@@ -8,6 +8,8 @@ pub struct EditorPreferences {
     pub tab_size: usize,
     pub use_spaces: bool,
     pub theme_name: String,
+    pub window_width: f32,
+    pub window_height: f32,
 }
 
 impl Default for EditorPreferences {
@@ -16,6 +18,8 @@ impl Default for EditorPreferences {
             tab_size: 4,
             use_spaces: true,
             theme_name: "default".to_string(),
+            window_width: 1200.0,
+            window_height: 800.0,
         }
     }
 }
@@ -39,12 +43,39 @@ pub fn get_themes_dir() -> PathBuf {
 }
 
 pub fn load_preferences() -> EditorPreferences {
-    let path = get_preferences_path();
-    if let Ok(content) = fs::read_to_string(&path) {
-        parse_preferences(&content)
-    } else {
-        EditorPreferences::default()
+    let primary = get_preferences_path();
+    let legacy = legacy_preferences_path();
+
+    let primary_prefs = read_preferences_from(&primary);
+    let legacy_prefs = legacy
+        .as_ref()
+        .and_then(|path| read_preferences_from(path));
+
+    match (primary_prefs, legacy_prefs) {
+        (Some(prefs), None) => prefs,
+        (None, Some(prefs)) => {
+            let _ = save_preferences_to_path(&prefs, &primary);
+            prefs
+        }
+        (Some(primary_prefs), Some(legacy_prefs)) => {
+            if legacy_is_newer_than_primary(legacy.as_ref(), &primary) {
+                let _ = save_preferences_to_path(&legacy_prefs, &primary);
+                legacy_prefs
+            } else {
+                primary_prefs
+            }
+        }
+        (None, None) => {
+            let prefs = EditorPreferences::default();
+            let _ = save_preferences_to_path(&prefs, &primary);
+            prefs
+        }
     }
+}
+
+fn legacy_preferences_path() -> Option<PathBuf> {
+    let home = std::env::var("HOME").ok()?;
+    Some(PathBuf::from(home).join(".config").join("pinel").join("preferences.lua"))
 }
 
 fn parse_preferences(content: &str) -> EditorPreferences {
@@ -73,6 +104,16 @@ fn parse_preferences(content: &str) -> EditorPreferences {
                 "theme_name" => {
                     prefs.theme_name = value.to_string();
                 }
+                "window_width" => {
+                    if let Ok(width) = value.parse::<f32>() {
+                        prefs.window_width = width.max(640.0).min(10000.0);
+                    }
+                }
+                "window_height" => {
+                    if let Ok(height) = value.parse::<f32>() {
+                        prefs.window_height = height.max(480.0).min(10000.0);
+                    }
+                }
                 _ => {}
             }
         }
@@ -82,24 +123,7 @@ fn parse_preferences(content: &str) -> EditorPreferences {
 
 pub fn save_preferences(prefs: &EditorPreferences) -> Result<(), std::io::Error> {
     let path = get_preferences_path();
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)?;
-    }
-    let content = format!(
-        r#"-- Pinel Editor Preferences
--- Edit these values to customize your editor
-
-return {{
-    tab_size = {},
-    use_spaces = {},
-    theme_name = "{}",
-}}
-"#,
-        prefs.tab_size, prefs.use_spaces, prefs.theme_name,
-    );
-    let mut file = fs::File::create(path)?;
-    file.write_all(content.as_bytes())?;
-    Ok(())
+    save_preferences_to_path(prefs, &path)
 }
 
 pub fn list_available_themes() -> Vec<String> {
@@ -130,4 +154,54 @@ pub fn load_theme_by_name(name: &str) -> ThemeColors {
     }
 
     load_theme()
+}
+
+fn read_preferences_from(path: &PathBuf) -> Option<EditorPreferences> {
+    let content = fs::read_to_string(path).ok()?;
+    Some(parse_preferences(&content))
+}
+
+fn legacy_is_newer_than_primary(legacy: Option<&PathBuf>, primary: &PathBuf) -> bool {
+    let Some(legacy) = legacy else {
+        return false;
+    };
+    let legacy_meta = fs::metadata(legacy).ok();
+    let primary_meta = fs::metadata(primary).ok();
+    let legacy_mtime = legacy_meta.and_then(|m| m.modified().ok());
+    let primary_mtime = primary_meta.and_then(|m| m.modified().ok());
+    match (legacy_mtime, primary_mtime) {
+        (Some(legacy_mtime), Some(primary_mtime)) => legacy_mtime > primary_mtime,
+        (Some(_), None) => true,
+        _ => false,
+    }
+}
+
+fn save_preferences_to_path(
+    prefs: &EditorPreferences,
+    path: &PathBuf,
+) -> Result<(), std::io::Error> {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    let content = format!(
+        r#"-- Pinel Editor Preferences
+-- Edit these values to customize your editor
+
+return {{
+    tab_size = {},
+    use_spaces = {},
+    theme_name = "{}",
+    window_width = {},
+    window_height = {},
+}}
+"#,
+        prefs.tab_size,
+        prefs.use_spaces,
+        prefs.theme_name,
+        prefs.window_width,
+        prefs.window_height,
+    );
+    let mut file = fs::File::create(path)?;
+    file.write_all(content.as_bytes())?;
+    Ok(())
 }

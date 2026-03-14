@@ -86,6 +86,8 @@ pub enum Message {
     ToggleCommandInput,
     CommandInputChanged(String),
     CommandInputSubmit,
+    /// Window resize event
+    WindowResized(u32, u32),
     /// New file
     NewFile,
     SaveAs,
