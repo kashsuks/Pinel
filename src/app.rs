@@ -273,7 +273,7 @@ impl Default for App {
             lsp: crate::features::lsp::LspBridge::new(None),
             lsp_diagnostics: HashMap::new(),
             pending_sensitive_open: None,
-            vim_mode: VimMode::Normal,
+            vim_mode: VimMode::Insert,
             vim_pending: String::new(),
             vim_count: String::new(),
             vim_last_find: None,

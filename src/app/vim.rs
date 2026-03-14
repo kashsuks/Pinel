@@ -38,43 +38,8 @@ impl App {
         }
     }
 
-    pub(super) fn handle_vim_key(&mut self, key: crate::message::VimKey) -> iced::Task<Message> {
-        if !self.vim_context_active() {
-            return iced::Task::none();
-        }
-
-        match self.vim_mode {
-            VimMode::Insert => {
-                if matches!(key, crate::message::VimKey::Escape) {
-                    if self.autocomplete.active {
-                        self.autocomplete.cancel();
-                    } else {
-                        self.vim_mode = VimMode::Normal;
-                        self.vim_pending.clear();
-                        self.vim_count.clear();
-                        self.vim_refresh_cursor_style();
-                    }
-                }
-                iced::Task::none()
-            }
-            VimMode::Normal => {
-                match key {
-                    crate::message::VimKey::Escape => {
-                        self.vim_pending.clear();
-                        self.vim_count.clear();
-                    }
-                    crate::message::VimKey::Ctrl(ch) => {
-                        self.vim_pending.clear();
-                        return self.vim_apply_ctrl_motion(ch);
-                    }
-                    crate::message::VimKey::Char(ch) => {
-                        return self.vim_handle_char(ch);
-                    }
-                    crate::message::VimKey::Enter | crate::message::VimKey::Backspace => {}
-                }
-                iced::Task::none()
-            }
-        }
+    pub(super) fn handle_vim_key(&mut self, _key: crate::message::VimKey) -> iced::Task<Message> {
+        iced::Task::none()
     }
 
     pub(super) fn vim_context_active(&self) -> bool {

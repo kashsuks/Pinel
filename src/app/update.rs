@@ -576,7 +576,6 @@ impl App {
                 } else if self.settings_open {
                     self.settings_open = false;
                 } else {
-                    self.vim_mode = VimMode::Normal;
                     self.vim_pending.clear();
                     self.vim_count.clear();
                 }
@@ -592,13 +591,7 @@ impl App {
                 }
                 iced::Task::none()
             }
-            Message::VimKeyPressed(key) => {
-                if matches!(key, crate::message::VimKey::Escape) && !self.vim_context_active() {
-                    self.update(Message::EscapePressed)
-                } else {
-                    self.handle_vim_key(key)
-                }
-            }
+            Message::VimKeyPressed(_) => iced::Task::none(),
             Message::ToggleCommandPalette => {
                 self.command_palette.toggle();
                 self.command_palette_selected = 0;
