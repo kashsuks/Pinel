@@ -77,19 +77,17 @@ Due to the extra security that MacOS has for unverified apps, you will need to g
 
 ## 2.2 Windows
 
-Describe how to install and run Pinel on Windows.
+Due to the simplicity that Windows (10/11) provides with installing external apps, you're in luck! All you need to do is:
 
-You might include:
+Go to the Github Releases page found [here](https://github.com/kashsuks/Pinel/releases)
 
-- Supported Windows versions.
-- Installer vs. portable ZIP.
-- Any extra steps (e.g. enabling developer mode, adding to PATH).
+Download the `rode-editor-windows-x86_64.exe` file as this is for Windows systems.
 
-```powershell
-# Example (replace with real commands)
-winget install Pinel
-pinel.exe
-```
+From here you can just double-click the install file to open up the app!
+
+*Optional*: You can also add this new binary to your `$PATH` if you would like to just refer to the app as `Pinel`
+
+**There is no active option for Winget or Chocolatey however they are in the works.**
 
 ## 2.3 Linux
 
