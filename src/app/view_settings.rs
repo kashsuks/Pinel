@@ -595,6 +595,84 @@ impl App {
         .spacing(16)
         .align_y(iced::Alignment::Center);
 
+        // ── LSP server availability ──────────────────────────────────────────
+        let server_status = crate::lsp_setup::lsp_server_status();
+
+        let server_status_heading = text("LSP Servers").size(13).color(theme().text_muted);
+
+        let server_status_desc = text(
+            "Language servers found on PATH. Install missing servers to enable LSP for those languages."
+        )
+        .size(11)
+        .color(theme().text_dim);
+
+        let server_rows: Vec<Element<'_, Message>> = server_status
+            .iter()
+            .map(|(key, path_opt)| {
+                let (icon, icon_color, status_text) = match path_opt {
+                    Some(p) => (
+                        "●",
+                        Color::from_rgb(0.30, 0.85, 0.50),
+                        p.to_string_lossy().into_owned(),
+                    ),
+                    None => (
+                        "○",
+                        Color::from_rgba(0.9, 0.4, 0.3, 0.85),
+                        "not found on PATH".to_string(),
+                    ),
+                };
+                row![
+                    text(icon)
+                        .size(10)
+                        .color(icon_color)
+                        .width(Length::Fixed(14.0)),
+                    text(*key)
+                        .size(12)
+                        .color(theme().text_muted)
+                        .width(Length::Fixed(240.0)),
+                    text(status_text)
+                        .size(11)
+                        .color(if path_opt.is_some() {
+                            theme().text_dim
+                        } else {
+                            Color::from_rgba(0.9, 0.5, 0.35, 0.9)
+                        })
+                        .width(Length::Fill),
+                ]
+                .spacing(8)
+                .align_y(iced::Alignment::Center)
+                .into()
+            })
+            .collect();
+
+        let server_status_panel = container(
+            column(
+                std::iter::once::<Element<'_, Message>>(server_status_heading.into())
+                    .chain(std::iter::once::<Element<'_, Message>>(
+                        server_status_desc.into(),
+                    ))
+                    .chain(server_rows)
+                    .collect::<Vec<_>>(),
+            )
+            .spacing(6),
+        )
+        .padding(iced::Padding {
+            top: 10.0,
+            right: 12.0,
+            bottom: 10.0,
+            left: 12.0,
+        })
+        .width(Length::Fill)
+        .style(|_theme| container::Style {
+            background: Some(Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.025))),
+            border: iced::Border {
+                color: Color::from_rgba(1.0, 1.0, 1.0, 0.06),
+                width: 1.0,
+                radius: 6.0.into(),
+            },
+            ..Default::default()
+        });
+
         let clear_logs_btn = button(text("Clear Logs").size(12).color(theme().text_primary))
             .on_press(Message::ClearDeveloperLogs)
             .style(|_theme, _status| button::Style {
@@ -689,6 +767,13 @@ impl App {
                 }
             ),
             lsp_row,
+            container(Space::new().width(Length::Fill).height(Length::Fixed(1.0))).style(
+                |_theme| container::Style {
+                    background: Some(Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.03))),
+                    ..Default::default()
+                }
+            ),
+            server_status_panel,
             container(Space::new().width(Length::Fill).height(Length::Fixed(1.0))).style(
                 |_theme| container::Style {
                     background: Some(Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.03))),

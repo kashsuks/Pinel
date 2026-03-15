@@ -185,8 +185,8 @@ impl App {
                                 ..Default::default()
                             });
 
-                        // LSP overlay (hover docs + completion from LSP server)
-                        let lsp_overlay = if self.lsp_enabled {
+                        // LSP hover only (no completion overlay — we use custom purple panel)
+                        let lsp_hover = if self.lsp_enabled && self.lsp_overlay.hover_visible {
                             iced_code_editor::view_lsp_overlay(
                                 &self.lsp_overlay,
                                 code_editor,
@@ -202,35 +202,34 @@ impl App {
                         let show_panel =
                             self.autocomplete.active && !self.autocomplete.suggestions.is_empty();
                         if show_panel {
-                            // ── Blueberry autocomplete modal ────────────────────────────────
-                            // Per-kind accent colors (Blueberry Dark palette)
+                            // ── Purple autocomplete modal with navigation ───────────────────
                             let kind_color = |kind: &crate::autocomplete::types::SuggestionKind| {
                                 use crate::autocomplete::types::SuggestionKind;
                                 match kind {
-                                    SuggestionKind::Keyword => Color::from_rgb(0.796, 0.651, 0.969), // purple #cba6f7
+                                    SuggestionKind::Keyword => Color::from_rgb(0.796, 0.651, 0.969),
                                     SuggestionKind::Function => {
                                         Color::from_rgb(0.000, 0.663, 1.000)
-                                    } // blue   #00a9ff
-                                    SuggestionKind::Method => Color::from_rgb(0.537, 0.863, 0.922), // cyan   #89dceb
-                                    SuggestionKind::Type => Color::from_rgb(0.976, 0.886, 0.686), // yellow #f9e2af
+                                    }
+                                    SuggestionKind::Method => Color::from_rgb(0.537, 0.863, 0.922),
+                                    SuggestionKind::Type => Color::from_rgb(0.976, 0.886, 0.686),
                                     SuggestionKind::Constant => {
                                         Color::from_rgb(0.976, 0.886, 0.686)
-                                    } // yellow
+                                    }
                                     SuggestionKind::Variable => {
                                         Color::from_rgb(0.706, 0.745, 0.996)
-                                    } // fg    #b4befe
+                                    }
                                     SuggestionKind::Property => {
                                         Color::from_rgb(0.000, 0.663, 1.000)
-                                    } // blue
-                                    SuggestionKind::Module => Color::from_rgb(0.537, 0.863, 0.922), // cyan
-                                    SuggestionKind::Macro => Color::from_rgb(0.000, 1.000, 0.824), // green #00ffd2
-                                    SuggestionKind::Snippet => Color::from_rgb(0.976, 0.886, 0.686), // yellow
+                                    }
+                                    SuggestionKind::Module => Color::from_rgb(0.537, 0.863, 0.922),
+                                    SuggestionKind::Macro => Color::from_rgb(0.000, 1.000, 0.824),
+                                    SuggestionKind::Snippet => Color::from_rgb(0.976, 0.886, 0.686),
                                 }
                             };
 
-                            let accent_purple = Color::from_rgb(0.796, 0.651, 0.969); // #cba6f7
-                            let bg_modal = Color::from_rgb(0.149, 0.149, 0.212); // #262637
-                            let bg_selected = Color::from_rgba(0.796, 0.651, 0.969, 0.18); // purple @18%
+                            let accent_purple = Color::from_rgb(0.796, 0.651, 0.969);
+                            let bg_modal = Color::from_rgb(0.149, 0.149, 0.212);
+                            let bg_selected = Color::from_rgba(0.796, 0.651, 0.969, 0.18);
                             let divider = Color::from_rgba(1.0, 1.0, 1.0, 0.06);
 
                             let mut items: Vec<Element<'_, Message>> = Vec::new();
@@ -258,19 +257,16 @@ impl App {
                                 items.push(
                                     container(
                                         row![
-                                            // Colored kind icon
                                             container(
                                                 text(suggestion.kind.icon()).size(11).color(ic)
                                             )
                                             .width(Length::Fixed(20.0))
                                             .center_x(Length::Fixed(20.0)),
-                                            // Completion text
                                             text(&suggestion.text).size(12).color(label_color),
                                             iced::widget::Space::new().width(Length::Fill),
-                                            // Kind label (right-aligned)
                                             text(format!("{:?}", suggestion.kind).to_lowercase())
                                                 .size(10)
-                                                .color(Color::from_rgba(ic.r, ic.g, ic.b, 0.65,)),
+                                                .color(Color::from_rgba(ic.r, ic.g, ic.b, 0.65)),
                                         ]
                                         .spacing(6)
                                         .align_y(iced::Alignment::Center),
@@ -295,7 +291,7 @@ impl App {
                                 );
                             }
 
-                            // ── Navigation footer ───────────────────────────────────────────
+                            // Navigation footer
                             items.push(
                                 container(
                                     container(
@@ -358,7 +354,6 @@ impl App {
                                     ..Default::default()
                                 });
 
-                            // Position the panel below the cursor
                             let cursor_pos = code_editor
                                 .cursor_screen_position()
                                 .unwrap_or(iced::Point::new(48.0, 20.0));
@@ -375,14 +370,13 @@ impl App {
                                 .width(Length::Fill)
                                 .height(Length::Fill);
 
-                            // LSP overlay: only show when local autocomplete is not active
-                            return stack![editor, positioned_panel, lsp_overlay]
+                            return stack![editor, positioned_panel, lsp_hover]
                                 .width(Length::Fill)
                                 .height(Length::Fill)
                                 .into();
                         }
 
-                        return stack![editor, lsp_overlay]
+                        return stack![editor, lsp_hover]
                             .width(Length::Fill)
                             .height(Length::Fill)
                             .into();

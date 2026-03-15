@@ -4,6 +4,7 @@ mod app;
 mod autocomplete;
 mod config;
 mod features;
+mod lsp_setup;
 mod message;
 mod subscriptions;
 mod theme;
@@ -13,6 +14,16 @@ mod wakatime;
 const FIRA_CODE: &[u8] = include_bytes!("assets/fonts/FiraCode-Bold.ttf");
 
 fn main() -> iced::Result {
+    // Augment PATH with well-known LSP server locations before anything else.
+    // macOS GUI apps do not inherit the shell's PATH, so rust-analyzer,
+    // pyright-langserver, typescript-language-server, etc. would otherwise
+    // be invisible to std::process::Command.
+    lsp_setup::ensure_lsp_paths();
+
+    // Ensure rust-analyzer has its config directory on macOS (prevents a
+    // first-run crash when the server cannot find its config file).
+    iced_code_editor::ensure_rust_analyzer_config();
+
     let icon_data = include_bytes!("assets/icon.png");
     let icon = window::icon::from_file_data(icon_data, None).expect("Failed to load icon.");
     let prefs = config::preferences::load_preferences();

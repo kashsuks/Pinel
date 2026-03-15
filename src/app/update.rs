@@ -100,7 +100,6 @@ impl App {
                     let mut lsp_content: Option<String> = None;
                     let mut cursor_sync: Option<(EditorMessage, String, String)> = None;
                     let mut autocomplete_refresh: Option<(EditorMessage, String, PathBuf)> = None;
-                    let mut completion_applied = None::<(usize, usize)>;
                     let mut manual_cursor_update: Option<(usize, usize)> = None;
                     let cursor_line_before = self.cursor_line;
                     let tab_size = self.editor_preferences.tab_size.max(1);
@@ -253,13 +252,6 @@ impl App {
                         }
                     }
 
-                    if let Some((delete_count, insert_count)) = completion_applied {
-                        self.cursor_col = self
-                            .cursor_col
-                            .saturating_sub(delete_count)
-                            .saturating_add(insert_count);
-                        self.autocomplete.cancel();
-                    }
                     if let Some((ref event, ref before, ref after)) = cursor_sync {
                         self.sync_cursor_from_editor_event(event, before, after);
                     }
@@ -544,6 +536,18 @@ impl App {
                         buffer: crate::features::editor_buffer::EditorBuffer::from_text(&content),
                     },
                 });
+
+                // Detach LSP from all existing tabs before switching to the new one
+                for tab in &mut self.tabs {
+                    if let TabKind::Editor {
+                        ref mut code_editor,
+                        ..
+                    } = tab.kind
+                    {
+                        code_editor.detach_lsp();
+                    }
+                }
+
                 self.active_tab = Some(self.tabs.len() - 1);
                 self.cursor_line = 1;
                 self.cursor_col = 1;
@@ -603,7 +607,66 @@ impl App {
             }
             Message::TabSelected(idx) => {
                 if idx < self.tabs.len() {
+                    // Detach LSP from all tabs first
+                    for tab in &mut self.tabs {
+                        if let TabKind::Editor {
+                            ref mut code_editor,
+                            ..
+                        } = tab.kind
+                        {
+                            code_editor.detach_lsp();
+                        }
+                    }
+
                     self.active_tab = Some(idx);
+
+                    // Get path and server_key before mutable borrow
+                    let (tab_path, has_lsp) = if let Some(tab) = self.tabs.get(idx) {
+                        (
+                            tab.path.clone(),
+                            self.lsp_server_keys.get(&tab.path).copied(),
+                        )
+                    } else {
+                        return iced::Task::none();
+                    };
+
+                    // Create LSP client if needed (before mutable borrow)
+                    let lsp_client_data = if self.lsp_enabled && tab_path.is_absolute() {
+                        if let Some(server_key) = has_lsp {
+                            self.dev_log(format!(
+                                "LSP: Reattaching {} server for {}",
+                                server_key,
+                                tab_path.display()
+                            ));
+                            let root_hint = tab_path.parent();
+                            match self.lsp.create_client(server_key, root_hint) {
+                                Ok(client) => {
+                                    let uri = format!("file://{}", tab_path.display());
+                                    if let Some(language) =
+                                        iced_code_editor::lsp_language_for_path(&tab_path)
+                                    {
+                                        let document = iced_code_editor::LspDocument::new(
+                                            uri,
+                                            language.language_id,
+                                        );
+                                        Some((client, document, server_key))
+                                    } else {
+                                        None
+                                    }
+                                }
+                                Err(e) => {
+                                    self.dev_log(format!("LSP: Failed to reattach: {}", e));
+                                    None
+                                }
+                            }
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    };
+
+                    // Now attach to the tab
                     if let Some(tab) = self.tabs.get_mut(idx) {
                         if let TabKind::Editor {
                             ref mut code_editor,
@@ -611,6 +674,15 @@ impl App {
                         } = tab.kind
                         {
                             code_editor.request_focus();
+
+                            if let Some((client, document, server_key)) = lsp_client_data {
+                                code_editor.set_lsp_enabled(true);
+                                code_editor.attach_lsp(client, document);
+                                self.dev_log(format!(
+                                    "LSP: Successfully reattached {} server",
+                                    server_key
+                                ));
+                            }
                         }
                     }
                     self.vim_refresh_cursor_style();
@@ -1406,8 +1478,8 @@ impl App {
                 .and_then(Autocomplete::detect_language);
             self.autocomplete
                 .trigger(content, cursor_idx, lang.as_deref());
-            // Only keep suggestions when prefix is strictly more than 3 characters
-            if self.autocomplete.prefix.len() <= 3 {
+            // Only keep suggestions when prefix is at least 2 characters
+            if self.autocomplete.prefix.len() <= 1 {
                 self.autocomplete.cancel();
             }
         }
