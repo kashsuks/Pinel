@@ -292,6 +292,33 @@ impl App {
         .spacing(16)
         .align_y(iced::Alignment::Center);
 
+        let line_number_width_row = row![
+            column![
+                text("Line Number Width").size(13).color(theme().text_muted),
+                text("Gutter width in pixels (20\u{2013}120)")
+                    .size(11)
+                    .color(theme().text_dim),
+            ]
+            .spacing(2)
+            .width(Length::FillPortion(2)),
+            text_input(
+                "40",
+                &self.editor_preferences.line_number_width.to_string()
+            )
+            .on_input(Message::SettingsLineNumberWidthChanged)
+            .size(13)
+            .padding(iced::Padding {
+                top: 8.0,
+                right: 12.0,
+                bottom: 8.0,
+                left: 12.0
+            })
+            .style(search_input_style)
+            .width(Length::Fixed(80.0)),
+        ]
+        .spacing(16)
+        .align_y(iced::Alignment::Center);
+
         let all_themes: Vec<&str> = {
             let mut v: Vec<&str> = BUILTIN_THEMES.to_vec();
             v.push("Custom (theme.lua)");
@@ -437,6 +464,13 @@ impl App {
                 }
             ),
             spaces_row,
+            container(Space::new().width(Length::Fill).height(Length::Fixed(1.0))).style(
+                |_theme| container::Style {
+                    background: Some(Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.03))),
+                    ..Default::default()
+                }
+            ),
+            line_number_width_row,
             container(Space::new().width(Length::Fill).height(Length::Fixed(1.0))).style(
                 |_theme| container::Style {
                     background: Some(Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.03))),

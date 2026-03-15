@@ -160,6 +160,11 @@ impl Default for App {
                 let t = crate::theme::ThemeColors::from_lua_theme(&lua_theme);
                 crate::theme::set_theme(t);
                 "Custom (theme.lua)".to_string()
+            } else if name == "default" || name.is_empty() {
+                // 'default' or empty → Pinel Blueberry Dark
+                let t = crate::theme::pinel_blueberry_dark_theme();
+                crate::theme::set_theme(t);
+                "Pinel Blueberry Dark".to_string()
             } else {
                 let found = crate::theme::BUILTIN_THEMES
                     .iter()
@@ -169,7 +174,10 @@ impl Default for App {
                     crate::theme::set_theme(t);
                     theme_name.to_string()
                 } else {
-                    "Catppuccin Mocha".to_string()
+                    // Unknown theme name → fall back to Blueberry Dark
+                    let t = crate::theme::builtin_theme("Pinel Blueberry Dark");
+                    crate::theme::set_theme(t);
+                    "Pinel Blueberry Dark".to_string()
                 }
             }
         };

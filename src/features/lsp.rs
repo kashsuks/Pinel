@@ -36,12 +36,8 @@ impl LspManager {
         root_hint: Option<&Path>,
     ) -> Result<Box<dyn LspClient>, String> {
         let root_uri = self.root_uri(root_hint);
-        let client = LspProcessClient::new_with_server(
-            &root_uri,
-            self.sender.clone(),
-            server_key,
-        )
-        .map_err(|e| format!("Failed to start LSP server '{}': {}", server_key, e))?;
+        let client = LspProcessClient::new_with_server(&root_uri, self.sender.clone(), server_key)
+            .map_err(|e| format!("Failed to start LSP server '{}': {}", server_key, e))?;
         Ok(Box::new(client))
     }
 

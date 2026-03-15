@@ -76,6 +76,7 @@ pub enum Message {
     SettingsSavePreferences,
     SettingsSelectTheme(String),
     SettingsReloadTheme,
+    SettingsLineNumberWidthChanged(String),
     /// Vim-style command input
     ToggleCommandInput,
     CommandInputChanged(String),

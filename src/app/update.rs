@@ -112,16 +112,39 @@ impl App {
                             ref mut buffer,
                         } = tab.kind
                         {
-                            // Check for LSP completion acceptance first
-                            if self.lsp_overlay.completion_visible 
-                                && matches!(event, EditorMessage::Enter) 
+                            // Accept local autocomplete on Enter
+                            if self.autocomplete.active
+                                && !self.autocomplete.suggestions.is_empty()
+                                && matches!(event, EditorMessage::Enter)
+                            {
+                                if let Some(suggestion) = self.autocomplete.get_selected().cloned() {
+                                    let prefix_len = self.autocomplete.prefix.len();
+                                    for _ in 0..prefix_len {
+                                        let _ = code_editor.update(&EditorMessage::Backspace);
+                                    }
+                                    for ch in suggestion.text.chars() {
+                                        let _ = code_editor.update(&EditorMessage::CharacterInput(ch));
+                                    }
+                                    let after = code_editor.content();
+                                    buffer.set_text(&after);
+                                    self.cursor_col = self.cursor_col.saturating_sub(prefix_len) + suggestion.text.len();
+                                    self.autocomplete.cancel();
+                                    lsp_path = Some(tab.path.clone());
+                                    lsp_content = Some(after);
+                                    mapped_task = Some(iced::Task::none());
+                                }
+                            }
+
+                            // Accept LSP completion on Enter
+                            if mapped_task.is_none()
+                                && self.lsp_overlay.completion_visible
+                                && matches!(event, EditorMessage::Enter)
                             {
                                 if let Some(selected) = self.lsp_overlay.selected_item() {
-                                    // Get the text before cursor to find word start
                                     let content = code_editor.content();
                                     let line = content.lines().nth(self.cursor_line.saturating_sub(1)).unwrap_or("");
                                     let before_cursor = &line[..self.cursor_col.saturating_sub(1).min(line.len())];
-                                    
+
                                     let chars: Vec<char> = before_cursor.chars().collect();
                                     let word_start = chars.iter()
                                         .enumerate()
@@ -129,28 +152,28 @@ impl App {
                                         .find(|(_, c)| !c.is_alphanumeric() && **c != '_')
                                         .map(|(i, _)| i + 1)
                                         .unwrap_or(0);
-                                    
+
                                     let prefix_len = before_cursor.len() - word_start;
-                                    let delete_text = &line[word_start..self.cursor_col.saturating_sub(1).min(line.len())];
-                                    
-                                    // Delete the prefix and insert completion
-                                    for _ in 0..delete_text.len() {
+                                    for _ in 0..prefix_len {
                                         let _ = code_editor.update(&EditorMessage::Backspace);
                                     }
                                     for ch in selected.chars() {
                                         let _ = code_editor.update(&EditorMessage::CharacterInput(ch));
                                     }
-                                    
+                                    let after = code_editor.content();
+                                    buffer.set_text(&after);
+                                    self.cursor_col = self.cursor_col.saturating_sub(prefix_len) + selected.len();
                                     self.lsp_overlay = iced_code_editor::LspOverlayState::new();
-                                    self.vim_refresh_cursor_style();
-                                    return iced::Task::none();
+                                    self.autocomplete.cancel();
+                                    lsp_path = Some(tab.path.clone());
+                                    lsp_content = Some(after);
+                                    mapped_task = Some(iced::Task::none());
                                 }
                             }
 
                             if mapped_task.is_none()
                                 && matches!(event, EditorMessage::Enter)
-                                && (!self.autocomplete.active
-                                    || self.autocomplete.suggestions.is_empty())
+                                && !self.autocomplete.active
                                 && !self.lsp_overlay.completion_visible
                             {
                                 let before = code_editor.content();
@@ -227,8 +250,25 @@ impl App {
                             .saturating_add(insert_count);
                         self.autocomplete.cancel();
                     }
-                    if let Some((event, before, after)) = cursor_sync {
-                        self.sync_cursor_from_editor_event(&event, &before, &after);
+                    if let Some((ref event, ref before, ref after)) = cursor_sync {
+                        self.sync_cursor_from_editor_event(event, before, after);
+                    }
+                    // For mouse events, read cursor position directly from editor
+                    if matches!(
+                        cursor_sync.as_ref().map(|(e, _, _)| e),
+                        Some(EditorMessage::MouseClick(_)) | Some(EditorMessage::MouseDrag(_))
+                    ) {
+                        if let Some(idx2) = self.active_tab {
+                            if let Some(tab) = self.tabs.get(idx2) {
+                                if let TabKind::Editor { ref code_editor, .. } = tab.kind {
+                                    let (line, col) = code_editor.cursor_position();
+                                    self.cursor_line = line + 1;
+                                    self.cursor_col = col + 1;
+                                }
+                            }
+                        }
+                        // Dismiss overlays on click
+                        self.lsp_overlay = iced_code_editor::LspOverlayState::new();
                     }
                     if let Some((event, after, path)) = autocomplete_refresh {
                         self.refresh_autocomplete_for_event(&event, &after, &path);
@@ -266,13 +306,23 @@ impl App {
                             self.last_wakatime_sent_at = Some(Instant::now());
                         }
 
-                        // LSP: request completion on character input
+                        // LSP: only request completion on actual text-change events
                         if self.lsp_enabled {
-                            if let Some(idx2) = self.active_tab {
-                                if let Some(tab) = self.tabs.get_mut(idx2) {
-                                    if let TabKind::Editor { ref mut code_editor, .. } = tab.kind {
-                                        code_editor.lsp_flush_pending_changes();
-                                        code_editor.lsp_request_completion();
+                            let is_text_change = cursor_sync.as_ref().map(|(e, _, _)| matches!(
+                                e,
+                                EditorMessage::CharacterInput(_)
+                                    | EditorMessage::Backspace
+                                    | EditorMessage::Delete
+                                    | EditorMessage::Paste(_)
+                                    | EditorMessage::Enter
+                            )).unwrap_or(false);
+                            if is_text_change {
+                                if let Some(idx2) = self.active_tab {
+                                    if let Some(tab) = self.tabs.get_mut(idx2) {
+                                        if let TabKind::Editor { ref mut code_editor, .. } = tab.kind {
+                                            code_editor.lsp_flush_pending_changes();
+                                            code_editor.lsp_request_completion();
+                                        }
                                     }
                                 }
                             }
@@ -776,7 +826,11 @@ impl App {
                 iced::Task::none()
             }
             Message::EscapePressed => {
-                if self.command_palette.open {
+                if self.autocomplete.active {
+                    self.autocomplete.cancel();
+                } else if self.lsp_overlay.completion_visible || self.lsp_overlay.hover_visible {
+                    self.lsp_overlay = iced_code_editor::LspOverlayState::new();
+                } else if self.command_palette.open {
                     self.command_palette.close();
                 } else if self.pending_sensitive_open.is_some() {
                     self.pending_sensitive_open = None;
@@ -1001,6 +1055,12 @@ impl App {
                 let _ = prefs::save_preferences(&self.editor_preferences);
                 iced::Task::none()
             }
+            Message::SettingsLineNumberWidthChanged(val) => {
+                if let Ok(w) = val.parse::<f32>() {
+                    self.editor_preferences.line_number_width = w.max(20.0).min(120.0);
+                }
+                iced::Task::none()
+            }
             Message::ToggleCommandInput => {
                 if self.command_input.open {
                     self.command_input.close();
@@ -1112,17 +1172,33 @@ impl App {
                         }
                         iced_code_editor::LspEvent::Completion { items } => {
                             if !items.is_empty() {
-                                let position = self.active_tab
+                                // Only show LSP completion if prefix is strictly more than 3 chars
+                                let prefix_len = self.active_tab
                                     .and_then(|idx| self.tabs.get(idx))
-                                    .and_then(|tab| {
+                                    .map(|tab| {
                                         if let TabKind::Editor { ref code_editor, .. } = tab.kind {
-                                            code_editor.cursor_screen_position()
+                                            let content = code_editor.content();
+                                            let line = content.lines().nth(self.cursor_line.saturating_sub(1)).unwrap_or("");
+                                            let before = &line[..self.cursor_col.saturating_sub(1).min(line.len())];
+                                            before.chars().rev().take_while(|c| c.is_alphanumeric() || *c == '_').count()
                                         } else {
-                                            None
+                                            0
                                         }
                                     })
-                                    .unwrap_or(iced::Point::new(4.0, 4.0));
-                                self.lsp_overlay.set_completions(items, position);
+                                    .unwrap_or(0);
+                                if prefix_len > 3 {
+                                    let position = self.active_tab
+                                        .and_then(|idx| self.tabs.get(idx))
+                                        .and_then(|tab| {
+                                            if let TabKind::Editor { ref code_editor, .. } = tab.kind {
+                                                code_editor.cursor_screen_position()
+                                            } else {
+                                                None
+                                            }
+                                        })
+                                        .unwrap_or(iced::Point::new(4.0, 4.0));
+                                    self.lsp_overlay.set_completions(items, position);
+                                }
                             }
                         }
                         iced_code_editor::LspEvent::Definition { uri, range } => {
@@ -1192,7 +1268,8 @@ impl App {
                 .and_then(Autocomplete::detect_language);
             self.autocomplete
                 .trigger(content, cursor_idx, lang.as_deref());
-            if self.autocomplete.prefix.len() < 2 {
+            // Only keep suggestions when prefix is strictly more than 3 characters
+            if self.autocomplete.prefix.len() <= 3 {
                 self.autocomplete.cancel();
             }
         }
@@ -1298,6 +1375,9 @@ impl App {
                     .map(|line| line.chars().count())
                     .unwrap_or(0);
                 self.cursor_col = len + 1;
+            }
+            EditorMessage::MouseClick(_) | EditorMessage::MouseDrag(_) => {
+                // Handled separately below via read_cursor_from_editor
             }
             _ => {}
         }

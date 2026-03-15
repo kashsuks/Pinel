@@ -55,15 +55,15 @@ impl SuggestionKind {
     pub fn icon(&self) -> &'static str {
         match self {
             SuggestionKind::Function => "ƒ",
-            SuggestionKind::Method => "⚡",
+            SuggestionKind::Method   => "⚡",
             SuggestionKind::Variable => "𝑥",
-            SuggestionKind::Type => "𝑇",
+            SuggestionKind::Type     => "𝑇",
             SuggestionKind::Constant => "◇",
-            SuggestionKind::Keyword => "◆",
-            SuggestionKind::Module => "📦",
-            SuggestionKind::Macro => "!",
+            SuggestionKind::Keyword  => "◆",
+            SuggestionKind::Module   => "⬡",
+            SuggestionKind::Macro    => "!",
             SuggestionKind::Property => "○",
-            SuggestionKind::Snippet => "📋",
+            SuggestionKind::Snippet  => "≈",
         }
     }
 

@@ -202,8 +202,32 @@ impl App {
                         let show_panel =
                             self.autocomplete.active && !self.autocomplete.suggestions.is_empty();
                         if show_panel {
+                            // ── Blueberry autocomplete modal ────────────────────────────────
+                            // Per-kind accent colors (Blueberry Dark palette)
+                            let kind_color = |kind: &crate::autocomplete::types::SuggestionKind| {
+                                use crate::autocomplete::types::SuggestionKind;
+                                match kind {
+                                    SuggestionKind::Keyword  => Color::from_rgb(0.796, 0.651, 0.969), // purple #cba6f7
+                                    SuggestionKind::Function => Color::from_rgb(0.000, 0.663, 1.000), // blue   #00a9ff
+                                    SuggestionKind::Method   => Color::from_rgb(0.537, 0.863, 0.922), // cyan   #89dceb
+                                    SuggestionKind::Type     => Color::from_rgb(0.976, 0.886, 0.686), // yellow #f9e2af
+                                    SuggestionKind::Constant => Color::from_rgb(0.976, 0.886, 0.686), // yellow
+                                    SuggestionKind::Variable => Color::from_rgb(0.706, 0.745, 0.996), // fg    #b4befe
+                                    SuggestionKind::Property => Color::from_rgb(0.000, 0.663, 1.000), // blue
+                                    SuggestionKind::Module   => Color::from_rgb(0.537, 0.863, 0.922), // cyan
+                                    SuggestionKind::Macro    => Color::from_rgb(0.000, 1.000, 0.824), // green #00ffd2
+                                    SuggestionKind::Snippet  => Color::from_rgb(0.976, 0.886, 0.686), // yellow
+                                }
+                            };
+
+                            let accent_purple = Color::from_rgb(0.796, 0.651, 0.969); // #cba6f7
+                            let bg_modal = Color::from_rgb(0.149, 0.149, 0.212);      // #262637
+                            let bg_selected = Color::from_rgba(0.796, 0.651, 0.969, 0.18); // purple @18%
+                            let divider = Color::from_rgba(1.0, 1.0, 1.0, 0.06);
+
                             let mut items: Vec<Element<'_, Message>> = Vec::new();
                             let visible_count = self.autocomplete.suggestions.len().min(8);
+
                             for (i, suggestion) in self
                                 .autocomplete
                                 .suggestions
@@ -212,83 +236,129 @@ impl App {
                                 .enumerate()
                             {
                                 let is_selected = i == self.autocomplete.selected_index;
-                                let bg_color = if is_selected {
-                                    Some(iced::Background::Color(theme().selection))
-                                } else {
-                                    None
-                                };
+                                let ic = kind_color(&suggestion.kind);
                                 let label_color = if is_selected {
                                     theme().text_primary
                                 } else {
                                     theme().text_muted
                                 };
+                                let row_bg = if is_selected {
+                                    Some(iced::Background::Color(bg_selected))
+                                } else {
+                                    None
+                                };
                                 items.push(
                                     container(
                                         row![
-                                            text(suggestion.kind.icon())
+                                            // Colored kind icon
+                                            container(
+                                                text(suggestion.kind.icon())
+                                                    .size(11)
+                                                    .color(ic)
+                                            )
+                                            .width(Length::Fixed(20.0))
+                                            .center_x(Length::Fixed(20.0)),
+                                            // Completion text
+                                            text(&suggestion.text)
                                                 .size(12)
-                                                .color(theme().text_placeholder),
-                                            text(&suggestion.text).size(12).color(label_color),
+                                                .color(label_color),
+                                            iced::widget::Space::new().width(Length::Fill),
+                                            // Kind label (right-aligned)
+                                            text(format!("{:?}", suggestion.kind).to_lowercase())
+                                                .size(10)
+                                                .color(Color::from_rgba(
+                                                    ic.r, ic.g, ic.b, 0.65,
+                                                )),
                                         ]
-                                        .spacing(8)
+                                        .spacing(6)
                                         .align_y(iced::Alignment::Center),
                                     )
                                     .padding(iced::Padding {
-                                        top: 3.0,
+                                        top: 4.0,
                                         right: 10.0,
-                                        bottom: 3.0,
+                                        bottom: 4.0,
                                         left: 8.0,
                                     })
                                     .width(Length::Fill)
                                     .style(move |_theme| container::Style {
-                                        background: bg_color,
+                                        background: row_bg,
+                                        border: iced::Border {
+                                            color: Color::TRANSPARENT,
+                                            width: 0.0,
+                                            radius: 4.0.into(),
+                                        },
                                         ..Default::default()
                                     })
                                     .into(),
                                 );
                             }
+
+                            // ── Navigation footer ───────────────────────────────────────────
                             items.push(
                                 container(
-                                    text("↑↓ Navigate  Enter Accept  Esc Dismiss")
-                                        .size(9)
-                                        .color(theme().text_dim),
+                                    container(
+                                        row![
+                                            text("↑↓").size(9).color(accent_purple),
+                                            text(" navigate · ").size(9).color(theme().text_dim),
+                                            text("↵").size(9).color(accent_purple),
+                                            text(" accept · ").size(9).color(theme().text_dim),
+                                            text("esc").size(9).color(accent_purple),
+                                            text(" dismiss").size(9).color(theme().text_dim),
+                                        ]
+                                        .spacing(0)
+                                        .align_y(iced::Alignment::Center),
+                                    )
+                                    .padding(iced::Padding {
+                                        top: 4.0,
+                                        right: 8.0,
+                                        bottom: 4.0,
+                                        left: 8.0,
+                                    })
+                                    .width(Length::Fill)
+                                    .style(move |_theme| container::Style {
+                                        background: Some(iced::Background::Color(
+                                            Color::from_rgba(0.796, 0.651, 0.969, 0.06)
+                                        )),
+                                        border: iced::Border {
+                                            color: divider,
+                                            width: 1.0,
+                                            radius: 0.0.into(),
+                                        },
+                                        ..Default::default()
+                                    }),
                                 )
-                                .padding(iced::Padding {
-                                    top: 2.0,
-                                    right: 8.0,
-                                    bottom: 0.0,
-                                    left: 8.0,
-                                })
+                                .width(Length::Fill)
                                 .into(),
                             );
 
                             let panel = container(column(items).spacing(1))
                                 .padding(4)
                                 .max_width(320.0)
-                                .style(|_theme| container::Style {
-                                    background: Some(iced::Background::Color(theme().bg_secondary)),
+                                .style(move |_theme| container::Style {
+                                    background: Some(iced::Background::Color(bg_modal)),
                                     border: iced::Border {
-                                        color: theme().border_subtle,
+                                        color: Color::from_rgba(
+                                            accent_purple.r,
+                                            accent_purple.g,
+                                            accent_purple.b,
+                                            0.35,
+                                        ),
                                         width: 1.0,
-                                        radius: 6.0.into(),
+                                        radius: 8.0.into(),
                                     },
                                     shadow: iced::Shadow {
-                                        color: theme().shadow_dark,
-                                        offset: iced::Vector::new(0.0, 2.0),
-                                        blur_radius: 8.0,
+                                        color: Color::from_rgba(0.0, 0.0, 0.0, 0.6),
+                                        offset: iced::Vector::new(0.0, 4.0),
+                                        blur_radius: 20.0,
                                     },
                                     ..Default::default()
                                 });
 
-                            // Position the autocomplete panel near the cursor
-                            let char_width: f32 = 7.8;
-                            let line_height: f32 = 20.0;
-                            let gutter_width: f32 = 48.0;
-                            let x = gutter_width + (self.cursor_col as f32 - 1.0) * char_width;
-                            let y = (self.cursor_line as f32) * line_height;
-                            // Clamp so the popup stays within the visible editor area
-                            let y = y.clamp(0.0, 560.0);
-                            let x = x.clamp(0.0, 500.0);
+                            // Position the panel below the cursor
+                            let cursor_pos = code_editor.cursor_screen_position()
+                                .unwrap_or(iced::Point::new(48.0, 20.0));
+                            let x = cursor_pos.x.clamp(0.0, 500.0);
+                            let y = (cursor_pos.y + 20.0).clamp(0.0, 560.0);
 
                             let positioned_panel = container(panel)
                                 .padding(iced::Padding {
@@ -300,6 +370,7 @@ impl App {
                                 .width(Length::Fill)
                                 .height(Length::Fill);
 
+                            // LSP overlay: only show when local autocomplete is not active
                             return stack![editor, positioned_panel, lsp_overlay]
                                 .width(Length::Fill)
                                 .height(Length::Fill)

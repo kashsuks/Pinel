@@ -15,8 +15,12 @@ impl FuzzyScorer {
             return 1000.0;
         }
 
+        // Exact prefix match — strongly preferred, shorter candidates rank higher
         if text_lower.starts_with(&pattern_lower) {
-            return 900.0 - (text.len() - pattern.len()) as f32;
+            let length_penalty = (text.len() - pattern.len()) as f32;
+            // Penalize leading underscores (e.g. __import__ vs import)
+            let underscore_penalty = text.chars().take_while(|c| *c == '_').count() as f32 * 50.0;
+            return 900.0 - length_penalty - underscore_penalty;
         }
 
         Self::fuzzy_match_score(text, pattern, &text_lower, &pattern_lower)

@@ -261,29 +261,8 @@ fn build_palette_syntax_theme() -> SynTheme {
 
 impl Default for ThemeColors {
     fn default() -> Self {
-        Self {
-            bg_primary: BG_MANTLE,
-            bg_secondary: BG_MANTLE,
-            bg_editor: Color::from_rgb(0.106, 0.106, 0.163),
-            bg_tab_active: SURFACE_1,
-            bg_tab_inactive: BG_MANTLE,
-            bg_status_bar: BG_MANTLE,
-            bg_tab_bar: BG_CRUST,
-            bg_hover: SURFACE_2,
-            bg_pressed: SURFACE_3,
-            bg_drag_handle: SURFACE_1,
-            text_primary: TEXT_1,
-            text_secondary: TEXT_2,
-            text_muted: TEXT_3,
-            text_dim: OVERLAY_2,
-            text_placeholder: OVERLAY_1,
-            border_subtle: SURFACE_2,
-            border_very_subtle: SURFACE_1,
-            selection: Color::from_rgba(0.537, 0.706, 0.980, 0.3), // ACCENT_BLUE @ 30%
-            shadow_dark: Color::from_rgba(0.067, 0.067, 0.106, 0.5), // BG_CRUST @ 50%
-            shadow_light: Color::from_rgba(0.345, 0.357, 0.439, 0.08), // SURFACE_3 @ 8%
-            syntax_theme: build_palette_syntax_theme(),
-        }
+        // Default is Pinel Blueberry Dark — built lazily to avoid recursion
+        pinel_blueberry_dark()
     }
 }
 
@@ -365,12 +344,20 @@ pub fn set_theme(t: ThemeColors) {
     *w = t;
 }
 
+/// Public alias to construct a Pinel Blueberry Dark theme (used by app startup).
+pub fn pinel_blueberry_dark_theme() -> ThemeColors {
+    pinel_blueberry_dark()
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // Built-in theme palettes
 // ═══════════════════════════════════════════════════════════════════════════
 
 /// List of all built-in theme names.
+/// The first two entries are the "Pinel Blueberry" themes and serve as the default.
 pub const BUILTIN_THEMES: &[&str] = &[
+    "Pinel Blueberry Dark",
+    "Pinel Blueberry Light",
     "Catppuccin Mocha",
     "Gruvbox Dark",
     "GitHub Dark",
@@ -382,12 +369,167 @@ pub const BUILTIN_THEMES: &[&str] = &[
 /// Build a ThemeColors from a named built-in theme.
 pub fn builtin_theme(name: &str) -> ThemeColors {
     match name {
+        "Pinel Blueberry Dark" => pinel_blueberry_dark(),
+        "Pinel Blueberry Light" => pinel_blueberry_light(),
         "Gruvbox Dark" => gruvbox_dark(),
         "GitHub Dark" => github_dark(),
         "Nord" => nord(),
         "TokyoNight" => tokyonight(),
         "Ayu Dark" => ayu_dark(),
-        _ => ThemeColors::default(), // Catppuccin Mocha
+        _ => pinel_blueberry_dark(), // fallback to Blueberry Dark
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Pinel Blueberry — Dark
+// ═══════════════════════════════════════════════════════════════════════════
+// Palette (dark)
+//   bg      #1e1e2e   fg      #b4befe
+//   red     #df4576   green   #00ffd2
+//   blue    #00a9ff   yellow  #f9e2af
+//   purple  #cba6f7   cyan    #89dceb
+//   gray    #9399b2
+
+fn pinel_blueberry_dark() -> ThemeColors {
+    let bg = Color::from_rgb(0.118, 0.118, 0.180);      // #1e1e2e
+    let bg_raised = Color::from_rgb(0.149, 0.149, 0.212); // #262637 — sidebar / panels
+    let bg_surface = Color::from_rgb(0.192, 0.196, 0.267); // #313244 — elevated surfaces
+    let fg = Color::from_rgb(0.706, 0.745, 0.996);      // #b4befe
+    let red = Color::from_rgb(0.875, 0.271, 0.463);     // #df4576
+    let green = Color::from_rgb(0.000, 1.000, 0.824);   // #00ffd2
+    let blue = Color::from_rgb(0.000, 0.663, 1.000);    // #00a9ff
+    let yellow = Color::from_rgb(0.976, 0.886, 0.686);  // #f9e2af
+    let purple = Color::from_rgb(0.796, 0.651, 0.969);  // #cba6f7
+    let cyan = Color::from_rgb(0.537, 0.863, 0.922);    // #89dceb
+    let gray = Color::from_rgb(0.576, 0.600, 0.698);    // #9399b2
+
+    // Text hierarchy built from the fg / gray
+    let text_primary = fg;                                // #b4befe — vivid, readable
+    let text_secondary = Color::from_rgb(0.651, 0.678, 0.784); // #a6adc8
+    let text_muted = gray;                               // #9399b2
+    let text_dim = Color::from_rgb(0.498, 0.518, 0.612); // #7f849c
+    let text_placeholder = Color::from_rgb(0.424, 0.439, 0.525); // #6c7086
+
+    let border_subtle = Color::from_rgb(0.271, 0.278, 0.353);   // #45475a
+    let border_very_subtle = Color::from_rgb(0.192, 0.196, 0.267); // #313244
+
+    let syn = build_syntax_theme(
+        "Pinel Blueberry Dark",
+        fg,        // foreground
+        bg,        // background
+        fg,        // caret
+        bg_surface, // line highlight
+        gray,      // comments
+        purple,    // keywords
+        blue,      // functions
+        cyan,      // types
+        green,     // strings
+        yellow,    // numbers
+        yellow,    // constants
+        fg,        // variables
+        blue,      // properties
+        cyan,      // operators
+        text_dim,  // punctuation
+    );
+
+    ThemeColors {
+        bg_primary: bg_raised,
+        bg_secondary: bg_raised,
+        bg_editor: bg,
+        bg_tab_active: bg_surface,
+        bg_tab_inactive: bg_raised,
+        bg_status_bar: bg_raised,
+        bg_tab_bar: Color::from_rgb(0.094, 0.094, 0.145), // #181825 crust-like
+        bg_hover: bg_surface,
+        bg_pressed: Color::from_rgb(0.345, 0.357, 0.439), // #585b70
+        bg_drag_handle: bg_surface,
+        text_primary,
+        text_secondary,
+        text_muted,
+        text_dim,
+        text_placeholder,
+        border_subtle,
+        border_very_subtle,
+        selection: Color::from_rgba(purple.r, purple.g, purple.b, 0.25),
+        shadow_dark: Color::from_rgba(0.0, 0.0, 0.0, 0.55),
+        shadow_light: Color::from_rgba(purple.r, purple.g, purple.b, 0.06),
+        syntax_theme: syn,
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Pinel Blueberry — Light
+// ═══════════════════════════════════════════════════════════════════════════
+// Palette (light)
+//   bg      #eff1f5   fg      #4c4f69
+//   red     #d20f39   green   #40a02b
+//   blue    #1e66f5   yellow  #df8e1d
+//   purple  #8839ef   cyan    #179299
+//   gray    #7c7f93
+
+fn pinel_blueberry_light() -> ThemeColors {
+    let bg = Color::from_rgb(0.937, 0.945, 0.961);      // #eff1f5
+    let bg_raised = Color::from_rgb(0.894, 0.906, 0.929); // #e4e7ee
+    let bg_surface = Color::from_rgb(0.847, 0.863, 0.894); // #d8dbE4
+    let fg = Color::from_rgb(0.298, 0.310, 0.412);      // #4c4f69
+    let red = Color::from_rgb(0.824, 0.059, 0.224);     // #d20f39
+    let green = Color::from_rgb(0.251, 0.627, 0.169);   // #40a02b
+    let blue = Color::from_rgb(0.118, 0.400, 0.961);    // #1e66f5
+    let yellow = Color::from_rgb(0.875, 0.557, 0.114);  // #df8e1d
+    let purple = Color::from_rgb(0.533, 0.224, 0.937);  // #8839ef
+    let cyan = Color::from_rgb(0.090, 0.573, 0.600);    // #179299
+    let gray = Color::from_rgb(0.486, 0.498, 0.576);    // #7c7f93
+
+    let text_primary = fg;
+    let text_secondary = Color::from_rgb(0.376, 0.396, 0.510); // #606481 approx
+    let text_muted = gray;
+    let text_dim = Color::from_rgb(0.620, 0.635, 0.715); // #9e9fb5 approx
+    let text_placeholder = Color::from_rgb(0.706, 0.722, 0.796); // #b4b7c9 approx
+
+    let border_subtle = Color::from_rgb(0.788, 0.808, 0.855);   // #c9ceda
+    let border_very_subtle = Color::from_rgb(0.847, 0.863, 0.894); // same as bg_surface
+
+    let syn = build_syntax_theme(
+        "Pinel Blueberry Light",
+        fg,
+        bg,
+        fg,
+        bg_surface,
+        gray,
+        purple,
+        blue,
+        cyan,
+        green,
+        yellow,
+        yellow,
+        fg,
+        blue,
+        cyan,
+        text_dim,
+    );
+
+    ThemeColors {
+        bg_primary: bg_raised,
+        bg_secondary: bg_raised,
+        bg_editor: bg,
+        bg_tab_active: bg_surface,
+        bg_tab_inactive: bg_raised,
+        bg_status_bar: bg_raised,
+        bg_tab_bar: Color::from_rgb(0.867, 0.882, 0.914), // slightly darker crust
+        bg_hover: bg_surface,
+        bg_pressed: Color::from_rgb(0.788, 0.808, 0.855),
+        bg_drag_handle: bg_surface,
+        text_primary,
+        text_secondary,
+        text_muted,
+        text_dim,
+        text_placeholder,
+        border_subtle,
+        border_very_subtle,
+        selection: Color::from_rgba(purple.r, purple.g, purple.b, 0.18),
+        shadow_dark: Color::from_rgba(0.298, 0.310, 0.412, 0.18),
+        shadow_light: Color::from_rgba(purple.r, purple.g, purple.b, 0.05),
+        syntax_theme: syn,
     }
 }
 
@@ -573,7 +715,9 @@ fn tokyonight() -> ThemeColors {
     let blue = Color::from_rgb(0.486, 0.631, 0.984); // #7aa2f7
     let blue2 = Color::from_rgb(0.478, 0.718, 0.957); // #7dcfff
     let purple = Color::from_rgb(0.733, 0.518, 0.969); // #bb9af7
+    #[allow(clippy::approx_constant)] // 0.318 is an intentional color value, not FRAC_1_PI
     let orange = Color::from_rgb(1.0, 0.608, 0.318); // #ff9e64
+
     let yellow = Color::from_rgb(0.878, 0.769, 0.459); // #e0af68
     let cyan = Color::from_rgb(0.486, 0.863, 0.871); // #7dcfff approx
 

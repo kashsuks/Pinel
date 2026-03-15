@@ -10,6 +10,8 @@ pub struct EditorPreferences {
     pub theme_name: String,
     pub window_width: f32,
     pub window_height: f32,
+    /// Width of the line-number gutter in logical pixels (default 40).
+    pub line_number_width: f32,
 }
 
 impl Default for EditorPreferences {
@@ -17,9 +19,10 @@ impl Default for EditorPreferences {
         Self {
             tab_size: 4,
             use_spaces: true,
-            theme_name: "default".to_string(),
+            theme_name: "Pinel Blueberry Dark".to_string(),
             window_width: 1200.0,
             window_height: 800.0,
+            line_number_width: 40.0,
         }
     }
 }
@@ -117,6 +120,11 @@ fn parse_preferences(content: &str) -> EditorPreferences {
                         prefs.window_height = height.max(480.0).min(10000.0);
                     }
                 }
+                "line_number_width" => {
+                    if let Ok(w) = value.parse::<f32>() {
+                        prefs.line_number_width = w.max(20.0).min(120.0);
+                    }
+                }
                 _ => {}
             }
         }
@@ -196,9 +204,16 @@ return {{
     theme_name = "{}",
     window_width = {},
     window_height = {},
+    -- Width of the line-number gutter in logical pixels (20–120)
+    line_number_width = {},
 }}
 "#,
-        prefs.tab_size, prefs.use_spaces, prefs.theme_name, prefs.window_width, prefs.window_height,
+        prefs.tab_size,
+        prefs.use_spaces,
+        prefs.theme_name,
+        prefs.window_width,
+        prefs.window_height,
+        prefs.line_number_width,
     );
     let mut file = fs::File::create(path)?;
     file.write_all(content.as_bytes())?;
