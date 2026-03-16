@@ -107,25 +107,22 @@ tar xzf pinel.tar.gz
 
 ## 2.4 Package managers
 
-Summarize how to install Pinel with different package managers across platforms.
+Pinel currently has support through the following package managers:
 
-You can group by ecosystem:
-
-- **Homebrew** (macOS / Linux)
-- **winget / Chocolatey** (Windows)
-- **apt / dnf / pacman** (Linux)
-
+- [Crates.io](https://crates.io/)
 ```bash
-# Homebrew (macOS / Linux)
-brew install pinel
-
-# Debian / Ubuntu
-sudo apt install pinel
-
-# Fedora
-sudo dnf install pinel
-
-# Arch
-sudo pacman -S pinel
+cargo install pinel
 ```
 
+- [AUR (Arch User Repository)](https://aur.archlinux.org/)
+Using an AUR helper like `yay`:
+
+```bash
+yay -S pinel
+```
+
+or with `paru`:
+
+```bash
+paru -S pinel
+```
