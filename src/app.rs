@@ -3,6 +3,7 @@
 //! This module defines [`App`] and splits its behavior into focused submodules:
 //! event updates, subscriptions, commands, and view builders.
 
+use frostmark::MarkState;
 use iced::widget::{
     button, column, container, markdown, mouse_area, row, scrollable, stack, text, text_input,
 };
@@ -66,6 +67,11 @@ pub struct Tab {
     pub path: PathBuf,
     pub name: String,
     pub kind: TabKind,
+}
+
+pub struct MarkdownPreviewPane {
+    pub source_path: PathBuf,
+    pub state: MarkState,
 }
 
 /// toast notification metadata.
