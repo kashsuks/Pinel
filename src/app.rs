@@ -128,6 +128,8 @@ pub struct App {
     command_palette_selected: usize,
     command_palette_input_id: iced::widget::Id,
 
+    markdown_preview: Option<MarkdownPreviewPane>,
+
     terminal: Terminal,
     terminal_pane: Option<IcedTerminal>,
     terminal_open: bool,
@@ -230,6 +232,8 @@ impl Default for App {
             command_palette: CommandPalette::default(),
             command_palette_selected: 0,
             command_palette_input_id: iced::widget::Id::unique(),
+
+            markdown_preview: None,
 
             terminal: Terminal::default(),
             terminal_pane: {
