@@ -291,7 +291,31 @@ impl Default for App {
             developer_panel_visible: false,
         };
 
-        for command in scripting::load_startup_commands() {
+        let startup_script = scripting::load_startup_script();
+        app.push_developer_log(format!(
+            "startup lua path: {}",
+            startup_script.path.display()
+        ));
+
+        match &startup_script.source {
+            Some(source) => {
+                app.push_developer_log("startup lua source begin".to_string());
+                for line in source.lines() {
+                    app.push_developer_log(format!("lua> {line}"));
+                }
+                app.push_developer_log("startup lua source end".to_string());
+            }
+            None => {
+                app.push_developer_log("startup lua source not found".to_string());
+            }
+        }
+
+        if let Some(error) = &startup_script.error {
+            app.push_developer_log(format!("startup lua error: {error}"));
+        }
+
+        for command in startup_script.commands {
+            app.push_developer_log(format!("startup lua command: {:?}", command));
             app.apply_editor_command(command);
         }
 
@@ -300,13 +324,17 @@ impl Default for App {
 }
 
 impl App {
+    fn push_developer_log(&mut self, message: String) {
+        let now = Instant::now();
+        self.developer_logs.push_back((now, message));
+        if self.developer_logs.len() > 1000 {
+            self.developer_logs.pop_front();
+        }
+    }
+
     pub fn dev_log(&mut self, message: String) {
         if self.editor_preferences.developer_mode {
-            let now = Instant::now();
-            self.developer_logs.push_back((now, message));
-            if self.developer_logs.len() > 1000 {
-                self.developer_logs.pop_front();
-            }
+            self.push_developer_log(message);
         }
     }
 

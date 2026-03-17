@@ -1,5 +1,6 @@
 use mlua::{Lua, Result as LuaResult};
 use std::fs;
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 #[derive(Debug, Clone)]
@@ -10,20 +11,46 @@ pub enum EditorCommand {
     SetSidebarWidth(f32),
 }
 
-pub fn load_startup_commands() -> Vec<EditorCommand> {
-    let path = crate::config::theme_manager::get_config_dir().join("init.lua");
+#[derive(Debug, Clone)]
+pub struct StartupScriptLoad {
+    pub path: PathBuf,
+    pub source: Option<String>,
+    pub commands: Vec<EditorCommand>,
+    pub error: Option<String>,
+}
+
+pub fn startup_script_path() -> PathBuf {
+    crate::config::theme_manager::get_config_dir().join("init.lua")
+}
+
+pub fn load_startup_script() -> StartupScriptLoad {
+    let path = startup_script_path();
 
     let source = match fs::read_to_string(&path) {
         Ok(source) => source,
-        Err(_) => return Vec::new(),
+        Err(err) => {
+            return StartupScriptLoad {
+                path,
+                source: None,
+                commands: Vec::new(),
+                error: Some(err.to_string()),
+            };
+        }
     };
 
     match eval_script(&source) {
-        Ok(commands) => commands,
-        Err(err) => {
-            eprintln!("Failed to load {}: {err}", path.display());
-            Vec::new()
-        }
+        Ok(commands) => StartupScriptLoad {
+            path,
+            source: Some(source),
+            commands,
+            error: None,
+        },
+        Err(err) => StartupScriptLoad {
+            path,
+            source: Some(source),
+            commands: Vec::new(),
+            error: Some(err),
+        },
     }
 }
 
