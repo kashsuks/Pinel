@@ -58,7 +58,7 @@ impl App {
     }
 
     pub(super) fn vim_refresh_cursor_style(&mut self) {
-        if self.terminal_open {
+        if self.terminal_open && self.focused_pane == FocusPane::Terminal {
             if let Some(idx) = self.active_tab {
                 if let Some(tab) = self.tabs.get_mut(idx) {
                     if let TabKind::Editor {
@@ -95,6 +95,11 @@ impl App {
         }
 
         self.terminal_open = !self.terminal_open;
+        self.focused_pane = if self.terminal_open {
+            FocusPane::Terminal
+        } else {
+            FocusPane::Editor
+        };
         self.vim_refresh_cursor_style();
 
         if self.terminal_open {
@@ -113,6 +118,30 @@ impl App {
     /// * `message` - The event to process.
     pub fn update(&mut self, message: Message) -> iced::Task<Message> {
         match message {
+            Message::FocusEditor => {
+                self.focused_pane = FocusPane::Editor;
+                if let Some(idx) = self.active_tab {
+                    if let Some(tab) = self.tabs.get_mut(idx) {
+                        if let TabKind::Editor {
+                            ref code_editor, ..
+                        } = tab.kind
+                        {
+                            code_editor.request_focus();
+                        }
+                    }
+                }
+                iced::Task::none()
+            }
+            Message::FocusTerminal => {
+                if !self.terminal_open {
+                    return iced::Task::none();
+                }
+                self.focused_pane = FocusPane::Terminal;
+                if let Some(term) = &self.terminal_pane {
+                    return iced::widget::operation::focus(term.widget_id().clone());
+                }
+                iced::Task::none()
+            }
             Message::CodeEditorEvent(event) => {
                 // Autocomplete keyboard navigation — intercept before editor processing
                 if self.autocomplete.active && !self.lsp_enabled {
@@ -1187,6 +1216,8 @@ impl App {
                         match term.handle(iced_term::Command::ProxyToBackend(cmd)) {
                             iced_term::actions::Action::Shutdown => {
                                 self.terminal_open = false;
+                                self.focused_pane = FocusPane::Editor;
+                                self.vim_refresh_cursor_style();
                             }
                             _ => {}
                         }

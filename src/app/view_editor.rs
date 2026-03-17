@@ -185,6 +185,7 @@ impl App {
                                 background: Some(iced::Background::Color(theme().bg_editor)),
                                 ..Default::default()
                             });
+                        let editor = mouse_area(editor).on_press(Message::FocusEditor);
 
                         let lsp_overlay = if self.lsp_enabled {
                             iced_code_editor::view_lsp_overlay(
@@ -474,7 +475,11 @@ impl App {
                 ..Default::default()
             });
 
-            let body = container(iced_term::TerminalView::show(term).map(Message::TerminalEvent))
+            let terminal_view =
+                mouse_area(iced_term::TerminalView::show(term).map(Message::TerminalEvent))
+                    .on_press(Message::FocusTerminal);
+
+            let body = container(terminal_view)
                 .width(Length::Fill)
                 .height(Length::Fill)
                 .style(|_theme| container::Style {

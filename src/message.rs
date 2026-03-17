@@ -59,6 +59,9 @@ pub enum Message {
     TerminalEvent(TerminalEvent),
     /// Terminal panel (Cmd/Ctrl+J)
     ToggleTerminal,
+    /// Explicit focus switching between editor and terminal panels
+    FocusEditor,
+    FocusTerminal,
     /// Find and Replace (Cmd+F)
     ToggleFindReplace,
     FindQueryChanged(String),

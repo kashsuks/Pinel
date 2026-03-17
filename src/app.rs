@@ -53,6 +53,12 @@ pub enum TabKind {
     Preview { md_items: Vec<markdown::Item> },
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FocusPane {
+    Editor,
+    Terminal,
+}
+
 impl std::fmt::Debug for TabKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -134,6 +140,7 @@ pub struct App {
     terminal_pane: Option<IcedTerminal>,
     terminal_open: bool,
     terminal_panel_height: f32,
+    focused_pane: FocusPane,
 
     find_replace: FindReplace,
     find_input_id: iced::widget::Id,
@@ -261,6 +268,7 @@ impl Default for App {
             },
             terminal_open: false,
             terminal_panel_height: 240.0,
+            focused_pane: FocusPane::Editor,
 
             find_replace: FindReplace::default(),
             find_input_id: iced::widget::Id::unique(),
