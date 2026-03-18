@@ -126,3 +126,40 @@ or with `paru`:
 ```bash
 paru -S pinel
 ```
+
+## 3. Internal API
+
+### 3.1 Supported Clients
+
+The only supported client as of now would be using `lua` to invoke the API functions. Support for other languages such as `python` or `javascript` are plans for the future.
+
+*Note*: All configurations must be done through `pinel/init.lua` and the `pinel` folder being located in the dotfiles of your device
+
+### pinel.theme.use_builtin(name)
+
+This function allows you to use one of the builtin themes supported by pinel. They are:
+- Nord
+- TokyoNight
+- ...
+
+Example:
+```lua
+pinel.theme.use_builtin("Nord")
+```
+Having this line of code in the `init.lua` file will make sure that the theme is *Nord* by default
+
+### pinel.theme.set_color(name, hex)
+
+Allows you to override a named UI or editor colour slot with hex colour.
+
+Params:
+- `name`: Name of the ui component
+- `hex`: Hex value for the override
+
+Example:
+```lua
+pinel.theme.set_color("bg_status_bar", "#101722")
+pinel.theme.set_color("editor.current_line_highlight", "#7aa2f733")
+```
+
+All of the options for `name` are listed [here](link to a lua file with all the functions and sample implementation)
