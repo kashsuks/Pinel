@@ -162,7 +162,7 @@ pinel.theme.set_color("bg_status_bar", "#101722")
 pinel.theme.set_color("editor.current_line_highlight", "#7aa2f733")
 ```
 
-All of the options for `name` are listed [here](link to a lua file with all the functions and sample implementation)
+All of the options for `name` are listed [here](https://github.com/kashsuks/Pinel/blob/master/examples/init.lua)
 
 ### pinel.ui.show_sidebar(visible)
 
@@ -189,4 +189,4 @@ pinel.ui.set_sidebar_width(100.0)
 
 ### Extra Resources
 
-A full example file is located [here]() that you may refer to.
+A full example file is located [here](https://github.com/kashsuks/Pinel/blob/master/examples/init.lua) that you may refer to.
