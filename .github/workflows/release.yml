@@ -2,7 +2,7 @@ name: Release
 
 on:
   push:
-    branches: [ "master" ]
+    branches: ["master"]
   workflow_dispatch:
 
 env:
@@ -13,7 +13,8 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       should_release: ${{ steps.check.outputs.should_release }}
-      version: ${{ steps.check.outputs.version }}
+      base_version: ${{ steps.check.outputs.base_version }}
+      publish_version: ${{ steps.check.outputs.publish_version }}
       release_tag: ${{ steps.check.outputs.release_tag }}
       release_name: ${{ steps.check.outputs.release_name }}
       release_channel: ${{ steps.check.outputs.release_channel }}
@@ -23,28 +24,29 @@ jobs:
       binary_name: ${{ steps.check.outputs.binary_name }}
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Resolve release metadata
         id: check
         shell: bash
         run: |
-          version=$(sed -n 's/^version = "\([^"]*\)"/\1/p' Cargo.toml)
+          base_version=$(sed -n 's/^version = "\([^"]*\)"/\1/p' Cargo.toml | head -n1)
           binary_name=$(sed -n 's/^name = "\([^"]*\)"/\1/p' Cargo.toml | head -n1)
 
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             release_channel="dev"
-            version="${version}-dev.${{ github.run_number }}"
-            release_tag="v${version}"
-            release_name="v$(sed -n 's/^version = \"\\([^\"]*\\)\"/\\1/p' Cargo.toml) @dev"
-            aur_version="$(sed -n 's/^version = \"\\([^\"]*\\)\"/\\1/p' Cargo.toml)_dev.${{ github.run_number }}"
+            publish_version="${base_version}-dev.${{ github.run_number }}"
+            release_tag="v${publish_version}"
+            release_name="v${base_version} @dev"
+            aur_version="${base_version}_dev.${{ github.run_number }}"
             aur_source_pkgname="pinel-dev"
             aur_binary_pkgname="pinel-bin-dev"
             should_release="true"
           else
             release_channel="stable"
-            release_tag="v${version}"
-            release_name="v${version} @stable"
-            aur_version="${version}"
+            publish_version="${base_version}"
+            release_tag="v${base_version}"
+            release_name="v${base_version} @stable"
+            aur_version="${base_version}"
             aur_source_pkgname="pinel"
             aur_binary_pkgname="pinel-bin"
 
@@ -61,7 +63,8 @@ jobs:
 
           {
             echo "should_release=${should_release}"
-            echo "version=${version}"
+            echo "base_version=${base_version}"
+            echo "publish_version=${publish_version}"
             echo "release_tag=${release_tag}"
             echo "release_name=${release_name}"
             echo "release_channel=${release_channel}"
@@ -99,7 +102,7 @@ jobs:
           targets: ${{ matrix.target }}
 
       - name: Build release binary
-        run: cargo build --release --target ${{ matrix.target }}
+        run: cargo build --release --locked --target ${{ matrix.target }}
 
       - name: Prepare asset
         shell: bash
@@ -120,6 +123,7 @@ jobs:
           prerelease: ${{ needs.prepare-release.outputs.release_channel == 'dev' }}
           body: |
             Release: ${{ needs.prepare-release.outputs.release_name }}
+            Tag: ${{ needs.prepare-release.outputs.release_tag }}
             Commit: ${{ github.sha }}
           token: ${{ secrets.GITHUB_TOKEN }}
 
@@ -137,13 +141,13 @@ jobs:
         if: needs.prepare-release.outputs.release_channel == 'dev'
         shell: bash
         run: |
-          perl -0pi -e 's/^version = "[^"]*"/version = "${{ needs.prepare-release.outputs.version }}"/m' Cargo.toml
-        
+          perl -0pi -e 's/^version = "[^"]*"/version = "${{ needs.prepare-release.outputs.publish_version }}"/m' Cargo.toml
+
       - name: Publish to crates.io
         shell: bash
         run: |
           cargo login "${{ secrets.CRATES_IO }}"
-          cargo publish --allow-dirty
+          cargo publish --locked --allow-dirty
           rm -f ~/.cargo/credentials
 
   update-aur:
