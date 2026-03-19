@@ -1,0 +1,52 @@
+name: Release macOS
+
+on:
+  workflow_call:
+    inputs:
+      binary_name:
+        required: true
+        type: string
+      release_tag:
+        required: true
+        type: string
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  release-macos:
+    permissions:
+      contents: write
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        include:
+          - target: x86_64-apple-darwin
+            asset_suffix: macos-x86_64
+          - target: aarch64-apple-darwin
+            asset_suffix: macos-arm64
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Build release binary
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Prepare asset
+        shell: bash
+        run: |
+          cp \
+            target/${{ matrix.target }}/release/${{ inputs.binary_name }} \
+            target/${{ inputs.binary_name }}-${{ matrix.asset_suffix }}
+
+      - name: Upload asset to release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: target/${{ inputs.binary_name }}-${{ matrix.asset_suffix }}
+          tag_name: ${{ inputs.release_tag }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

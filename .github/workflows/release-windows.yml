@@ -1,0 +1,45 @@
+name: Release Windows
+
+on:
+  workflow_call:
+    inputs:
+      binary_name:
+        required: true
+        type: string
+      release_tag:
+        required: true
+        type: string
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  release-windows:
+    permissions:
+      contents: write
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Build release binary
+        run: cargo build --release --target x86_64-pc-windows-msvc
+
+      - name: Prepare asset
+        shell: bash
+        run: |
+          cp \
+            target/x86_64-pc-windows-msvc/release/${{ inputs.binary_name }}.exe \
+            target/${{ inputs.binary_name }}-windows-x86_64.exe
+
+      - name: Upload asset to release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: target/${{ inputs.binary_name }}-windows-x86_64.exe
+          tag_name: ${{ inputs.release_tag }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -74,50 +74,16 @@ jobs:
             echo "binary_name=${binary_name}"
           } >> "$GITHUB_OUTPUT"
 
-  build-and-release:
+  create-release:
     needs: prepare-release
     if: needs.prepare-release.outputs.should_release == 'true'
     permissions:
       contents: write
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        include:
-          - os: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
-            asset_suffix: linux-x86_64
-          - os: windows-latest
-            target: x86_64-pc-windows-msvc
-            asset_suffix: windows-x86_64.exe
-          - os: macos-latest
-            target: x86_64-apple-darwin
-            asset_suffix: macos-x86_64
-
+    runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.target }}
-
-      - name: Build release binary
-        run: cargo build --release --target ${{ matrix.target }}
-
-      - name: Prepare asset
-        shell: bash
-        run: |
-          cd target/${{ matrix.target }}/release
-          if [ "${{ matrix.os }}" = "windows-latest" ]; then
-            cp ${{ needs.prepare-release.outputs.binary_name }}.exe ../../${{ needs.prepare-release.outputs.binary_name }}-${{ matrix.asset_suffix }}
-          else
-            cp ${{ needs.prepare-release.outputs.binary_name }} ../../${{ needs.prepare-release.outputs.binary_name }}-${{ matrix.asset_suffix }}
-          fi
-
-      - name: Upload to release
+      - name: Create GitHub release shell
         uses: softprops/action-gh-release@v1
         with:
-          files: target/*-${{ matrix.asset_suffix }}
           tag_name: ${{ needs.prepare-release.outputs.release_tag }}
           name: ${{ needs.prepare-release.outputs.release_name }}
           prerelease: ${{ needs.prepare-release.outputs.release_channel == 'dev' }}
@@ -125,106 +91,54 @@ jobs:
             Release: ${{ needs.prepare-release.outputs.release_name }}
             Tag: ${{ needs.prepare-release.outputs.release_tag }}
             Commit: ${{ github.sha }}
-          token: ${{ secrets.GITHUB_TOKEN }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  publish-crate:
+  linux:
+    needs: [prepare-release, create-release]
+    if: needs.prepare-release.outputs.should_release == 'true'
+    uses: ./.github/workflows/release-linux.yml
+    with:
+      binary_name: ${{ needs.prepare-release.outputs.binary_name }}
+      release_tag: ${{ needs.prepare-release.outputs.release_tag }}
+    secrets: inherit
+
+  windows:
+    needs: [prepare-release, create-release]
+    if: needs.prepare-release.outputs.should_release == 'true'
+    uses: ./.github/workflows/release-windows.yml
+    with:
+      binary_name: ${{ needs.prepare-release.outputs.binary_name }}
+      release_tag: ${{ needs.prepare-release.outputs.release_tag }}
+    secrets: inherit
+
+  macos:
+    needs: [prepare-release, create-release]
+    if: needs.prepare-release.outputs.should_release == 'true'
+    uses: ./.github/workflows/release-macos.yml
+    with:
+      binary_name: ${{ needs.prepare-release.outputs.binary_name }}
+      release_tag: ${{ needs.prepare-release.outputs.release_tag }}
+    secrets: inherit
+
+  crates:
     needs: prepare-release
     if: needs.prepare-release.outputs.should_release == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
+    uses: ./.github/workflows/release-crates.yml
+    with:
+      release_channel: ${{ needs.prepare-release.outputs.release_channel }}
+      publish_version: ${{ needs.prepare-release.outputs.publish_version }}
+    secrets: inherit
 
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Adjust version for dev publish
-        if: needs.prepare-release.outputs.release_channel == 'dev'
-        shell: bash
-        run: |
-          perl -0pi -e 's/^version = "[^"]*"/version = "${{ needs.prepare-release.outputs.publish_version }}"/m' Cargo.toml
-
-      - name: Publish to crates.io
-        shell: bash
-        run: |
-          cargo login "${{ secrets.CRATES_IO }}"
-          cargo publish --allow-dirty
-          rm -f ~/.cargo/credentials
-
-  update-aur:
-    needs: [prepare-release, build-and-release]
+  aur:
+    needs: [prepare-release, linux]
     if: needs.prepare-release.outputs.should_release == 'true'
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        include:
-          - package_type: source
-            build_from_source: true
-          - package_type: binary
-            build_from_source: false
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Generate PKGBUILD for source package
-        if: matrix.build_from_source
-        shell: bash
-        run: |
-          cat > PKGBUILD << 'EOF'
-          # Maintainer: kashyap <ksukshavasi@gmail.com>
-          pkgname=${{ needs.prepare-release.outputs.aur_source_pkgname }}
-          pkgver=${{ needs.prepare-release.outputs.aur_version }}
-          pkgrel=1
-          pkgdesc="(somewhat) fast text editor written in rust (${{ needs.prepare-release.outputs.release_channel }} release)"
-          arch=('x86_64')
-          url="https://github.com/kashsuks/Pinel"
-          license=('GPL3')
-          depends=()
-          makedepends=('rust' 'cargo')
-          provides=('pinel')
-          conflicts=('pinel' 'pinel-dev')
-          source=("$pkgname-$pkgver.tar.gz::https://github.com/kashsuks/Pinel/archive/refs/tags/${{ needs.prepare-release.outputs.release_tag }}.tar.gz")
-          sha256sums=('SKIP')
-
-          build() {
-              cd "$srcdir"/Pinel-*
-              cargo build --release
-          }
-
-          package() {
-              cd "$srcdir"/Pinel-*
-              install -Dm755 "target/release/pinel" "$pkgdir/usr/bin/pinel"
-          }
-          EOF
-
-      - name: Generate PKGBUILD for binary package
-        if: ${{ !matrix.build_from_source }}
-        shell: bash
-        run: |
-          cat > PKGBUILD << 'EOF'
-          # Maintainer: kashyap <ksukshavasi@gmail.com>
-          pkgname=${{ needs.prepare-release.outputs.aur_binary_pkgname }}
-          pkgver=${{ needs.prepare-release.outputs.aur_version }}
-          pkgrel=1
-          pkgdesc="(somewhat) fast text editor written in rust (${{ needs.prepare-release.outputs.release_channel }} binary release)"
-          arch=('x86_64')
-          url="https://github.com/kashsuks/Pinel"
-          license=('GPL3')
-          depends=()
-          provides=('pinel')
-          conflicts=('pinel' 'pinel-bin' 'pinel-dev' 'pinel-bin-dev')
-          source=("pinel-$pkgver::https://github.com/kashsuks/Pinel/releases/download/${{ needs.prepare-release.outputs.release_tag }}/${{ needs.prepare-release.outputs.binary_name }}-linux-x86_64")
-          sha256sums=('SKIP')
-
-          package() {
-              install -Dm755 "$srcdir/pinel-$pkgver" "$pkgdir/usr/bin/pinel"
-          }
-          EOF
-
-      - name: Publish to AUR
-        uses: KSXGitHub/github-actions-deploy-aur@v2.7.0
-        with:
-          pkgname: ${{ matrix.build_from_source && needs.prepare-release.outputs.aur_source_pkgname || needs.prepare-release.outputs.aur_binary_pkgname }}
-          pkgbuild: ./PKGBUILD
-          commit_username: kashyap
-          commit_email: ksukshavasi@gmail.com
-          ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
-          commit_message: Update to ${{ needs.prepare-release.outputs.aur_version }} (${{ needs.prepare-release.outputs.release_channel }})
+    uses: ./.github/workflows/release-aur.yml
+    with:
+      aur_version: ${{ needs.prepare-release.outputs.aur_version }}
+      aur_source_pkgname: ${{ needs.prepare-release.outputs.aur_source_pkgname }}
+      aur_binary_pkgname: ${{ needs.prepare-release.outputs.aur_binary_pkgname }}
+      binary_name: ${{ needs.prepare-release.outputs.binary_name }}
+      release_channel: ${{ needs.prepare-release.outputs.release_channel }}
+      release_tag: ${{ needs.prepare-release.outputs.release_tag }}
+    secrets: inherit

@@ -1,0 +1,104 @@
+name: Release AUR
+
+on:
+  workflow_call:
+    inputs:
+      aur_version:
+        required: true
+        type: string
+      aur_source_pkgname:
+        required: true
+        type: string
+      aur_binary_pkgname:
+        required: true
+        type: string
+      binary_name:
+        required: true
+        type: string
+      release_channel:
+        required: true
+        type: string
+      release_tag:
+        required: true
+        type: string
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  update-aur:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - package_type: source
+            build_from_source: true
+          - package_type: binary
+            build_from_source: false
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Generate PKGBUILD for source package
+        if: matrix.build_from_source
+        shell: bash
+        run: |
+          cat > PKGBUILD << 'EOF'
+          # Maintainer: kashyap <ksukshavasi@gmail.com>
+          pkgname=${{ inputs.aur_source_pkgname }}
+          pkgver=${{ inputs.aur_version }}
+          pkgrel=1
+          pkgdesc="(somewhat) fast text editor written in rust (${{ inputs.release_channel }} release)"
+          arch=('x86_64')
+          url="https://github.com/kashsuks/Pinel"
+          license=('GPL3')
+          depends=()
+          makedepends=('rust' 'cargo')
+          provides=('pinel')
+          conflicts=('pinel' 'pinel-dev')
+          source=("$pkgname-$pkgver.tar.gz::https://github.com/kashsuks/Pinel/archive/refs/tags/${{ inputs.release_tag }}.tar.gz")
+          sha256sums=('SKIP')
+
+          build() {
+              cd "$srcdir"/Pinel-*
+              cargo build --release
+          }
+
+          package() {
+              cd "$srcdir"/Pinel-*
+              install -Dm755 "target/release/pinel" "$pkgdir/usr/bin/pinel"
+          }
+          EOF
+
+      - name: Generate PKGBUILD for binary package
+        if: ${{ !matrix.build_from_source }}
+        shell: bash
+        run: |
+          cat > PKGBUILD << 'EOF'
+          # Maintainer: kashyap <ksukshavasi@gmail.com>
+          pkgname=${{ inputs.aur_binary_pkgname }}
+          pkgver=${{ inputs.aur_version }}
+          pkgrel=1
+          pkgdesc="(somewhat) fast text editor written in rust (${{ inputs.release_channel }} binary release)"
+          arch=('x86_64')
+          url="https://github.com/kashsuks/Pinel"
+          license=('GPL3')
+          depends=()
+          provides=('pinel')
+          conflicts=('pinel' 'pinel-bin' 'pinel-dev' 'pinel-bin-dev')
+          source=("pinel-$pkgver::https://github.com/kashsuks/Pinel/releases/download/${{ inputs.release_tag }}/${{ inputs.binary_name }}-linux-x86_64")
+          sha256sums=('SKIP')
+
+          package() {
+              install -Dm755 "$srcdir/pinel-$pkgver" "$pkgdir/usr/bin/pinel"
+          }
+          EOF
+
+      - name: Publish to AUR
+        uses: KSXGitHub/github-actions-deploy-aur@v2.7.0
+        with:
+          pkgname: ${{ matrix.build_from_source && inputs.aur_source_pkgname || inputs.aur_binary_pkgname }}
+          pkgbuild: ./PKGBUILD
+          commit_username: kashyap
+          commit_email: ksukshavasi@gmail.com
+          ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+          commit_message: Update to ${{ inputs.aur_version }} (${{ inputs.release_channel }})

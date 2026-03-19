@@ -1,0 +1,36 @@
+name: Release Crates
+
+on:
+  workflow_call:
+    inputs:
+      release_channel:
+        required: true
+        type: string
+      publish_version:
+        required: true
+        type: string
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  publish-crate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Adjust version for dev publish
+        if: inputs.release_channel == 'dev'
+        shell: bash
+        run: |
+          perl -0pi -e 's/^version = "[^"]*"/version = "${{ inputs.publish_version }}"/m' Cargo.toml
+
+      - name: Publish to crates.io
+        shell: bash
+        run: |
+          cargo login "${{ secrets.CRATES_IO }}"
+          cargo publish --allow-dirty
+          rm -f ~/.cargo/credentials
