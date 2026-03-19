@@ -8,6 +8,14 @@
 
 Pinel is shipped across multiple platforms, mainly *Github Releases* and [crates.io](https://crates.io). Note that nightly builds are an ongoing process and are planned to arrive in the near future.
 
+## Quick Install
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/kashsuks/Pinel/main/install.sh | bash
+```
+
+The installer downloads the latest matching GitHub release for your platform and installs `pinel` into `~/.local/bin` by default. If no prebuilt release asset exists for the current platform, it falls back to `cargo install pinel --locked`.
+
 ## Compiling from Source
 
 If you would like to compile from source, please follow the instructions below.
