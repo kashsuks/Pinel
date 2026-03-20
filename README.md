@@ -50,12 +50,12 @@ You will see that the required packages will get installed and the application m
 
 ## Mac Installation
 
-- For Mac Silicon (any of the M series chips), please use `pinel-editor-apple-silicon`
+- For Mac Silicon (any of the M series chips), please use `pinel-macos-x86_64`
 
 Once you've installed it:
 - Copy the path of the install (either through finder or whatever method)
 - Go to your terminal of choice and type in `chmod +x <the path to the install>`
-- Then run `pinel-editor-apple-silicon`
+- Then run `./pinel-macos-x86_64` while in the correct director
 
 If apple says that the install cannot be verified:
 - Go to settings
@@ -65,6 +65,19 @@ If apple says that the install cannot be verified:
 - The app _should_ open!
 
 If you would like to use [crates.io](https://crates.io) to use the application please refer to the [published version](https://crates.io/crates/pinel-editor)
+
+## Arch Linux
+
+For Arch Linux users installation is simple.
+
+On the most recent release, look for `pinel-linux-x86_64` and install it.
+
+Once that is done, run `chmod +x <path of the install>` and then run `./<path of the install>`.
+This will make the binary executable and then run it.
+
+## If you cannot access these
+
+Go to [the website](https://pinel.netlify.app) and look at the video demo linked. It will give you can idea of all the features in the project
 
 ---
 
@@ -76,6 +89,7 @@ If you would like to use [crates.io](https://crates.io) to use the application p
 - Vim motions (commands) currently for navigation
 - Settings/preferences
 - System default terminal usage
+- Scripting using Lua
 
 --- 
 
