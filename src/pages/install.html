@@ -28,17 +28,21 @@
   
   var ua = navigator.userAgent;
   var platformSpan = downloadLink.querySelector('.download-platform-text');
-  var baseUrl = 'https://github.com/pinelproject/pinel/releases/latest/download';
+  var downloads = {
+    mac: 'https://github.com/kashsuks/Pinel/releases/download/v0.5.1/pinel-macos-arm64',
+    win: 'https://github.com/pinelproject/pinel/releases/latest/download/pinel-windows-x64.zip',
+    linux: 'https://github.com/kashsuks/Pinel/releases/download/v0.5.1/pinel-linux-x86_64'
+  };
   
   if (/Mac/i.test(ua)) {
     platformSpan.textContent = 'Download for macOS (arm64)';
-    downloadLink.href = baseUrl + '/pinel-macos-arm64.tar.gz';
+    downloadLink.href = downloads.mac;
   } else if (/Win/i.test(ua)) {
     platformSpan.textContent = 'Download for Windows';
-    downloadLink.href = baseUrl + '/pinel-windows-x64.zip';
+    downloadLink.href = downloads.win;
   } else if (/Linux/i.test(ua)) {
     platformSpan.textContent = 'Download for Linux (x86_64)';
-    downloadLink.href = baseUrl + '/pinel-linux-x64.tar.gz';
+    downloadLink.href = downloads.linux;
   } else {
     platformSpan.textContent = 'Download';
   }

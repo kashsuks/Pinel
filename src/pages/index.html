@@ -26,10 +26,14 @@
 (function() {
   var btn = document.getElementById('downloadBtn');
   if (!btn) return;
+  var downloads = {
+    mac: 'https://github.com/kashsuks/Pinel/releases/download/v0.5.1/pinel-macos-arm64',
+    linux: 'https://github.com/kashsuks/Pinel/releases/download/v0.5.1/pinel-linux-x86_64'
+  };
   var ua = navigator.userAgent;
   if (/Mac/i.test(ua)) {
     btn.textContent = 'Download for macOS';
-    btn.href = '#download-macos';
+    btn.href = downloads.mac;
   } else if (/Win/i.test(ua)) {
     btn.textContent = 'Download for Windows';
     btn.href = '#';
@@ -41,7 +45,7 @@
     });
   } else if (/Linux/i.test(ua)) {
     btn.textContent = 'Download for Linux';
-    btn.href = '#download-linux';
+    btn.href = downloads.linux;
   }
 
   window.copyInstall = function() {
