@@ -84,7 +84,7 @@ impl CommandPalette {
     }
 
     pub fn toggle(&mut self, include_markdown_render: bool) {
-        self.open = !self.open;
+        self.open = !self.open; // literally toggles it, ! changes on to off and vice versa
         if self.open {
             self.input.clear();
             self.commands = Self::commands_for(include_markdown_render);
