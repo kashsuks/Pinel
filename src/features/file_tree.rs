@@ -1,23 +1,22 @@
-/// This file provides code related to the File Tree and 
+/// This file provides code related to the File Tree and
 /// sidebar. Toggling a folder, selecting files/folder, and others
 /// are part of this file
-
 use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 
 /// This enum provides the values needed for a file to be registered and accessed
-/// 
+///
 /// # Variants
-/// 
+///
 /// - `File { path, name }` - The path and name of the file being accessed.
 /// - `Directory { path, name, children }` - Information related to a directory such as children.
-/// 
+///
 /// # Examples
-/// 
+///
 /// ```
 /// use crate::...;
-/// 
+///
 /// let fileentry = FileEntry::File;
 /// match fileentry {
 ///     FileEntry::File { path, name } => handle_fields,
@@ -50,6 +49,7 @@ pub struct FileTree {
 impl FileTree {
     pub fn new(root: PathBuf) -> Self {
         let entries = scan_directory(&root);
+        Self {
             root,
             entries,
             expanded: HashSet::new(),
@@ -84,13 +84,7 @@ impl FileTree {
     }
 }
 
-const IGNORED_DIRS: &[&str] = &[
-    ".git",
-    "node_modules",
-    "target",
-    ".DS_Store",
-    "__pycache__",
-];
+const IGNORED_DIRS: &[&str] = &[".git", "node_modules", "target", ".DS_Store", "__pycache__"];
 
 fn scan_directory(path: &Path) -> Vec<FileEntry> {
     let mut entries = Vec::new(); // An empty vector of entires
@@ -121,18 +115,15 @@ fn scan_directory(path: &Path) -> Vec<FileEntry> {
         }
     }
 
-    entries.sort_by(|a, b| {
-        match (a, b) {
-            (
-                FileEntry::Directory { name: name_a, .. },
-                FileEntry::Directory { name: name_b, .. },
-            ) => name_a.to_lowercase().cmp(&name_b.to_lowercase()),
-            (FileEntry::File { name: name_a, .. }, FileEntry::File { name: name_b, .. }) => {
-                name_a.to_lowercase().cmp(&name_b.to_lowercase())
-            }
-            (FileEntry::Directory { .. }, FileEntry::File { .. }) => std::cmp::Ordering::Less,
-            (FileEntry::File { .. }, FileEntry::Directory { .. }) => std::cmp::Ordering::Greater,
+    entries.sort_by(|a, b| match (a, b) {
+        (FileEntry::Directory { name: name_a, .. }, FileEntry::Directory { name: name_b, .. }) => {
+            name_a.to_lowercase().cmp(&name_b.to_lowercase())
         }
+        (FileEntry::File { name: name_a, .. }, FileEntry::File { name: name_b, .. }) => {
+            name_a.to_lowercase().cmp(&name_b.to_lowercase())
+        }
+        (FileEntry::Directory { .. }, FileEntry::File { .. }) => std::cmp::Ordering::Less,
+        (FileEntry::File { .. }, FileEntry::Directory { .. }) => std::cmp::Ordering::Greater,
     });
 
     return entries;
@@ -140,9 +131,9 @@ fn scan_directory(path: &Path) -> Vec<FileEntry> {
 
 /// Lazily load the children of a folder by only storing parent dirs
 /// until they are being accessed
-/// 
+///
 /// # Arguments
-/// 
+///
 /// - `entries` (`&mut Vec<FileEntry>`) - Related parent directory entries.
 /// - `target` (`&Path`) - Final target child file.
 fn populate_children(entries: &mut Vec<FileEntry>, target: &Path) {

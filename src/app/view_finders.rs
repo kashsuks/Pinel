@@ -1,6 +1,6 @@
 use super::*;
-use iced::widget::column;
 use crate::features::icons::icon_handle;
+use iced::widget::column;
 
 impl App {
     pub(super) fn view_fuzzy_finder_overlay(&self) -> Element<'_, Message> {

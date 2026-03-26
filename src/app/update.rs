@@ -41,7 +41,10 @@ impl App {
             return;
         }
 
-        if let TabKind::Editor { ref code_editor, .. } = tab.kind {
+        if let TabKind::Editor {
+            ref code_editor, ..
+        } = tab.kind
+        {
             preview.state = frostmark::MarkState::with_html_and_markdown(&code_editor.content());
         }
     }
@@ -854,7 +857,18 @@ impl App {
             Message::FileTreeRefresh => {
                 if let Some(ref mut tree) = self.file_tree {
                     tree.refresh();
+
+                    self.all_workspace_files =
+                        crate::features::search::collect_all_files(&tree.root);
+                    self.fuzzy_finder.set_folder(tree.root.clone());
+
+                    if let Some(selected) = tree.selected.clone() {
+                        if !selected.exists() {
+                            tree.selected = None;
+                        }
+                    }
                 }
+
                 iced::Task::none()
             }
             Message::OpenFolderDialog => iced::Task::perform(
@@ -1028,7 +1042,10 @@ impl App {
                     return iced::Task::none();
                 }
 
-                let TabKind::Editor { ref code_editor, .. } = tab.kind else {
+                let TabKind::Editor {
+                    ref code_editor, ..
+                } = tab.kind
+                else {
                     return iced::Task::none();
                 };
 
@@ -1041,9 +1058,7 @@ impl App {
                 } else {
                     self.markdown_preview = Some(MarkdownPreviewPane {
                         source_path: tab.path.clone(),
-                        state: frostmark::MarkState::with_html_and_markdown(
-                            &code_editor.content(),
-                        ),
+                        state: frostmark::MarkState::with_html_and_markdown(&code_editor.content()),
                     });
                 }
 
@@ -1186,22 +1201,22 @@ impl App {
                 iced::widget::operation::focus(self.fuzzy_finder.input_id.clone())
             }
             Message::FuzzyFinderNavigate(delta) => {
-               if self.command_palette.open {
-                   let count = self.command_palette.filtered_commands.len();
-                   if count == 0 {
-                       return iced::Task::none();
-                   }
-                   let current = self.command_palette_selected as i32;
-                   let next = (current + delta).rem_euclid(count as i32) as usize;
-                   self.command_palette_selected = next;
-                   return iced::Task::none();
-               }
+                if self.command_palette.open {
+                    let count = self.command_palette.filtered_commands.len();
+                    if count == 0 {
+                        return iced::Task::none();
+                    }
+                    let current = self.command_palette_selected as i32;
+                    let next = (current + delta).rem_euclid(count as i32) as usize;
+                    self.command_palette_selected = next;
+                    return iced::Task::none();
+                }
 
-               if !self.fuzzy_finder.open {
-                   return iced::Task::none();
-               }
-               self.fuzzy_finder.navigate(delta);
-               iced::Task::none()
+                if !self.fuzzy_finder.open {
+                    return iced::Task::none();
+                }
+                self.fuzzy_finder.navigate(delta);
+                iced::Task::none()
             }
             Message::FuzzyFinderSelect => {
                 if self.command_palette.open {

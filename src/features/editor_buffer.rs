@@ -5,7 +5,6 @@
 ///
 /// This file provides structure and implementations for large amounts of text-editing
 /// using the `ropey` package.
-
 use ropey::Rope;
 
 #[derive(Debug, Clone)]
@@ -14,9 +13,9 @@ pub struct EditorBuffer {
 }
 
 /// Implementation functions for the Editor Buffer and passing data through lines
-/// 
+///
 /// # Arguments
-/// 
+///
 /// - `text` (`&str`) - Passed argument text used to perform actions.
 impl EditorBuffer {
     pub fn from_text(text: &str) -> Self {

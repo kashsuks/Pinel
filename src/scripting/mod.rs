@@ -120,7 +120,9 @@ pub fn eval_script(source: &str) -> Result<Vec<EditorCommand>, String> {
 
     pinel.set("theme", theme).map_err(|e| e.to_string())?;
     pinel.set("ui", ui).map_err(|e| e.to_string())?;
-    lua.globals().set("pinel", pinel).map_err(|e| e.to_string())?;
+    lua.globals()
+        .set("pinel", pinel)
+        .map_err(|e| e.to_string())?;
 
     lua.load(source).exec().map_err(|e| e.to_string())?;
 

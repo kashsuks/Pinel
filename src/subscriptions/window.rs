@@ -13,3 +13,12 @@ pub fn resizes() -> Subscription<Message> {
         _ => None,
     })
 }
+
+/// Refreshes workspace-derived state when the app regains focus
+/// This catches branch switches or filesystem changes when made outside Pinel
+pub fn focus_refresh() -> Subscription<Message> {
+    iced::event::listen_with(|event, _status, _id| match event {
+        Event::Window(window::Event::Focused) => Some(Message::FileTreeRefresh),
+        _ => None,
+    })
+}

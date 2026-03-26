@@ -17,7 +17,6 @@ use std::time::{Duration, Instant};
 
 use crate::autocomplete::engine::Autocomplete;
 use crate::config::preferences::{self as prefs, EditorPreferences};
-use crate::scripting::{self, EditorCommand};
 use crate::features::command_input::CommandInput;
 use crate::features::command_palette::CommandPalette;
 use crate::features::file_tree::FileTree;
@@ -26,6 +25,7 @@ use crate::features::fuzzy_finder::FuzzyFinder;
 use crate::features::terminal::Terminal;
 use crate::features::updater::UpdateInfo;
 use crate::message::Message;
+use crate::scripting::{self, EditorCommand};
 use crate::theme::*;
 use crate::ui::{
     editor_container_style, empty_editor, file_finder_item_style, file_finder_panel_style,

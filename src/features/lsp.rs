@@ -105,18 +105,18 @@ fn path_to_file_uri(path: &Path) -> String {
 }
 
 /// Provides structure for Inline diagnostic
-/// 
+///
 /// # Fields
-/// 
+///
 /// - `line` (`usize`) - The line that the user requires a diagnostic for.
 /// - `severity` (`lsp_types`) - What severity is the error/warning in the users code.
 /// - `message` (`String`) - The message that the LSP provides for inline diagnostic visuals.
-/// 
+///
 /// # Examples
-/// 
+///
 /// ```
 /// use crate::lsp;
-/// 
+///
 /// let s = InlineDiagnostic {
 ///     line: value,
 ///     severity: value,
