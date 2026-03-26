@@ -49,7 +49,7 @@ impl App {
         }
     }
 
-    fn open_path_task(path: PathBuf) -> iced::Task<Message> {
+    pub(super) fn open_path_task(path: PathBuf) -> iced::Task<Message> {
         iced::Task::perform(
             async move {
                 let content = std::fs::read_to_string(&path)
