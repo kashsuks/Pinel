@@ -49,21 +49,22 @@ impl RemoteBrowser {
         execute!(stdout, EnterAlternateScreen)?;
         let backend = CrosstermBackend::new(stdout);
         let mut terminal = Terminal::new(backend)?;
+        let result = (|| -> Result<()> {
+            loop {
+                terminal.draw(|frame| self.draw(frame))?;
 
-        let result = loop {
-            terminal.draw(|frame| self.draw(frame))?;
-
-            if let Event::Key(key) = event::read()? {
-                match key.code {
-                    KeyCode::Char('q') => break Ok(()),
-                    KeyCode::Up => self.previous(),
-                    KeyCode::Down => self.next(),
-                    KeyCode::Backspace => self.go_up()?,
-                    KeyCode::Enter => self.activate()?,
-                    _ => {}
+                if let Event::Key(key) = event::read()? {
+                    match key.code {
+                        KeyCode::Char('q') => return Ok(()),
+                        KeyCode::Up => self.previous(),
+                        KeyCode::Down => self.next(),
+                        KeyCode::Backspace => self.go_up()?,
+                        KeyCode::Enter => self.activate()?,
+                        _ => {}
+                    }
                 }
             }
-        };
+        })();
 
         disable_raw_mode()?;
         execute!(terminal.backend_mut(), LeaveAlternateScreen)?;

@@ -1,9 +1,6 @@
-use anyhow::{Context, Result};
-use ssh2::{FileStat, Session, Sftp};
-use std::fs::File;
-use std::io::{Read, Write};
-use std::net::TcpStream;
+use anyhow::{bail, Context, Result};
 use std::path::{Path, PathBuf};
+use std::process::{Command, Output};
 
 #[derive(Debug, Clone)]
 pub struct RemoteEntry {
@@ -13,56 +10,71 @@ pub struct RemoteEntry {
 }
 
 pub struct SshSession {
-    _session: Session,
-    sftp: Sftp,
+    target: String,
 }
 
 impl SshSession {
     pub fn connect(target: &str) -> Result<Self> {
-        let (user, host) = split_target(target);
-        let tcp = TcpStream::connect(format!("{host}:22"))
-            .with_context(|| format!("failed to connect to {host}:22"))?;
+        let session = Self {
+            target: target.to_string(),
+        };
 
-        let mut session = Session::new().context("failed to create ssh session")?;
-        session.set_tcp_stream(tcp);
-        session.handshake().context("ssh handshake failed")?;
-        session
-            .userauth_agent(&user)
-            .with_context(|| format!("ssh agent authentication failed for {user}@{host}"))?;
-
-        let sftp = session.sftp().context("failed to open sftp subsystem")?;
-        Ok(Self {
-            _session: session,
-            sftp,
-        })
+        session.run_ssh("true")?;
+        Ok(session)
     }
 
     pub fn canonicalize(&self, path: &str) -> Result<PathBuf> {
-        self.sftp
-            .realpath(Path::new(path))
-            .with_context(|| format!("failed to resolve remote path {path}"))
+        let output = self.run_ssh_capture(&format!("cd {} && pwd -P", shell_quote(path)))?;
+        let canonical = output.trim();
+
+        if canonical.is_empty() {
+            bail!("remote path resolved to an empty value");
+        }
+
+        Ok(PathBuf::from(canonical))
     }
 
     pub fn read_dir(&self, path: &Path) -> Result<Vec<RemoteEntry>> {
-        let mut entries = self
-            .sftp
-            .readdir(path)
-            .with_context(|| format!("failed to read remote directory {}", path.display()))?
-            .into_iter()
-            .filter_map(|(path, stat)| {
-                let name = path.file_name()?.to_string_lossy().to_string();
+        let remote_path = path.to_string_lossy();
+        let script = format!(
+            "cd {} && \
+             for item in .?* *; do \
+                 [ \"$item\" = '.?*' ] && [ ! -e \"$item\" ] && continue; \
+                 [ \"$item\" = '*' ] && [ ! -e \"$item\" ] && continue; \
+                 [ \"$item\" = '.' ] && continue; \
+                 [ \"$item\" = '..' ] && continue; \
+                 if [ -d \"$item\" ]; then \
+                     printf 'd\\0%s\\0' \"$item\"; \
+                 else \
+                     printf 'f\\0%s\\0' \"$item\"; \
+                 fi; \
+             done",
+            shell_quote(&remote_path)
+        );
 
-                if name == "." || name == ".." {
-                    return None;
-                }
+        let output = self.run_ssh_bytes(&script)?;
+        let mut fields = output.stdout.split(|byte| *byte == 0);
+        let mut entries = Vec::new();
 
-                Some(RemoteEntry {
-                    path,
-                    name,
-                    is_dir: is_dir(&stat),
-                })
-            })
-            .collect::<Vec<_>>();
+        while let Some(kind) = fields.next() {
+            if kind.is_empty() {
+                continue;
+            }
+
+            let Some(name) = fields.next() else {
+                bail!("malformed remote directory listing");
+            };
+
+            let name = String::from_utf8(name.to_vec())
+                .context("remote directory entry was not valid UTF-8")?;
+            let is_dir = kind == b"d";
+
+            entries.push(RemoteEntry {
+                path: path.join(&name),
+                name,
+                is_dir,
+            });
+        }
 
         entries.sort_by(|a, b| match (a.is_dir, b.is_dir) {
             (true, false) => std::cmp::Ordering::Less,
@@ -74,50 +86,82 @@ impl SshSession {
     }
 
     pub fn download_file(&self, remote_path: &Path, local_path: &Path) -> Result<()> {
-        let mut remote_file = self
-            .sftp
-            .open(remote_path)
-            .with_context(|| format!("failed to open remote file {}", remote_path.display()))?;
+        let remote_spec = format!(
+            "{}:{}",
+            self.target,
+            shell_quote(&remote_path.to_string_lossy())
+        );
 
-        let mut contents = Vec::new();
-        remote_file.read_to_end(&mut contents)?;
+        let output = Command::new("scp")
+            .arg(remote_spec)
+            .arg(local_path)
+            .output()
+            .context("failed to launch scp for remote download")?;
 
-        let mut local_file = File::create(local_path)
-            .with_context(|| format!("failed to create local file {}", local_path.display()))?;
-        local_file.write_all(&contents)?;
-
-        Ok(())
+        ensure_success(output, "scp download failed")
     }
 
     pub fn upload_file(&self, local_path: &Path, remote_path: &Path) -> Result<()> {
-        let mut local_file = File::open(local_path)
-            .with_context(|| format!("failed to open local file {}", local_path.display()))?;
+        let remote_spec = format!(
+            "{}:{}",
+            self.target,
+            shell_quote(&remote_path.to_string_lossy())
+        );
 
-        let mut contents = Vec::new();
-        local_file.read_to_end(&mut contents)?;
+        let output = Command::new("scp")
+            .arg(local_path)
+            .arg(remote_spec)
+            .output()
+            .context("failed to launch scp for remote upload")?;
 
-        let mut remote_file = self
-            .sftp
-            .create(remote_path)
-            .with_context(|| format!("failed to write remote file {}", remote_path.display()))?;
-        remote_file.write_all(&contents)?;
+        ensure_success(output, "scp upload failed")
+    }
 
-        Ok(())
+    fn run_ssh(&self, remote_command: &str) -> Result<()> {
+        let output = self.run_ssh_bytes(remote_command)?;
+        ensure_success(output, "ssh command failed")
+    }
+
+    fn run_ssh_capture(&self, remote_command: &str) -> Result<String> {
+        let output = self.run_ssh_bytes(remote_command)?;
+        ensure_success_with_stdout(output, "ssh command failed")
+    }
+
+    fn run_ssh_bytes(&self, remote_command: &str) -> Result<Output> {
+        Command::new("ssh")
+            .arg(&self.target)
+            .arg(remote_command)
+            .output()
+            .with_context(|| format!("failed to launch ssh for {}", self.target))
     }
 }
 
-fn split_target(target: &str) -> (String, String) {
-    match target.split_once('@') {
-        Some((user, host)) => (user.to_string(), host.to_string()),
-        None => (whoami::username(), target.to_string()),
+fn ensure_success(output: Output, context: &str) -> Result<()> {
+    if output.status.success() {
+        return Ok(());
     }
+
+    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+    if stderr.is_empty() {
+        bail!("{context}");
+    }
+
+    bail!("{context}: {stderr}");
 }
 
-fn is_dir(stat: &FileStat) -> bool {
-    const S_IFMT: u32 = 0o170000;
-    const S_IFDIR: u32 = 0o040000;
+fn ensure_success_with_stdout(output: Output, context: &str) -> Result<String> {
+    if output.status.success() {
+        return String::from_utf8(output.stdout).context("ssh output was not valid UTF-8");
+    }
 
-    stat.perm
-        .map(|perm| (perm & S_IFMT) == S_IFDIR)
-        .unwrap_or(false)
+    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+    if stderr.is_empty() {
+        bail!("{context}");
+    }
+
+    bail!("{context}: {stderr}");
+}
+
+fn shell_quote(value: &str) -> String {
+    format!("'{}'", value.replace('\'', "'\\''"))
 }
