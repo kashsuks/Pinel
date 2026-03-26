@@ -26,13 +26,13 @@ impl CommandInput {
     }
 
     /// Process the command in a vim command style
-    /// 
+    ///
     /// # Arguments
-    /// 
+    ///
     /// - `&self` (`undefined`) - Provides variables and functions avaiable for `Self` usage
-    /// 
+    ///
     /// # Returns
-    /// 
+    ///
     /// - `Option<String>` - Returns the option chosen based on the input
     pub fn process_command(&self) -> Option<String> {
         let cmd = self.input.trim();

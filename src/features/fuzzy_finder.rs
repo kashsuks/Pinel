@@ -190,14 +190,14 @@ fn scan_directory(dir: &Path, root: &Path) -> Vec<FileEntry> {
 }
 
 /// Fuzzy matching algorithm for the inbuilt fuzzy finder
-/// 
+///
 /// # Arguments
-/// 
+///
 /// - `text` (`&str`) - Input text to fuzzy find provided by user.
 /// - `pattern` (`&str`) - String pattern that it follows.
-/// 
+///
 /// # Returns
-/// 
+///
 /// - `i32` - Final results for the fuzzy finder.
 fn fuzzy_match(text: &str, pattern: &str) -> i32 {
     if pattern.is_empty() {
