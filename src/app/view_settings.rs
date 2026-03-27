@@ -294,6 +294,70 @@ impl App {
         .spacing(16)
         .align_y(iced::Alignment::Center);
 
+        let autosave_label = if self.editor_preferences.autosave_enabled {
+            "Enabled"
+        } else {
+            "Disabled"
+        };
+
+        let autosave_toggle_row = row![
+            column![
+                text("Autosave").size(13).color(theme().text_muted),
+                text("Automatically save modified files")
+                    .size(11)
+                    .color(theme().text_dim)
+            ]
+            .spacing(2)
+            .width(Length::FillPortion(2)),
+            button(text(autosave_label).size(12).color(theme().text_primary))
+                .on_press(Message::SettingsToggleAutosave)
+                .style(|_theme, _status| button::Style {
+                    background: Some(Background::Color(theme().bg_secondary)),
+                    border: iced::Border {
+                        color: Color::from_rgba(1.0, 1.0, 1.0, 0.88),
+                        width: 1.0,
+                        radius: 4.0.into(),
+                    },
+                    text_color: theme().text_primary,
+                    ..Default::default()
+                })
+                .padding(iced::Padding {
+                    top: 6.0,
+                    right: 16.0,
+                    bottom: 6.0,
+                    left: 16.0
+                }),
+        ]
+        .spacing(16)
+        .align_y(iced::Alignment::Center);
+
+        let autosave_interval_row = row![
+            column![
+                text("Autosave Interval").size(13).color(theme().text_muted),
+                text("Delay in milliseconds before autosaving (30-1000)")
+                    .size(11)
+                    .color(theme().text_dim),
+            ]
+            .spacing(2)
+            .width(Length::FillPortion(2)),
+            text_input(
+                "300",
+                &self.editor_preferences.autosave_interval_ms.to_string()
+            )
+            .on_input(Message::SettingsAutosaveIntervalChanged)
+            .size(13)
+            .padding(iced::Padding {
+                top: 8.0,
+                right: 12.0,
+                bottom: 8.0,
+                left: 12.0
+            })
+            .style(search_input_style)
+            .width(Length::Fixed(100.0)),
+        ]
+        .spacing(16)
+        .align_y(iced::Alignment::Center);
+
         let line_number_width_row = row![
             column![
                 text("Line Number Width").size(13).color(theme().text_muted),
@@ -463,6 +527,20 @@ impl App {
                 }
             ),
             spaces_row,
+            container(Space::new().width(Length::Fill).height(Length::Fixed(1.0))).style(
+                |_theme| container::Style {
+                    background: Some(Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.03))),
+                    ..Default::default()
+                }
+            ),
+            autosave_toggle_row,
+            container(Space::new().width(Length::Fill).height(Length::Fixed(1.0))).style(
+                |_theme| container::Style {
+                    background: Some(Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.03))),
+                    ..Default::default()
+                }
+            ),
+            autosave_interval_row,
             container(Space::new().width(Length::Fill).height(Length::Fixed(1.0))).style(
                 |_theme| container::Style {
                     background: Some(Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.03))),

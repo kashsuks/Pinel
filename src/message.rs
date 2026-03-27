@@ -80,6 +80,8 @@ pub enum Message {
     SettingsNavigate(String),
     SettingsTabSizeChanged(String),
     SettingsToggleUseSpaces,
+    SettingsToggleAutosave,
+    SettingsAutosaveIntervalChanged(String),
     SettingsSavePreferences,
     SettingsSelectTheme(String),
     SettingsReloadTheme,
@@ -102,6 +104,8 @@ pub enum Message {
 
     DismissNotification,
     LspTick,
+    AutosaveTick,
+    AutosaveFinished(PathBuf, String, Result<(), String>),
 
     // Developer mode
     ToggleDeveloperPanel,

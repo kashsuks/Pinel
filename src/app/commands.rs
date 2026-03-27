@@ -48,6 +48,8 @@ impl App {
                         code_editor: editor,
                         buffer: crate::features::editor_buffer::EditorBuffer::from_text(""),
                     },
+                    autosave_requested_at: None,
+                    autosave_in_flight: false,
                 });
                 self.active_tab = Some(self.tabs.len() - 1);
                 self.vim_refresh_cursor_style();

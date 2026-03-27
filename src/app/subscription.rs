@@ -13,6 +13,15 @@ impl App {
             iced::time::every(Duration::from_millis(150)).map(|_| Message::LspTick),
         ];
 
+        if self.editor_preferences.autosave_enabled {
+            subs.push(
+                iced::time::every(Duration::from_millis(
+                    self.editor_preferences.autosave_interval_ms.clamp(30, 1000),
+                ))
+                .map(|_| Message::AutosaveTick),
+            );
+        }
+
         if let Some(term) = &self.terminal_pane {
             subs.push(term.subscription().map(Message::TerminalEvent));
         }

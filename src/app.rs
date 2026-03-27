@@ -74,6 +74,8 @@ pub struct Tab {
     pub path: PathBuf,
     pub name: String,
     pub kind: TabKind,
+    pub autosave_requested_at: Option<Instant>,
+    pub autosave_in_flight: bool,
 }
 
 pub struct MarkdownPreviewPane {

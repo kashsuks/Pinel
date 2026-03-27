@@ -60,6 +60,52 @@ impl App {
         )
     }
 
+    fn queue_autosave_for_active_tab(&mut self) {
+        let Some(idx) = self.active_tab else {
+            return;
+        };
+
+        let Some(tab) = self.tabs.get_mut(idx) else {
+            return;
+        };
+
+        if matches!(tab.kind, TabKind::Editor { .. }) {
+            tab.autosave_requested_at = Some(Instant::now());
+        }
+    }
+
+    fn autosave_task_for_tab(&mut self, idx: usize) -> iced::Task<Message> {
+        let Some(tab) = self.tabs.get_mut(idx) else {
+            return iced::Task::none();
+        };
+
+        let TabKind::Editor { code_editor, .. } = &tab.kind else {
+            return iced::Task::none();
+        };
+
+        if tab.path == PathBuf::from("untitled")
+            || !code_editor.is_modified()
+            || tab.autosave_in_flight
+        {
+            return iced::Task::none();
+        }
+
+        tab.autosave_in_flight = true;
+
+        let path = tab.path.clone();
+        let saved_content = code_editor.content();
+        let write_path = path.clone();
+        let write_content = saved_content.clone();
+
+        iced::Task::perform(
+            async move {
+                let result = std::fs::write(&write_path, write_content).map_err(|e| e.to_string());
+                (path, saved_content, result)
+            },
+            |(path, saved_content, result)| Message::AutosaveFinished(path, saved_content, result),
+        )
+    }
+
     pub(super) fn vim_refresh_cursor_style(&mut self) {
         if self.terminal_open && self.focused_pane == FocusPane::Terminal {
             if let Some(idx) = self.active_tab {
@@ -339,6 +385,10 @@ impl App {
 
                     if let Some((ref event, ref before, ref after)) = cursor_sync {
                         self.sync_cursor_from_editor_event(event, before, after);
+
+                        if before != after {
+                            self.queue_autosave_for_active_tab();
+                        }
                     }
                     if !matches!(event, EditorMessage::MouseHover(_)) {
                         self.pending_hover_request = None;
@@ -698,6 +748,8 @@ impl App {
                             &effective_content,
                         ),
                     },
+                    autosave_requested_at: None,
+                    autosave_in_flight: false,
                 });
 
                 // Detach LSP from all existing tabs before switching to the new one
@@ -961,6 +1013,8 @@ impl App {
                             code_editor.mark_saved();
                             code_editor.lsp_did_save();
                         }
+                        tab.autosave_requested_at = None;
+                        tab.autosave_in_flight = false;
                     }
                 }
 
@@ -995,6 +1049,8 @@ impl App {
                             code_editor.mark_saved();
                             code_editor.lsp_did_save();
                         }
+                        tab.autosave_requested_at = None;
+                        tab.autosave_in_flight = false;
                     }
                 }
                 iced::Task::none()
@@ -1447,6 +1503,17 @@ impl App {
                 self.editor_preferences.use_spaces = !self.editor_preferences.use_spaces;
                 iced::Task::none()
             }
+            Message::SettingsToggleAutosave => {
+                self.editor_preferences.autosave_enabled =
+                    !self.editor_preferences.autosave_enabled;
+                iced::Task::none()
+            }
+            Message::SettingsAutosaveIntervalChanged(val) => {
+                if let Ok(interval) = val.parse::<u64>() {
+                    self.editor_preferences.autosave_interval_ms = interval.clamp(30, 1000);
+                }
+                iced::Task::none()
+            }
             Message::SettingsSavePreferences => {
                 let _ = prefs::save_preferences(&self.editor_preferences);
                 self.notification = Some(Notification {
@@ -1560,6 +1627,8 @@ impl App {
                         code_editor: editor,
                         buffer: crate::features::editor_buffer::EditorBuffer::from_text(""),
                     },
+                    autosave_requested_at: None,
+                    autosave_in_flight: false,
                 });
                 self.active_tab = Some(self.tabs.len() - 1);
                 self.cursor_line = 1;
@@ -1738,6 +1807,63 @@ impl App {
                         }
                     }
                 }
+                iced::Task::none()
+            }
+            Message::AutosaveTick => {
+                if !self.editor_preferences.autosave_enabled {
+                    return iced::Task::none();
+                }
+
+                let Some(idx) = self.active_tab else {
+                    return iced::Task::none();
+                };
+
+                let should_save = self
+                    .tabs
+                    .get(idx)
+                    .and_then(|tab| tab.autosave_requested_at)
+                    .is_some_and(|requested_at| {
+                        requested_at.elapsed()
+                            >= Duration::from_millis(
+                                self.editor_preferences.autosave_interval_ms.clamp(30, 1000),
+                            )
+                    });
+
+                if should_save {
+                    return self.autosave_task_for_tab(idx);
+                }
+
+                iced::Task::none()
+            }
+            Message::AutosaveFinished(path, saved_content, result) => {
+                let Some(tab) = self.tabs.iter_mut().find(|tab| tab.path == path) else {
+                    return iced::Task::none();
+                };
+
+                tab.autosave_in_flight = false;
+
+                match result {
+                    Ok(()) => {
+                        if let TabKind::Editor { code_editor, .. } = &mut tab.kind {
+                            if code_editor.content() == saved_content {
+                                code_editor.mark_saved();
+                                code_editor.lsp_did_save();
+                                tab.autosave_requested_at = None;
+                            } else {
+                                tab.autosave_requested_at = Some(Instant::now());
+                            }
+                        }
+                    }
+
+                    Err(err) => {
+                        tab.autosave_requested_at = Some(Instant::now());
+                        self.notification = Some(Notification {
+                            message: format!("Autosave failed: {err}"),
+                            shown_at: Instant::now(),
+                        });
+                    }
+                }
+
                 iced::Task::none()
             }
             Message::CheckForUpdate => {

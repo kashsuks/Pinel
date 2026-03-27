@@ -7,6 +7,8 @@ use std::path::PathBuf;
 pub struct EditorPreferences {
     pub tab_size: usize,
     pub use_spaces: bool,
+    pub autosave_enabled: bool,
+    pub autosave_interval_ms: u64,
     pub theme_name: String,
     pub window_width: f32,
     pub window_height: f32,
@@ -21,6 +23,8 @@ impl Default for EditorPreferences {
         Self {
             tab_size: 4,
             use_spaces: true,
+            autosave_enabled: true,
+            autosave_interval_ms: 300,
             theme_name: "Pinel Blueberry Dark".to_string(),
             window_width: 1200.0,
             window_height: 800.0,
@@ -109,6 +113,14 @@ fn parse_preferences(content: &str) -> EditorPreferences {
                 }
                 "use_spaces" => {
                     prefs.use_spaces = value == "true";
+                }
+                "autosave_enabled" => {
+                    prefs.autosave_enabled = value == "true";
+                }
+                "autosave_interval_ms" => {
+                    if let Ok(interval) = value.parse::<u64>() {
+                        prefs.autosave_interval_ms = interval.clamp(30, 1000);
+                    }
                 }
                 "theme_name" => {
                     prefs.theme_name = value.to_string();
@@ -207,6 +219,9 @@ fn save_preferences_to_path(
 return {{
     tab_size = {},
     use_spaces = {},
+    autosave_enabled = {},
+    -- Autosave interval in milliseconds (30–1000)
+    autosave_interval_ms = {},
     theme_name = "{}",
     window_width = {},
     window_height = {},
@@ -218,6 +233,8 @@ return {{
 "#,
         prefs.tab_size,
         prefs.use_spaces,
+        prefs.autosave_enabled,
+        prefs.autosave_interval_ms,
         prefs.theme_name,
         prefs.window_width,
         prefs.window_height,
