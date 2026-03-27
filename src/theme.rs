@@ -9,7 +9,7 @@ use syntect::highlighting::{
     ThemeSettings,
 };
 
-// ── Layout constants ────────────────────────────────────────────────────────
+// Layout Constants
 pub const SIDEBAR_DEFAULT_WIDTH: f32 = 180.0;
 pub const SIDEBAR_MIN_WIDTH: f32 = 100.0;
 pub const SIDEBAR_MAX_WIDTH: f32 = 500.0;
@@ -23,7 +23,7 @@ pub const BORDER_RADIUS_TAB: f32 = 10.0;
 // PALETTE – Generic color slots.  Swap these values to re-theme the editor.
 // ═══════════════════════════════════════════════════════════════════════════
 
-// -- Accent colours (warm → cool) --
+// Accent Colours
 pub const ACCENT_WARM_1: Color = Color::from_rgb(0.961, 0.878, 0.863); // #f5e0dc
 pub const ACCENT_WARM_2: Color = Color::from_rgb(0.949, 0.804, 0.804); // #f2cdcd
 pub const ACCENT_PINK: Color = Color::from_rgb(0.961, 0.761, 0.906); // #f5c2e7
@@ -39,22 +39,22 @@ pub const ACCENT_MID_BLUE: Color = Color::from_rgb(0.455, 0.780, 0.925); // #74c
 pub const ACCENT_BLUE: Color = Color::from_rgb(0.537, 0.706, 0.980); // #89b4fa
 pub const ACCENT_SOFT_BLUE: Color = Color::from_rgb(0.706, 0.745, 0.996); // #b4befe
 
-// -- Text hierarchy --
+// Text hierarchy
 pub const TEXT_1: Color = Color::from_rgb(0.804, 0.839, 0.957); // #cdd6f4
 pub const TEXT_2: Color = Color::from_rgb(0.729, 0.761, 0.871); // #bac2de
 pub const TEXT_3: Color = Color::from_rgb(0.651, 0.678, 0.784); // #a6adc8
 
-// -- Overlay layers --
+// Overlay Layers
 pub const OVERLAY_3: Color = Color::from_rgb(0.576, 0.600, 0.698); // #9399b2
 pub const OVERLAY_2: Color = Color::from_rgb(0.498, 0.518, 0.612); // #7f849c
 pub const OVERLAY_1: Color = Color::from_rgb(0.424, 0.439, 0.525); // #6c7086
 
-// -- Surface layers --
+// Surface Layers
 pub const SURFACE_3: Color = Color::from_rgb(0.345, 0.357, 0.439); // #585b70
 pub const SURFACE_2: Color = Color::from_rgb(0.271, 0.278, 0.353); // #45475a
 pub const SURFACE_1: Color = Color::from_rgb(0.192, 0.196, 0.267); // #313244
 
-// -- Background layers --
+// Background Layers
 pub const BG_BASE: Color = Color::from_rgb(0.118, 0.118, 0.180); // #1e1e2e
 pub const BG_MANTLE: Color = Color::from_rgb(0.094, 0.094, 0.145); // #181825
 pub const BG_CRUST: Color = Color::from_rgb(0.067, 0.067, 0.106); // #11111b
@@ -89,9 +89,15 @@ pub struct ThemeColors {
     pub syntax_theme: SynTheme,
 }
 
-// ── Helpers ─────────────────────────────────────────────────────────────────
-
-/// Convert an iced Color to a syntect SynColor (u8 components).
+/// Convert an `iced` colour to `syntect` colour
+/// 
+/// # Arguments
+/// 
+/// - `c` (`Color`) - The iced colour scheme.
+/// 
+/// # Returns
+/// 
+/// - `SynColor` - Syntect colour scheme.
 const fn to_syn(c: Color) -> SynColor {
     SynColor {
         r: (c.r * 255.0) as u8,
@@ -119,126 +125,101 @@ fn build_palette_syntax_theme() -> SynTheme {
     let bold = FontStyle::BOLD;
 
     let scopes = vec![
-        // Comments
         scope_item(
             "comment, comment.line, comment.block, punctuation.definition.comment",
             OVERLAY_2,
             italic,
         ),
-        // Keywords & control flow
         scope_item(
             "keyword, keyword.control, keyword.operator.logical, storage.type, storage.modifier",
             ACCENT_PURPLE,
             none,
         ),
-        // Functions / methods
         scope_item(
             "entity.name.function, support.function, meta.function-call",
             ACCENT_BLUE,
             none,
         ),
-        // Types / classes
         scope_item(
             "entity.name.type, entity.name.class, support.type, support.class",
             ACCENT_YELLOW,
             none,
         ),
-        // Strings
         scope_item(
             "string, string.quoted, punctuation.definition.string",
             ACCENT_GREEN,
             none,
         ),
-        // Numbers
         scope_item(
             "constant.numeric, constant.numeric.integer, constant.numeric.float",
             ACCENT_ORANGE,
             none,
         ),
-        // Boolean / language constants
         scope_item(
             "constant.language, constant.language.boolean",
             ACCENT_ORANGE,
             italic,
         ),
-        // Other constants
         scope_item(
             "constant.other, variable.other.constant",
             ACCENT_ORANGE,
             none,
         ),
-        // Variables
         scope_item("variable, variable.other, variable.parameter", TEXT_1, none),
-        // Properties / fields
         scope_item(
             "variable.other.property, variable.other.member, support.variable.property",
             ACCENT_SOFT_BLUE,
             none,
         ),
-        // Operators
         scope_item(
             "keyword.operator, keyword.operator.assignment, punctuation.accessor",
             ACCENT_SKY,
             none,
         ),
-        // Punctuation / brackets
         scope_item(
             "punctuation, punctuation.section, punctuation.separator, meta.brace",
             OVERLAY_3,
             none,
         ),
-        // Tags (HTML / XML)
         scope_item(
             "entity.name.tag, punctuation.definition.tag",
             ACCENT_PURPLE,
             none,
         ),
-        // Attributes
         scope_item("entity.other.attribute-name", ACCENT_YELLOW, italic),
-        // Namespaces / modules
         scope_item(
             "entity.name.namespace, entity.name.module",
             ACCENT_WARM_1,
             none,
         ),
-        // Macros
         scope_item(
             "entity.name.macro, support.function.macro",
             ACCENT_TEAL,
             bold,
         ),
-        // Lifetimes / labels
         scope_item(
             "storage.modifier.lifetime, entity.name.lifetime",
             ACCENT_DARK_RED,
             italic,
         ),
-        // Escape sequences
         scope_item("constant.character.escape", ACCENT_PINK, none),
-        // Regex
         scope_item("string.regexp", ACCENT_ORANGE, none),
-        // Decorators / annotations
         scope_item(
             "meta.decorator, meta.annotation, punctuation.decorator",
             ACCENT_ORANGE,
             italic,
         ),
-        // Markdown headings
         scope_item("markup.heading, entity.name.section", ACCENT_BLUE, bold),
-        // Markdown bold / italic
         scope_item("markup.bold", TEXT_1, bold),
         scope_item("markup.italic", TEXT_1, italic),
-        // Links
         scope_item(
             "markup.underline.link, string.other.link",
             ACCENT_MID_BLUE,
             none,
         ),
-        // Diff
         scope_item("markup.inserted", ACCENT_GREEN, none),
         scope_item("markup.deleted", ACCENT_RED, none),
         scope_item("markup.changed", ACCENT_YELLOW, none),
-        // Invalid / errors
         scope_item("invalid, invalid.illegal", ACCENT_RED, none),
     ];
 
@@ -286,13 +267,12 @@ fn editor_style(
 
 impl Default for ThemeColors {
     fn default() -> Self {
-        // Default is Pinel Blueberry Dark — built lazily to avoid recursion
+        // Default is Pinel Blueberry Dark and lazily builds instead of recursion
         pinel_blueberry_dark()
     }
 }
 
 impl ThemeColors {
-    /// Convert a theme_manager::ThemeColors (hex strings) into a runtime ThemeColors.
     pub fn from_lua_theme(lua: &crate::config::theme_manager::ThemeColors) -> Self {
         let p = |hex: &str| -> Color {
             let hex = hex.trim_start_matches('#');
@@ -368,12 +348,10 @@ impl ThemeColors {
 
 pub static THEME: Lazy<RwLock<ThemeColors>> = Lazy::new(|| RwLock::new(ThemeColors::default()));
 
-/// Get a read guard to the current theme. Use as `theme().field`.
 pub fn theme() -> std::sync::RwLockReadGuard<'static, ThemeColors> {
     THEME.read().unwrap()
 }
 
-/// Replace the current theme (for hot-reload / theme switching).
 pub fn set_theme(t: ThemeColors) {
     let mut w = THEME.write().unwrap();
     *w = t;
@@ -445,7 +423,6 @@ impl ThemeColors {
     }
 }
 
-/// Public alias to construct a Pinel Blueberry Dark theme (used by app startup).
 pub fn pinel_blueberry_dark_theme() -> ThemeColors {
     pinel_blueberry_dark()
 }
@@ -467,7 +444,6 @@ pub const BUILTIN_THEMES: &[&str] = &[
     "Ayu Dark",
 ];
 
-/// Build a ThemeColors from a named built-in theme.
 pub fn builtin_theme(name: &str) -> ThemeColors {
     match name {
         "Pinel Blueberry Dark" => pinel_blueberry_dark(),
@@ -516,21 +492,21 @@ fn pinel_blueberry_dark() -> ThemeColors {
 
     let syn = build_syntax_theme(
         "Pinel Blueberry Dark",
-        fg,         // foreground
-        bg,         // background
-        fg,         // caret
-        bg_surface, // line highlight
-        gray,       // comments
-        purple,     // keywords
-        blue,       // functions
-        cyan,       // types
-        green,      // strings
-        yellow,     // numbers
-        yellow,     // constants
-        fg,         // variables
-        blue,       // properties
-        cyan,       // operators
-        text_dim,   // punctuation
+        fg,
+        bg,
+        fg,
+        bg_surface,
+        gray,
+        purple,
+        blue,
+        cyan,
+        green,
+        yellow,
+        yellow,
+        fg,
+        blue,
+        cyan,
+        text_dim,
     );
 
     ThemeColors {
