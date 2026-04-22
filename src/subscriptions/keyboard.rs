@@ -64,36 +64,6 @@ pub fn shortcuts() -> Subscription<Message> {
     })
 }
 
-/// Emits raw keyboard and mouse input messages for developer logging.
-pub fn input_debug() -> Subscription<Message> {
-    iced::event::listen_with(|event, _status, _id| match event {
-        Event::Keyboard(iced::keyboard::Event::KeyPressed { key, modifiers, .. }) => {
-            Some(Message::InputLog(format!(
-                "input:key_pressed key={key:?} shift={} ctrl={} alt={} command={}",
-                modifiers.shift(),
-                modifiers.control(),
-                modifiers.alt(),
-                modifiers.command()
-            )))
-        }
-        Event::Keyboard(iced::keyboard::Event::KeyReleased { key, modifiers, .. }) => {
-            Some(Message::InputLog(format!(
-                "input:key_released key={key:?} shift={} ctrl={} alt={} command={}",
-                modifiers.shift(),
-                modifiers.control(),
-                modifiers.alt(),
-                modifiers.command()
-            )))
-        }
-        Event::Mouse(iced::mouse::Event::ButtonPressed(button)) => Some(Message::InputLog(
-            format!("input:mouse_pressed button={button:?}"),
-        )),
-        Event::Mouse(iced::mouse::Event::ButtonReleased(button)) => Some(Message::InputLog(
-            format!("input:mouse_released button={button:?}"),
-        )),
-        _ => None,
-    })
-}
 
 pub fn modifier_state() -> Subscription<Message> {
     iced::event::listen_with(|event, _status, _id| match event {

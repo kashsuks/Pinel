@@ -1041,11 +1041,6 @@ impl App {
 
                 iced::Task::none()
             }
-            Message::InputLog(line) => {
-                eprintln!("{line}");
-                self.dev_log(line);
-                iced::Task::none()
-            }
             Message::FileSaved(result) => {
                 if let Err(e) = result {
                     eprintln!("Failed to save file: {}", e);
