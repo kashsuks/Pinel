@@ -55,6 +55,16 @@ pub enum TabKind {
     },
     /// markdown preview for an editor tab.
     Preview { md_items: Vec<markdown::Item> },
+    Image { handle: iced::widget::image::Handle },
+    Video { player: iced_video_player::Video },
+    Audio {
+        file_path: std::path::PathBuf,
+        sink: std::sync::Arc<std::sync::Mutex<Option<rodio::Sink>>>,
+        stream: std::sync::Arc<rodio::OutputStream>,
+        playing: bool,
+        duration_secs: f32,
+        position_secs: f32,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -68,6 +78,9 @@ impl std::fmt::Debug for TabKind {
         match self {
             TabKind::Editor { .. } => f.debug_struct("Editor").finish_non_exhaustive(),
             TabKind::Preview { .. } => f.debug_struct("Preview").finish_non_exhaustive(),
+            TabKind::Image { .. } => f.debug_struct("Image").finish_non_exhaustive(),
+            TabKind::Video { .. } => f.debug_struct("Video").finish_non_exhaustive(),
+            TabKind::Audio { .. } => f.debug_struct("Audio").finish_non_exhaustive(),
         }
     }
 }
