@@ -7,7 +7,6 @@ impl App {
         let mut subs = vec![
             crate::subscriptions::keyboard::shortcuts(),
             crate::subscriptions::keyboard::modifier_state(),
-            crate::subscriptions::keyboard::input_debug(),
             crate::subscriptions::mouse::sidebar_resize(),
             crate::subscriptions::window::resizes(),
             crate::subscriptions::window::focus_refresh(),

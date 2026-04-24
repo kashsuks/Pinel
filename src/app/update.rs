@@ -1041,11 +1041,6 @@ impl App {
 
                 iced::Task::none()
             }
-            Message::InputLog(line) => {
-                eprintln!("{line}");
-                self.dev_log(line);
-                iced::Task::none()
-            }
             Message::FileSaved(result) => {
                 if let Err(e) = result {
                     eprintln!("Failed to save file: {}", e);
@@ -1560,6 +1555,7 @@ impl App {
                 }
                 iced::Task::none()
             }
+            #[cfg(feature = "unstable-comet")]
             Message::SettingsToggleDeveloperMode => {
                 self.editor_preferences.developer_mode = !self.editor_preferences.developer_mode;
                 self.dev_log(format!(
@@ -1589,10 +1585,12 @@ impl App {
                 }
                 iced::Task::none()
             }
+            #[cfg(feature = "unstable-comet")]
             Message::ToggleDeveloperPanel => {
                 self.developer_panel_visible = !self.developer_panel_visible;
                 iced::Task::none()
             }
+            #[cfg(feature = "unstable-comet")]
             Message::ClearDeveloperLogs => {
                 self.developer_logs.clear();
                 self.dev_log("Logs cleared".to_string());
