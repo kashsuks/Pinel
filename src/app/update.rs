@@ -16,6 +16,27 @@ impl App {
         )
     }
 
+    fn is_image_path(path: &std::path::Path) -> bool {
+        matches!(
+            path.extension().and_then(|ext| ext.to_str()),
+            Some("png" | "jpg" | "jpeg" | "gif" | "webp" | "bmp" | "ico")
+        )
+    }
+
+    fn is_video_path(path: &std::path::Path) -> bool {
+        matches!(
+            path.extension().and_then(|ext| ext.to_str()),
+            Some("mp4" | "mkv" | "mov" | "avi" | "webm")
+        )
+    }
+
+    fn is_audio_path(path: &std::path::Path) -> bool {
+        matches!(
+            path.extension().and_then(|ext| ext.to_str()),
+            Some("mp3" | "wav" | "ogg" | "flac" | "aac")
+        )
+    }
+
     fn active_tab_supports_markdown_preview(&self) -> bool {
         self.active_tab
             .and_then(|idx| self.tabs.get(idx))
