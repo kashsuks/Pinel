@@ -1,7 +1,6 @@
 /// This file is responsible for starting up the process
 /// and defining as well as starting up the cli tool
 /// for ssh connection
-
 use clap::Parser;
 use iced::window;
 use std::path::PathBuf;

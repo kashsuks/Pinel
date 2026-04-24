@@ -1,7 +1,6 @@
 /// This file is responsible for internal messages
 /// Used to send internal flags and data transfer to trigger
 /// Other instances of Message types.
-
 use crate::features::search::SearchResult;
 use iced_code_editor::LspOverlayMessage;
 use iced_term::Event as TerminalEvent;
@@ -110,8 +109,11 @@ pub enum Message {
     AutosaveTick,
     AutosaveFinished(PathBuf, String, Result<(), String>),
 
+    #[cfg(feature = "unstable-comet")]
     ToggleDeveloperPanel,
+    #[cfg(feature = "unstable-comet")]
     ClearDeveloperLogs,
+    #[cfg(feature = "unstable-comet")]
     SettingsToggleDeveloperMode,
     ToggleLsp,
 

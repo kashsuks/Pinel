@@ -12,7 +12,9 @@ use iced::window;
 use iced::{Background, Color, Element, Length, Subscription};
 use iced_code_editor::CodeEditor;
 use iced_term::Terminal as IcedTerminal;
-use std::collections::{HashMap, VecDeque};
+use std::collections::HashMap;
+#[cfg(feature = "unstable-comet")]
+use std::collections::VecDeque;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
@@ -179,7 +181,9 @@ pub struct App {
     autocomplete: Autocomplete,
     modifier_state: Modifiers,
 
+    #[cfg(feature = "unstable-comet")]
     developer_logs: VecDeque<(Instant, String)>,
+    #[cfg(feature = "unstable-comet")]
     developer_panel_visible: bool,
 }
 
@@ -300,34 +304,46 @@ impl Default for App {
             pending_sensitive_open: None,
             autocomplete: Autocomplete::new(),
             modifier_state: Modifiers::default(),
+            #[cfg(feature = "unstable-comet")]
             developer_logs: VecDeque::new(),
+            #[cfg(feature = "unstable-comet")]
             developer_panel_visible: false,
         };
 
         let startup_script = scripting::load_startup_script();
-        app.push_developer_log(format!(
-            "startup lua path: {}",
-            startup_script.path.display()
-        ));
+        #[cfg(not(feature = "unstable-comet"))]
+        let _ = (
+            &startup_script.path,
+            &startup_script.source,
+            &startup_script.error,
+        );
+        #[cfg(feature = "unstable-comet")]
+        {
+            app.push_developer_log(format!(
+                "startup lua path: {}",
+                startup_script.path.display()
+            ));
 
-        match &startup_script.source {
-            Some(source) => {
-                app.push_developer_log("startup lua source begin".to_string());
-                for line in source.lines() {
-                    app.push_developer_log(format!("lua> {line}"));
+            match &startup_script.source {
+                Some(source) => {
+                    app.push_developer_log("startup lua source begin".to_string());
+                    for line in source.lines() {
+                        app.push_developer_log(format!("lua> {line}"));
+                    }
+                    app.push_developer_log("startup lua source end".to_string());
                 }
-                app.push_developer_log("startup lua source end".to_string());
+                None => {
+                    app.push_developer_log("startup lua source not found".to_string());
+                }
             }
-            None => {
-                app.push_developer_log("startup lua source not found".to_string());
-            }
-        }
 
-        if let Some(error) = &startup_script.error {
-            app.push_developer_log(format!("startup lua error: {error}"));
+            if let Some(error) = &startup_script.error {
+                app.push_developer_log(format!("startup lua error: {error}"));
+            }
         }
 
         for command in startup_script.commands {
+            #[cfg(feature = "unstable-comet")]
             app.push_developer_log(format!("startup lua command: {:?}", command));
             app.apply_editor_command(command);
         }
@@ -337,6 +353,7 @@ impl Default for App {
 }
 
 impl App {
+    #[cfg(feature = "unstable-comet")]
     fn push_developer_log(&mut self, message: String) {
         let now = Instant::now();
         self.developer_logs.push_back((now, message));
@@ -345,11 +362,15 @@ impl App {
         }
     }
 
+    #[cfg(feature = "unstable-comet")]
     pub fn dev_log(&mut self, message: String) {
         if self.editor_preferences.developer_mode {
             self.push_developer_log(message);
         }
     }
+
+    #[cfg(not(feature = "unstable-comet"))]
+    pub fn dev_log(&mut self, _message: String) {}
 
     pub(super) fn configured_code_editor(&self, content: &str, syntax: &str) -> CodeEditor {
         let mut editor = iced_code_editor::CodeEditor::new(content, syntax);

@@ -2689,6 +2689,7 @@ checksum = "000e01026c93ba643f8357a3db3ada0e6555265a377f6f9291c472f6dd701fb3"
 dependencies = [
  "iced_core",
  "iced_debug",
+ "iced_devtools",
  "iced_futures",
  "iced_highlighter",
  "iced_renderer",
@@ -2732,6 +2733,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "iced_beacon"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "02a48f970444257a5e8b19def673f14f0d79c159fa851055e2a861683c3f8845"
+dependencies = [
+ "bincode",
+ "futures",
+ "iced_core",
+ "log",
+ "semver",
+ "serde",
+ "thiserror 2.0.17",
+ "tokio",
+]
+
+[[package]]
 name = "iced_core"
 version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2744,6 +2761,7 @@ dependencies = [
  "log",
  "num-traits",
  "rustc-hash 2.1.1",
+ "serde",
  "smol_str",
  "thiserror 2.0.17",
  "web-time",
@@ -2755,8 +2773,21 @@ version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "25035ab0215a620e53f4103e36fc4e59a1fb2817e4bfc38a30ad27b4202ea0be"
 dependencies = [
+ "iced_beacon",
  "iced_core",
  "iced_futures",
+ "log",
+]
+
+[[package]]
+name = "iced_devtools"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "59b8e2a306ac5c583234b02f5404afdb7b7467c8f72a4a44ad3e7be30fc4b339"
+dependencies = [
+ "iced_debug",
+ "iced_program",
+ "iced_widget",
  "log",
 ]
 
@@ -5711,6 +5742,16 @@ name = "self_cell"
 version = "1.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b12e76d157a900eb52e81bc6e9f3069344290341720e9178cde2407113ac8d89"
+
+[[package]]
+name = "semver"
+version = "1.0.28"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8a7852d02fc848982e0c167ef163aaff9cd91dc640ba85e263cb1ce46fae51cd"
+dependencies = [
+ "serde",
+ "serde_core",
+]
 
 [[package]]
 name = "serde"

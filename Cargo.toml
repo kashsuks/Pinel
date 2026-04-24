@@ -11,6 +11,10 @@ keywords = ["editor", "terminal", "iced"]
 categories = ["development-tools"]
 include = ["src/**/*", "Cargo.toml", "README.md", "LICENSE"]
 
+[features]
+default = []
+unstable-comet = ["iced/debug"]
+
 [dependencies]
 eframe = "0.29"
 image = "0.24"
