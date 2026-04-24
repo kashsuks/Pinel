@@ -15,6 +15,7 @@ pub struct EditorPreferences {
     /// Width of the line-number gutter in logical pixels (default 40).
     pub line_number_width: f32,
     /// Enable developer mode with debug logging
+    #[cfg(feature = "unstable-comet")]
     pub developer_mode: bool,
 }
 
@@ -29,6 +30,7 @@ impl Default for EditorPreferences {
             window_width: 1200.0,
             window_height: 800.0,
             line_number_width: 40.0,
+            #[cfg(feature = "unstable-comet")]
             developer_mode: false,
         }
     }
@@ -140,6 +142,7 @@ fn parse_preferences(content: &str) -> EditorPreferences {
                         prefs.line_number_width = w.max(20.0).min(120.0);
                     }
                 }
+                #[cfg(feature = "unstable-comet")]
                 "developer_mode" => {
                     prefs.developer_mode = value == "true";
                 }
@@ -212,6 +215,14 @@ fn save_preferences_to_path(
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
     }
+    #[cfg(feature = "unstable-comet")]
+    let developer_mode_config = format!(
+        "    -- Enable developer mode with debug logging (WARNING: Logs may contain sensitive data)\n    developer_mode = {},\n",
+        prefs.developer_mode
+    );
+    #[cfg(not(feature = "unstable-comet"))]
+    let developer_mode_config = String::new();
+
     let content = format!(
         r#"-- Pinel Editor Preferences
 -- Edit these values to customize your editor
@@ -227,9 +238,7 @@ return {{
     window_height = {},
     -- Width of the line-number gutter in logical pixels (20–120)
     line_number_width = {},
-    -- Enable developer mode with debug logging (WARNING: Logs may contain sensitive data)
-    developer_mode = {},
-}}
+{}}}
 "#,
         prefs.tab_size,
         prefs.use_spaces,
@@ -239,7 +248,7 @@ return {{
         prefs.window_width,
         prefs.window_height,
         prefs.line_number_width,
-        prefs.developer_mode,
+        developer_mode_config,
     );
     let mut file = fs::File::create(path)?;
     file.write_all(content.as_bytes())?;

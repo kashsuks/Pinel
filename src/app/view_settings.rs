@@ -34,11 +34,19 @@ impl App {
     pub(super) fn view_settings_panel(&self) -> Element<'_, Message> {
         use iced::widget::Space;
 
+        #[cfg(feature = "unstable-comet")]
+        let mut sections = vec![
+            ("general", "General"),
+            ("preferences", "Preferences"),
+            ("wakatime", "WakaTime"),
+        ];
+        #[cfg(feature = "unstable-comet")]
+        sections.push(("developer", "Developer"));
+        #[cfg(not(feature = "unstable-comet"))]
         let sections = vec![
             ("general", "General"),
             ("preferences", "Preferences"),
             ("wakatime", "WakaTime"),
-            ("developer", "Developer"),
         ];
 
         let nav_items: Vec<Element<'_, Message>> = sections
@@ -129,6 +137,7 @@ impl App {
             "general" => self.view_settings_general(),
             "preferences" => self.view_settings_preferences(),
             "wakatime" => self.view_settings_wakatime(),
+            #[cfg(feature = "unstable-comet")]
             "developer" => self.view_settings_developer(),
             _ => self.view_settings_general(),
         };
@@ -569,6 +578,7 @@ impl App {
         .into()
     }
 
+    #[cfg(feature = "unstable-comet")]
     pub(super) fn view_settings_developer(&self) -> Element<'_, Message> {
         use iced::widget::Space;
 
