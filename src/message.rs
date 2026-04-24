@@ -120,4 +120,12 @@ pub enum Message {
     CheckForUpdate,
     UpdateAvailable(crate::features::updater::UpdateInfo),
     DismissUpdateBanner,
+
+    // all the ones below are related to media playback
+    VideoEvent(iced_video_player::Message),
+    AudioPlay,
+    AudioPause,
+    AudioStop,
+    AudioSeek(f32),
+    AudioTick,
 }
