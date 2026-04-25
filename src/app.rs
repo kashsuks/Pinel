@@ -405,6 +405,17 @@ impl App {
         editor.set_line_numbers_enabled(true);
         editor.set_wrap_enabled(false);
         editor.set_font_size(13.0, true);
+
+        // iced-code-editor builtin indentation
+        let indent_style = if self.editor_preferences.use_spaces {
+            iced_code_editor::IndentStyle::Spaces(
+                self.editor_preferences.tab_size.clamp(1, 8) as u8
+            )
+        } else {
+            iced_code_editor::IndentStyle::Tab
+        };
+        editor.set_indent_style(indent_style);
+
         editor
     }
 
@@ -414,6 +425,22 @@ impl App {
         for tab in &mut self.tabs {
             if let TabKind::Editor { code_editor, .. } = &mut tab.kind {
                 code_editor.set_theme(editor_style);
+            }
+        }
+    }
+
+    pub(super) fn apply_indent_style_to_tabs(&mut self) {
+        let indent_style = if self.editor_preferences.use_spaces {
+            iced_code_editor::IndentStyle::Spaces(
+                self.editor_preferences.tab_size.clamp(1, 8) as u8
+            )
+        } else {
+            iced_code_editor::IndentStyle::Tab
+        };
+
+        for tab in &mut self.tabs {
+            if let TabKind::Editor { code_editor, .. } = &mut tab.kind {
+                code_editor.set_indent_style(indent_style);
             }
         }
     }
