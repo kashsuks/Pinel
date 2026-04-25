@@ -31,6 +31,92 @@ impl App {
         )
     }
 
+    #[cfg(feature = "video")]
+    fn prepend_env_paths(
+        key: &str,
+        separator: char,
+        candidates: impl IntoIterator<Item = std::path::PathBuf>,
+    ) {
+        let mut paths: Vec<std::path::PathBuf> = candidates
+            .into_iter()
+            .filter(|path| path.exists())
+            .collect();
+
+        if let Some(existing) = std::env::var_os(key) {
+            paths.extend(std::env::split_paths(&existing));
+        }
+
+        let mut deduped: Vec<std::path::PathBuf> = Vec::new();
+        for path in paths {
+            if !deduped.iter().any(|existing| existing == &path) {
+                deduped.push(path);
+            }
+        }
+
+        let value = deduped
+            .iter()
+            .map(|path| path.to_string_lossy())
+            .collect::<Vec<_>>()
+            .join(&separator.to_string());
+        if !value.is_empty() {
+            std::env::set_var(key, value);
+        }
+    }
+
+    #[cfg(feature = "video")]
+    fn configure_video_runtime() {
+        use std::path::PathBuf;
+
+        let homebrew = PathBuf::from("/opt/homebrew");
+        if !homebrew.exists() {
+            return;
+        }
+
+        let gstreamer_prefix = homebrew.join("opt/gstreamer");
+        let glib_prefix = homebrew.join("opt/glib");
+
+        Self::prepend_env_paths(
+            "DYLD_FALLBACK_LIBRARY_PATH",
+            ':',
+            [
+                glib_prefix.join("lib"),
+                gstreamer_prefix.join("lib"),
+                homebrew.join("lib"),
+            ],
+        );
+        Self::prepend_env_paths(
+            "GI_TYPELIB_PATH",
+            ':',
+            [
+                glib_prefix.join("lib/girepository-1.0"),
+                gstreamer_prefix.join("lib/girepository-1.0"),
+            ],
+        );
+        Self::prepend_env_paths(
+            "PKG_CONFIG_PATH",
+            ':',
+            [
+                glib_prefix.join("lib/pkgconfig"),
+                gstreamer_prefix.join("lib/pkgconfig"),
+                homebrew.join("lib/pkgconfig"),
+            ],
+        );
+        Self::prepend_env_paths(
+            "GST_PLUGIN_SYSTEM_PATH_1_0",
+            ':',
+            [
+                gstreamer_prefix.join("lib/gstreamer-1.0"),
+                homebrew.join("lib/gstreamer-1.0"),
+            ],
+        );
+        Self::prepend_env_paths("PATH", ':', [homebrew.join("bin"), homebrew.join("sbin")]);
+
+        let scanner = gstreamer_prefix.join("libexec/gstreamer-1.0/gst-plugin-scanner");
+        if scanner.exists() {
+            std::env::set_var("GST_PLUGIN_SCANNER", scanner);
+        }
+    }
+
     fn is_audio_path(path: &std::path::Path) -> bool {
         matches!(
             path.extension().and_then(|ext| ext.to_str()),
@@ -788,6 +874,7 @@ impl App {
                         handle: iced::widget::image::Handle::from_path(&path),
                     }
                 } else if Self::is_video_path(&path) {
+                    Self::configure_video_runtime();
                     match iced_video_player::Video::new(&url::Url::from_file_path(&path).unwrap()) {
                         Ok(player) => TabKind::Video { player },
                         Err(e) => {
