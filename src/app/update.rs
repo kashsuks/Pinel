@@ -1895,6 +1895,120 @@ impl App {
 
                 iced::Task::none()
             }
+            Message::VideoEvent(video_msg) => {
+                if let Some(idx) = self.active_tab {
+                    if let Some(tab) = self.tabs.get_mut(idx) {
+                        if let TabKind::Video { ref mut player } = tab.kind {
+                            player.update(video_msg);
+                        }
+                    }
+                }
+                iced::Task::none()
+            }
+            Message::AudioPlay => {
+                if let Some(idx) = self.active_tab {
+                    if let Some(tab) = self.tabs.get_mut(idx) {
+                        if let TabKind::Audio {
+                            ref mut sink,
+                            ref mut playing,
+                            ref file_path,
+                            ref stream,
+                            ..
+                        } = tab.kind
+                        {
+                            let mut guard = sink.lock().unwrap();
+                            if guard.is_none() {
+                                // rebuild the sink from file for play-after-stop
+                                if let Ok(file) = std::fs::File::open(file_path) {
+                                    let buf = std::io::BufReder::new(file);
+                                    if let Ok(new_sink) =
+                                        rodio::Sink::try_new(&stream.1)
+                                    {
+                                        let _ = new_sink.append(
+                                            rodio::Decoder::new(buf).unwrap(),
+                                        );
+                                        *guard = Some(new_sink);
+                                    }
+                                }
+                            }
+                            if let Some(s) = guard.as_ref() {
+                                s.play();
+                                *playing = true;
+                            }
+                        }
+                    }
+                }
+                iced::Task::none()
+            }
+            Message::AudioPause => {
+                if let Some(idx) = self.active_tab {
+                    if let Some(tab) = self.tabs.get_mut(idx) {
+                        if let TabKind::Audio {
+                            ref sink,
+                            ref mut playing,
+                            ..
+                        } = tab.kind
+                        {
+                            if let Some(s) = sink.lock().unwrap().as_ref() {
+                                s.pause();
+                                *playing = false;
+                            }
+                        }
+                    }
+                }
+
+                iced::Task::none()
+            }
+            Message::AudioStop => {
+                if let Some(idx) = self.active_tab {
+                    if let Some(tab) = self.tabs.get_mut(idx) {
+                        if let TabKind::Audio {
+                            ref sink,
+                            ref mut playing,
+                            ref mut position_secs, // where you are in the audio 
+                            ..
+                        } = tab.kind
+                        {
+                            if let Some(s) = sink.lock().unwrap().as_ref() {
+                                s.stop();
+                                *playing = false;
+                                *position_secs = 0.0;
+                            }
+                        }
+                    }
+                }
+
+                iced::Task::none()
+            }
+            Message::AudioTick => {
+                // playback position display
+                if let Some(idx) = self.active_tab {
+                    if let Some(tab) = self.tabs.get_mut(idx) {
+                        if let TabKind::Audio {
+                            ref sink,
+                            ref mut playing,
+                            ref mut position_secs,
+                            ref duration_secs,
+                            ..
+                        } = tab.kind
+                        {
+                            let guard = sink.lock.unwrap();
+                            if let Some(s) = guard.as_ref() {
+                                if s.empty() {
+                                    *playing = false;
+                                    *position_secs = 0.0;
+                                } else if *playing {
+                                    *position_secs =
+                                        (*position_secs + 0.1).min(*duration_secs);
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                iced::Task::none()
+            }
+            Message::AudioSeek(_) => iced::Task::none(), // rodio doesnt seek support natively
             Message::CheckForUpdate => {
                 iced::Task::perform(crate::features::updater::check_for_update(), |result| {
                     match result {
