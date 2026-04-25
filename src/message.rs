@@ -120,4 +120,17 @@ pub enum Message {
     CheckForUpdate,
     UpdateAvailable(crate::features::updater::UpdateInfo),
     DismissUpdateBanner,
+
+    // all the ones below are related to media playback
+    #[cfg(feature = "video")]
+    VideoTogglePause,
+    #[cfg(feature = "video")]
+    VideoEndOfStream,
+    #[cfg(feature = "video")]
+    VideoNewFrame,
+    AudioPlay,
+    AudioPause,
+    AudioStop,
+    AudioSeek(f32),
+    AudioTick,
 }

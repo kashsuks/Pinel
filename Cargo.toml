@@ -14,6 +14,7 @@ include = ["src/**/*", "Cargo.toml", "README.md", "LICENSE"]
 [features]
 default = []
 unstable-comet = ["iced/debug"]
+video = ["dep:iced_video_player"]
 
 [dependencies]
 eframe = "0.29"
@@ -60,3 +61,6 @@ frostmark = "0.3"
 quinn-proto = "0.11.14"
 bytes = "1.11.1"
 mlua = { version = "0.10", features = ["lua54", "vendored"] }
+
+iced_video_player = { git = "https://github.com/jazzfool/iced_video_player", branch = "master", optional = true }
+rodio = { version = "0.17", features = ["mp3", "wav", "vorbis", "flac"] }

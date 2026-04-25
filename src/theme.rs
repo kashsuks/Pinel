@@ -90,13 +90,13 @@ pub struct ThemeColors {
 }
 
 /// Convert an `iced` colour to `syntect` colour
-/// 
+///
 /// # Arguments
-/// 
+///
 /// - `c` (`Color`) - The iced colour scheme.
-/// 
+///
 /// # Returns
-/// 
+///
 /// - `SynColor` - Syntect colour scheme.
 const fn to_syn(c: Color) -> SynColor {
     SynColor {

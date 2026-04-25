@@ -156,7 +156,6 @@ pub fn ensure_lsp_paths() {
     );
 }
 
-
 /// Verifies that a specific LSP server binary is resolvable on the (possibly
 /// augmented) `PATH` and returns its absolute path, or `None`.
 ///
@@ -285,7 +284,6 @@ fn add_python_framework_bins(candidates: &mut LinkedList<PathBuf>) {
         candidates.push_back(bin);
     }
 }
-
 
 #[cfg(test)]
 mod tests {
