@@ -122,7 +122,12 @@ pub enum Message {
     DismissUpdateBanner,
 
     // all the ones below are related to media playback
-    VideoEvent(iced_video_player::Message),
+    #[cfg(feature = "video")]
+    VideoTogglePause,
+    #[cfg(feature = "video")]
+    VideoEndOfStream,
+    #[cfg(feature = "video")]
+    VideoNewFrame,
     AudioPlay,
     AudioPause,
     AudioStop,

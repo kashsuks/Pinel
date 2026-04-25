@@ -26,6 +26,17 @@ impl App {
             subs.push(term.subscription().map(Message::TerminalEvent));
         }
 
+        // media subscriptions for the active tab
+        if let Some(idx) = self.active_tab {
+            if let Some(tab) = self.tabs.get(idx) {
+                if let crate::app::TabKind::Audio { playing: true, .. } = tab.kind {
+                    subs.push(
+                        iced::time::every(Duration::from_millis(100)).map(|_| Message::AudioTick),
+                    );
+                }
+            }
+        }
+
         Subscription::batch(subs)
     }
 }

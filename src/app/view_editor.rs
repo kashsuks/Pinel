@@ -439,6 +439,254 @@ impl App {
                         .height(Length::Fill)
                         .into();
                     }
+                    TabKind::Image { handle } => {
+                        return container(
+                            scrollable(
+                                container(
+                                    iced::widget::image::Image::new(handle.clone())
+                                        .content_fit(iced::ContentFit::Contain),
+                                )
+                                .width(Length::Fill)
+                                .height(Length::Fill)
+                                .center_x(Length::Fill)
+                                .center_y(Length::Fill),
+                            )
+                            .width(Length::Fill)
+                            .height(Length::Fill),
+                        )
+                        .width(Length::Fill)
+                        .height(Length::Fill)
+                        .style(|_theme| container::Style {
+                            background: Some(iced::Background::Color(theme().bg_editor)),
+                            ..Default::default()
+                        })
+                        .into();
+                    }
+                    #[cfg(feature = "video")]
+                    TabKind::Video { player } => {
+                        return container(
+                            column![
+                                // Video frame fills the space
+                                container(
+                                    iced_video_player::VideoPlayer::new(player)
+                                        .width(Length::Fill)
+                                        .height(Length::Fill)
+                                        .content_fit(iced::ContentFit::Contain)
+                                        .on_end_of_stream(Message::VideoEndOfStream)
+                                        .on_new_frame(Message::VideoNewFrame)
+                                )
+                                .width(Length::Fill)
+                                .height(Length::Fill),
+                                // Playback controls bar
+                                container(
+                                    row![
+                                        button(
+                                            text(if player.paused() { "▶" } else { "⏸" })
+                                                .size(14)
+                                                .color(theme().text_primary)
+                                        )
+                                        .on_press(Message::VideoTogglePause)
+                                        .style(|_t, _s| button::Style {
+                                            background: Some(iced::Background::Color(
+                                                theme().bg_secondary,
+                                            )),
+                                            border: iced::Border {
+                                                color: iced::Color::TRANSPARENT,
+                                                width: 0.0,
+                                                radius: 6.0.into(),
+                                            },
+                                            text_color: theme().text_primary,
+                                            ..Default::default()
+                                        })
+                                        .padding(
+                                            iced::Padding {
+                                                top: 6.0,
+                                                right: 12.0,
+                                                bottom: 6.0,
+                                                left: 12.0,
+                                            }
+                                        ),
+                                        text(format!(
+                                            "{:.0}s / {:.0}s",
+                                            player.position().as_secs_f64(),
+                                            player.duration().as_secs_f64()
+                                        ))
+                                        .size(12)
+                                        .color(theme().text_muted),
+                                    ]
+                                    .spacing(12)
+                                    .align_y(iced::Alignment::Center),
+                                )
+                                .padding(iced::Padding {
+                                    top: 8.0,
+                                    right: 12.0,
+                                    bottom: 8.0,
+                                    left: 12.0,
+                                })
+                                .width(Length::Fill)
+                                .style(|_theme| container::Style {
+                                    background: Some(
+                                        iced::Background::Color(theme().bg_secondary,)
+                                    ),
+                                    ..Default::default()
+                                }),
+                            ]
+                            .spacing(0),
+                        )
+                        .width(Length::Fill)
+                        .height(Length::Fill)
+                        .style(|_theme| container::Style {
+                            background: Some(iced::Background::Color(Color::BLACK)),
+                            ..Default::default()
+                        })
+                        .into();
+                    }
+                    TabKind::Audio {
+                        playing,
+                        duration_secs,
+                        position_secs,
+                        file_path,
+                        ..
+                    } => {
+                        let pct = if *duration_secs > 0.0 {
+                            position_secs / duration_secs
+                        } else {
+                            0.0
+                        };
+
+                        let fmt_time = |secs: f32| -> String {
+                            let m = (secs as u32) / 60;
+                            let s = (secs as u32) % 60;
+                            format!("{m}:{s:02}")
+                        };
+
+                        let file_name = file_path
+                            .file_name()
+                            .unwrap_or_default()
+                            .to_string_lossy()
+                            .to_string();
+
+                        let play_pause_btn = button(
+                            text(if *playing { "⏸  Pause" } else { "▶  Play" })
+                                .size(14)
+                                .color(theme().text_primary),
+                        )
+                        .on_press(if *playing {
+                            Message::AudioPause
+                        } else {
+                            Message::AudioPlay
+                        })
+                        .style(|_t, _s| button::Style {
+                            background: Some(iced::Background::Color(
+                                crate::theme::ACCENT_PURPLE.scale_alpha(0.2),
+                            )),
+                            border: iced::Border {
+                                color: crate::theme::ACCENT_PURPLE.scale_alpha(0.4),
+                                width: 1.0,
+                                radius: 8.0.into(),
+                            },
+                            text_color: theme().text_primary,
+                            ..Default::default()
+                        })
+                        .padding(iced::Padding {
+                            top: 10.0,
+                            right: 24.0,
+                            bottom: 10.0,
+                            left: 24.0,
+                        });
+
+                        let stop_btn = button(text("⏹  Stop").size(14).color(theme().text_muted))
+                            .on_press(Message::AudioStop)
+                            .style(|_t, _s| button::Style {
+                                background: Some(iced::Background::Color(theme().bg_secondary)),
+                                border: iced::Border {
+                                    color: iced::Color::from_rgba(1.0, 1.0, 1.0, 0.08),
+                                    width: 1.0,
+                                    radius: 8.0.into(),
+                                },
+                                text_color: theme().text_muted,
+                                ..Default::default()
+                            })
+                            .padding(iced::Padding {
+                                top: 10.0,
+                                right: 24.0,
+                                bottom: 10.0,
+                                left: 24.0,
+                            });
+
+                        // Progress bar drawn as two stacked containers
+                        let bar_filled = container(iced::widget::Space::new())
+                            .width(Length::FillPortion((pct * 1000.0) as u16))
+                            .height(Length::Fixed(4.0))
+                            .style(|_t| container::Style {
+                                background: Some(iced::Background::Color(
+                                    crate::theme::ACCENT_PURPLE,
+                                )),
+                                border: iced::Border {
+                                    radius: 2.0.into(),
+                                    ..Default::default()
+                                },
+                                ..Default::default()
+                            });
+
+                        let bar_empty = container(iced::widget::Space::new())
+                            .width(Length::FillPortion(((1.0 - pct) * 1000.0) as u16))
+                            .height(Length::Fixed(4.0))
+                            .style(|_t| container::Style {
+                                background: Some(iced::Background::Color(iced::Color::from_rgba(
+                                    1.0, 1.0, 1.0, 0.10,
+                                ))),
+                                border: iced::Border {
+                                    radius: 2.0.into(),
+                                    ..Default::default()
+                                },
+                                ..Default::default()
+                            });
+
+                        let progress_row =
+                            row![bar_filled, bar_empty].width(Length::Fill).spacing(0);
+
+                        return container(
+                            column![
+                                // Waveform icon placeholder
+                                container(text("🎵").size(64))
+                                    .width(Length::Fill)
+                                    .center_x(Length::Fill),
+                                // File name
+                                text(file_name).size(18).color(theme().text_primary),
+                                // Progress bar
+                                progress_row,
+                                // Time display
+                                row![
+                                    text(fmt_time(*position_secs))
+                                        .size(12)
+                                        .color(theme().text_muted),
+                                    iced::widget::Space::new().width(Length::Fill),
+                                    text(fmt_time(*duration_secs))
+                                        .size(12)
+                                        .color(theme().text_dim),
+                                ]
+                                .width(Length::Fill),
+                                // Controls
+                                row![play_pause_btn, stop_btn]
+                                    .spacing(12)
+                                    .align_y(iced::Alignment::Center),
+                            ]
+                            .spacing(20)
+                            .align_x(iced::Alignment::Center)
+                            .width(Length::Fill),
+                        )
+                        .width(Length::Fill)
+                        .height(Length::Fill)
+                        .center_x(Length::Fill)
+                        .center_y(Length::Fill)
+                        .padding(40)
+                        .style(|_theme| container::Style {
+                            background: Some(iced::Background::Color(theme().bg_editor)),
+                            ..Default::default()
+                        })
+                        .into();
+                    }
                 }
             }
         }

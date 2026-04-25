@@ -1,6 +1,7 @@
 use super::*;
 use crate::autocomplete::engine::Autocomplete;
 use iced_code_editor::Message as EditorMessage;
+use rodio::Source;
 
 impl App {
     fn should_confirm_sensitive_open(path: &std::path::Path) -> bool {
@@ -678,6 +679,11 @@ impl App {
                     {
                         code_editor.detach_lsp();
                     }
+                    if let TabKind::Audio { ref sink, .. } = self.tabs[idx].kind {
+                        if let Some(s) = sink.lock().unwrap().as_ref() {
+                            s.stop();
+                        }
+                    }
                     if self
                         .markdown_preview
                         .as_ref()
@@ -712,6 +718,11 @@ impl App {
                     } = self.tabs[idx].kind
                     {
                         code_editor.detach_lsp();
+                    }
+                    if let TabKind::Audio { ref sink, .. } = self.tabs[idx].kind {
+                        if let Some(s) = sink.lock().unwrap().as_ref() {
+                            s.stop();
+                        }
                     }
                     if self
                         .markdown_preview
@@ -770,15 +781,116 @@ impl App {
                     .and_then(|e| e.to_str())
                     .unwrap_or("txt")
                     .to_string();
-                self.tabs.push(Tab {
-                    path,
-                    name,
-                    kind: TabKind::Editor {
+
+                #[cfg(feature = "video")]
+                let tab_kind = if Self::is_image_path(&path) {
+                    TabKind::Image {
+                        handle: iced::widget::image::Handle::from_path(&path),
+                    }
+                } else if Self::is_video_path(&path) {
+                    match iced_video_player::Video::new(&url::Url::from_file_path(&path).unwrap()) {
+                        Ok(player) => TabKind::Video { player },
+                        Err(e) => {
+                            eprintln!("Video load error: {e}");
+                            TabKind::Editor {
+                                code_editor: self.configured_code_editor("", &ext),
+                                buffer: crate::features::editor_buffer::EditorBuffer::from_text(""),
+                            }
+                        }
+                    }
+                } else if Self::is_audio_path(&path) {
+                    match rodio::OutputStream::try_default() {
+                        Ok((stream, stream_handle)) => {
+                            let sink = rodio::Sink::try_new(&stream_handle).ok();
+                            // preload the file to get its duration
+                            let duration_secs = {
+                                use std::io::BufReader;
+                                std::fs::File::open(&path)
+                                    .ok()
+                                    .and_then(|f| {
+                                        rodio::Decoder::new(BufReader::new(f)).ok().and_then(|d| {
+                                            d.total_duration().map(|dur| dur.as_secs_f32())
+                                        })
+                                    })
+                                    .unwrap_or(0.0)
+                            };
+                            TabKind::Audio {
+                                file_path: path.clone(),
+                                sink: std::sync::Arc::new(std::sync::Mutex::new(sink)),
+                                stream: std::sync::Arc::new((stream, stream_handle)),
+                                playing: false,
+                                duration_secs,
+                                position_secs: 0.0,
+                            }
+                        }
+                        Err(e) => {
+                            eprintln!("Audio init error: {e}");
+                            TabKind::Editor {
+                                code_editor: self.configured_code_editor("", &ext),
+                                buffer: crate::features::editor_buffer::EditorBuffer::from_text(""),
+                            }
+                        }
+                    }
+                } else {
+                    TabKind::Editor {
                         code_editor: { self.configured_code_editor(&effective_content, &ext) },
                         buffer: crate::features::editor_buffer::EditorBuffer::from_text(
                             &effective_content,
                         ),
-                    },
+                    }
+                };
+
+                #[cfg(not(feature = "video"))]
+                let tab_kind = if Self::is_image_path(&path) {
+                    TabKind::Image {
+                        handle: iced::widget::image::Handle::from_path(&path),
+                    }
+                } else if Self::is_audio_path(&path) {
+                    match rodio::OutputStream::try_default() {
+                        Ok((stream, stream_handle)) => {
+                            let sink = rodio::Sink::try_new(&stream_handle).ok();
+                            // preload the file to get its duration
+                            let duration_secs = {
+                                use std::io::BufReader;
+                                std::fs::File::open(&path)
+                                    .ok()
+                                    .and_then(|f| {
+                                        rodio::Decoder::new(BufReader::new(f)).ok().and_then(|d| {
+                                            d.total_duration().map(|dur| dur.as_secs_f32())
+                                        })
+                                    })
+                                    .unwrap_or(0.0)
+                            };
+                            TabKind::Audio {
+                                file_path: path.clone(),
+                                sink: std::sync::Arc::new(std::sync::Mutex::new(sink)),
+                                stream: std::sync::Arc::new((stream, stream_handle)),
+                                playing: false,
+                                duration_secs,
+                                position_secs: 0.0,
+                            }
+                        }
+                        Err(e) => {
+                            eprintln!("Audio init error: {e}");
+                            TabKind::Editor {
+                                code_editor: self.configured_code_editor("", &ext),
+                                buffer: crate::features::editor_buffer::EditorBuffer::from_text(""),
+                            }
+                        }
+                    }
+                } else {
+                    TabKind::Editor {
+                        code_editor: { self.configured_code_editor(&effective_content, &ext) },
+                        buffer: crate::features::editor_buffer::EditorBuffer::from_text(
+                            &effective_content,
+                        ),
+                    }
+                };
+
+                self.tabs.push(Tab {
+                    path,
+                    name,
+                    kind: tab_kind,
                     autosave_requested_at: None,
                     autosave_in_flight: false,
                 });
@@ -1895,16 +2007,30 @@ impl App {
 
                 iced::Task::none()
             }
-            Message::VideoEvent(video_msg) => {
+            #[cfg(feature = "video")]
+            Message::VideoTogglePause => {
                 if let Some(idx) = self.active_tab {
                     if let Some(tab) = self.tabs.get_mut(idx) {
                         if let TabKind::Video { ref mut player } = tab.kind {
-                            player.update(video_msg);
+                            player.set_paused(!player.paused());
                         }
                     }
                 }
                 iced::Task::none()
             }
+            #[cfg(feature = "video")]
+            Message::VideoEndOfStream => {
+                if let Some(idx) = self.active_tab {
+                    if let Some(tab) = self.tabs.get_mut(idx) {
+                        if let TabKind::Video { ref mut player } = tab.kind {
+                            let _ = player.restart_stream();
+                        }
+                    }
+                }
+                iced::Task::none()
+            }
+            #[cfg(feature = "video")]
+            Message::VideoNewFrame => iced::Task::none(),
             Message::AudioPlay => {
                 if let Some(idx) = self.active_tab {
                     if let Some(tab) = self.tabs.get_mut(idx) {
@@ -1920,13 +2046,9 @@ impl App {
                             if guard.is_none() {
                                 // rebuild the sink from file for play-after-stop
                                 if let Ok(file) = std::fs::File::open(file_path) {
-                                    let buf = std::io::BufReder::new(file);
-                                    if let Ok(new_sink) =
-                                        rodio::Sink::try_new(&stream.1)
-                                    {
-                                        let _ = new_sink.append(
-                                            rodio::Decoder::new(buf).unwrap(),
-                                        );
+                                    let buf = std::io::BufReader::new(file);
+                                    if let Ok(new_sink) = rodio::Sink::try_new(&stream.as_ref().1) {
+                                        let _ = new_sink.append(rodio::Decoder::new(buf).unwrap());
                                         *guard = Some(new_sink);
                                     }
                                 }
@@ -1965,7 +2087,7 @@ impl App {
                         if let TabKind::Audio {
                             ref sink,
                             ref mut playing,
-                            ref mut position_secs, // where you are in the audio 
+                            ref mut position_secs, // where you are in the audio
                             ..
                         } = tab.kind
                         {
@@ -1992,20 +2114,19 @@ impl App {
                             ..
                         } = tab.kind
                         {
-                            let guard = sink.lock.unwrap();
+                            let guard = sink.lock().unwrap();
                             if let Some(s) = guard.as_ref() {
                                 if s.empty() {
                                     *playing = false;
                                     *position_secs = 0.0;
                                 } else if *playing {
-                                    *position_secs =
-                                        (*position_secs + 0.1).min(*duration_secs);
+                                    *position_secs = (*position_secs + 0.1).min(*duration_secs);
                                 }
                             }
                         }
                     }
                 }
-                
+
                 iced::Task::none()
             }
             Message::AudioSeek(_) => iced::Task::none(), // rodio doesnt seek support natively

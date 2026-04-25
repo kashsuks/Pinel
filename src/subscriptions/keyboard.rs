@@ -64,7 +64,6 @@ pub fn shortcuts() -> Subscription<Message> {
     })
 }
 
-
 pub fn modifier_state() -> Subscription<Message> {
     iced::event::listen_with(|event, _status, _id| match event {
         Event::Keyboard(iced::keyboard::Event::ModifiersChanged(modifiers)) => {
