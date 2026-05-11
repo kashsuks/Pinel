@@ -1,3 +1,11 @@
+/// This file is responsible for defining methods and processes
+/// For the configuration files of `Pinel`
+///
+/// This includes (but is not restricted to):
+/// - Wakatime/Hackatime CLI Config
+/// - Config file (.config/pinel) location
+/// - Parsing and/or writing to and from lua to theme code
+
 use std::fs;
 use std::io::Write;
 use std::path::PathBuf;
@@ -12,7 +20,8 @@ impl Default for WakaTimeConfig {
     fn default() -> Self {
         Self {
             api_key: String::new(),
-            api_url: "https://api.wakatime.com/api/v1".to_string(),
+            api_url: "https://api.wakatime.com/api/v1".to_string(), // change to hackatime/v1 for
+                                                                    // hackatime support
         }
     }
 }
@@ -23,7 +32,8 @@ fn get_config_dir() -> PathBuf {
 }
 
 fn get_wakatime_path() -> PathBuf {
-    get_config_dir().join("wakatime.lua")
+    get_config_dir().join("wakatime.lua") // as mentioned before the path is changed here for
+                                          // hackatime/v1
 }
 
 pub fn load() -> WakaTimeConfig {
@@ -53,6 +63,14 @@ fn to_lua(cfg: &WakaTimeConfig) -> String {
     )
 }
 
+/// Responsible for parsing lua theme code to wakatime config
+///
+/// Arguments:
+/// - content(str): The contents of the lua file that will be parsed into wakatime config
+///
+/// Returns:
+/// - Result<WakatimeConfig, String>: The final wakatime config as a string with the
+///                                   wakatime url and extra info
 fn from_lua(content: &str) -> Result<WakaTimeConfig, String> {
     let mut cfg = WakaTimeConfig::default();
 
@@ -72,7 +90,7 @@ fn from_lua(content: &str) -> Result<WakaTimeConfig, String> {
                 .to_string();
 
             match key {
-                "api_key" => cfg.api_key = value,
+                "api_key" => cfg.api_key = value, // secret, keep private
                 "api_url" => cfg.api_url = value,
                 _ => {}
             }

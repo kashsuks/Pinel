@@ -76,6 +76,8 @@ pub enum TabKind {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FocusPane {
+    // there really are only two options for the active panel as of now
+    // might be more with the lazygit integration
     Editor,
     Terminal,
 }
@@ -303,24 +305,31 @@ impl Default for App {
             find_replace: FindReplace::default(),
             find_input_id: iced::widget::Id::unique(),
             replace_input_id: iced::widget::Id::unique(),
+
             command_input: CommandInput::default(),
             command_input_id: iced::widget::Id::unique(),
+
             settings_open: false,
             settings_section: "general".to_string(),
+
             editor_preferences,
             active_theme_name,
             theme_dropdown_open: false,
+
             wakatime: wakatime::load(),
             wakatime_api_key_hovered: false,
             last_wakatime_entity: None,
             last_wakatime_sent_at: None,
+
             notification: None,
             update_banner: None,
+
             lsp: crate::features::lsp::LspManager::new(),
             lsp_diagnostics: HashMap::new(),
             lsp_overlay: iced_code_editor::LspOverlayState::new(),
             lsp_enabled: true,
             lsp_server_keys: HashMap::new(),
+
             pending_hover_request: None,
             pending_sensitive_open: None,
             autocomplete: Autocomplete::new(),
@@ -401,6 +410,7 @@ impl App {
             weight: iced::font::Weight::Normal,
             ..iced::Font::DEFAULT
         });
+
         editor.set_search_replace_enabled(false);
         editor.set_line_numbers_enabled(true);
         editor.set_wrap_enabled(false);
