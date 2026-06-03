@@ -201,6 +201,10 @@ pub struct App {
 
     pending_sensitive_open: Option<PathBuf>,
 
+    tab_drag_index: Option<usize>,
+    tab_drag_offset: f32,
+    tab_drag_target: Option<usize>,
+
     autocomplete: Autocomplete,
     modifier_state: Modifiers,
 

@@ -97,6 +97,9 @@ pub enum Message {
     NewFile,
     SaveAs,
     SelectTabByIndex(usize),
+    TabDragStart(usize),
+    TabDragMove(f32),
+    TabDragEnd,
 
     WakaTimeApiKeyChanged(String),
     WakaTimeApiKeyHoverStart,
