@@ -1814,6 +1814,12 @@ impl App {
                 self.vim_refresh_cursor_style();
                 iced::Task::none()
             }
+            Message::SelectTabByIndex(idx) => {
+                if idx < self.tabs.len() {
+                    return self.update(Message::TabSelected(idx));
+                }
+                iced::Task::none()
+            }
             Message::SaveAs => iced::Task::perform(
                 async {
                     rfd::AsyncFileDialog::new()
