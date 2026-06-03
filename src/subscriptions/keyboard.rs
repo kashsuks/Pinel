@@ -47,6 +47,15 @@ pub fn shortcuts() -> Subscription<Message> {
                         "j" | "J" => return Some(Message::ToggleTerminal),
                         "f" | "F" => return Some(Message::ToggleFindReplace),
                         "n" | "N" => return Some(Message::NewFile),
+                        "1" => return Some(Message::SelectTabByIndex(0)),
+                        "2" => return Some(Message::SelectTabByIndex(1)),
+                        "3" => return Some(Message::SelectTabByIndex(2)),
+                        "4" => return Some(Message::SelectTabByIndex(3)),
+                        "5" => return Some(Message::SelectTabByIndex(4)),
+                        "6" => return Some(Message::SelectTabByIndex(5)),
+                        "7" => return Some(Message::SelectTabByIndex(6)),
+                        "8" => return Some(Message::SelectTabByIndex(7)),
+                        "9" => return Some(Message::SelectTabByIndex(8)),
                         _ => {}
                     }
                 }
