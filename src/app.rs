@@ -336,6 +336,11 @@ impl Default for App {
 
             pending_hover_request: None,
             pending_sensitive_open: None,
+
+            tab_drag_index: None,
+            tab_drag_offset: 0.0,
+            tab_drag_target: None,
+
             autocomplete: Autocomplete::new(),
             modifier_state: Modifiers::default(),
             #[cfg(feature = "unstable-comet")]

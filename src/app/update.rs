@@ -1814,6 +1814,43 @@ impl App {
                 self.vim_refresh_cursor_style();
                 iced::Task::none()
             }
+            Message::TabDragStart(idx) => {
+                self.tab_drag_index = Some(idx);
+                self.tab_drag_offset = 0.0;
+                self.tab_drag_target = Some(idx);
+                iced::Task::none()
+            }
+            Message::TabDragMove(delta_x) => {
+                if let Some(drag_idx) = self.tab_drag_index {
+                    self.tab_drag_offset += delta_x; // should change globally what our offset is
+                                                     // based on what the user changes it by
+                    
+                    const TAB_WIDTH: f32 = 120.0;
+                    let slot_offset = (self.tab_drag_offset / TAB_WIDTH).round() as i32;
+                    let raw_target = drag_idx as i32 + slot_offset;
+                    let clamped = raw_target.clamp(0, self.tabs.len() as i32 - 1) as usize;
+                    self.tab_drag_target = Some(clamped);
+                }
+                iced::Task::none()
+            }
+            Message::TabDragEnd => {
+                if let (Some(from), Some(to)) = (self.tab_drag_index, self.tab_drag_target) {
+                    if from != to {
+                        self.tabs.swap(from, to);
+                        if let Some(active) = self.active_tab {
+                            if active == from {
+                                self.active_tab = Some(to);
+                            } else if active == to {
+                                self.active_tab = Some(from);
+                            }
+                        }
+                    }
+                }
+                self.tab_drag_index = None;
+                self.tab_drag_offset = 0.0;
+                self.tab_drag_target = None;
+                iced::Task::none()
+            }
             Message::SelectTabByIndex(idx) => {
                 if idx < self.tabs.len() {
                     return self.update(Message::TabSelected(idx));

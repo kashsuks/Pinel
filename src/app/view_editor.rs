@@ -8,38 +8,79 @@ impl App {
             return container(text("")).into();
         }
 
-        let tabs: Vec<Element<'_, Message>> = self
-            .tabs
+        // create a display so that the tabs can shift into their new slots
+        let display_order: Vec<usize> = if let (Some(from), Some(to)) =
+            (self.tab_drag_index, self.tab_drag_target)
+        {
+            let mut order: Vec<usize> = (0..self.tabs.len()).collect();
+            // remove the dragged tab from the original slot and insert at the target
+            order.remove(from);
+            order.insert(to, from);
+            order
+        } else {
+            (0..self.tabs.len()).collect()
+        };
+
+        let tabs: Vec<Element<'_, Message>> = display_order
             .iter()
-            .enumerate()
-            .map(|(idx, tab)| {
-                let is_active = self.active_tab == Some(idx);
-                let is_modified = matches!(&tab.kind, TabKind::Editor { code_editor, .. } if code_editor.is_modified());
+            .map(|&real_idx| {
+                let tab = &self.tabs[real_idx];
+                let is_active = self.active_tab == Some(real_idx);
+                let is_dragging = self.tab_drag_index == Some(real_idx);
+                let is_modified = matches!(&tab.kind, TabKind::Editor { code_editor, ..} if code_editor.is_modified());
+
                 let close_icon = if is_modified {
                     text("●").size(10).color(theme().text_muted)
                 } else {
                     text("x").size(10).color(theme().text_dim)
                 };
 
-                button(
+                let tab_content = button(
                     row![
-                        text(&tab.name).size(12).color(theme().text_muted),
+                        text(&tab.name).size(12).color(if is_dragging {
+                            theme().text_primary
+                        } else {
+                            theme().text_muted
+                        }),
                         button(close_icon)
                             .style(tab_close_button_style)
-                            .on_press(Message::TabClosed(idx))
+                            .on_press(Message::TabClosed(real_idx))
                             .padding(2),
                     ]
                     .spacing(8)
                     .align_y(iced::Alignment::Center),
                 )
                 .style(tab_button_style(is_active))
-                .on_press(Message::TabSelected(idx))
+                .on_press(Message::TabSelected(real_idx))
                 .padding(iced::Padding {
                     top: 8.0,
                     right: 16.0,
                     bottom: 8.0,
                     left: 16.0,
-                })
+                });
+
+                // mouse_area can help us detect when the user started dragging
+                mouse_area(
+                    container(tab_content)
+                        .style(move |_theme| {
+                            if is_dragging {
+                                container::Style {
+                                    background: Some(iced::Background::Color(
+                                        iced::Color::from_rgba(1.0, 1.0, 1.0, 0.08),     
+                                    )),
+                                    border: iced::Border {
+                                        color: iced::Color::from_rgba(1.0, 1.0, 1.0, 0.15),
+                                        width: 1.0,
+                                        radius: 6.0.into(),
+                                    },
+                                    ..Default::default()
+                                }
+                            } else {
+                                container::Style::default()
+                            }
+                        }),
+                )
+                .on_press(Message::TabDragStart(real_idx))
                 .into()
             })
             .collect();
