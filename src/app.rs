@@ -202,8 +202,10 @@ pub struct App {
     pending_sensitive_open: Option<PathBuf>,
 
     tab_drag_index: Option<usize>,
-    tab_drag_offset: f32,
+    tab_drag_start_x: f32,
+    tab_drag_curent_x: f32,
     tab_drag_target: Option<usize>,
+    tab_hover_index: Option<usize>,
 
     autocomplete: Autocomplete,
     modifier_state: Modifiers,
@@ -338,8 +340,10 @@ impl Default for App {
             pending_sensitive_open: None,
 
             tab_drag_index: None,
-            tab_drag_offset: 0.0,
+            tab_drag_start_x: 0.0,
+            tab_drag_curent_x: 0.0,
             tab_drag_target: None,
+            tab_hover_index: None,
 
             autocomplete: Autocomplete::new(),
             modifier_state: Modifiers::default(),

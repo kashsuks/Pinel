@@ -21,10 +21,12 @@ pub fn tab_drag() -> Subscription<Message> {
         Event::Mouse(iced::mouse::Event::CursorMoved { position }) => {
             Some(Message::TabDragMove(position.x))
         }
+        Event::Mouse(iced::mouse::Event::ButtonPressed(iced::mouse::Button::Left)) => {
+            Some(Message::TabDragInitiate)
+        }
         Event::Mouse(iced::mouse::Event::ButtonReleased(iced::mouse::Button::Left)) => {
             Some(Message::TabDragEnd)
         }
-
         _ => None,
     })
 }

@@ -13,6 +13,8 @@ impl App {
             iced::time::every(Duration::from_millis(150)).map(|_| Message::LspTick),
         ];
 
+        subs.push(crate::subscriptions::mouse::tab_drag());
+
         if self.editor_preferences.autosave_enabled {
             subs.push(
                 iced::time::every(Duration::from_millis(

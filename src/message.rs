@@ -97,7 +97,9 @@ pub enum Message {
     NewFile,
     SaveAs,
     SelectTabByIndex(usize),
-    TabDragStart(usize),
+    TabHoverEnter(usize),
+    TabHoverExit,
+    TabDragInitiate,
     TabDragMove(f32),
     TabDragEnd,
 

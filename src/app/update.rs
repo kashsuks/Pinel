@@ -1814,19 +1814,28 @@ impl App {
                 self.vim_refresh_cursor_style();
                 iced::Task::none()
             }
-            Message::TabDragStart(idx) => {
-                self.tab_drag_index = Some(idx);
-                self.tab_drag_offset = 0.0;
-                self.tab_drag_target = Some(idx);
+            Message::TabHoverEnter(idx) => {
+                self.tab_hover_index = Some(idx);
                 iced::Task::none()
             }
-            Message::TabDragMove(delta_x) => {
+            Message::TabHoverExit => {
+                self.tab_hover_index = None;
+                iced::Task::none()
+            }
+            Message::TabDragInitiate => {
+                if let Some(idx) = self.tab_hover_index {
+                    self.tab_drag_index = Some(idx);
+                    self.tab_drag_start_x = self.tab_drag_curent_x;
+                    self.tab_drag_target = Some(idx);
+                }
+                iced::Task::none()
+            }
+            Message::TabDragMove(abs_x) => {
+                self.tab_drag_curent_x = abs_x;
                 if let Some(drag_idx) = self.tab_drag_index {
-                    self.tab_drag_offset += delta_x; // should change globally what our offset is
-                                                     // based on what the user changes it by
-                    
+                    let offset = abs_x - self.tab_drag_start_x;
                     const TAB_WIDTH: f32 = 120.0;
-                    let slot_offset = (self.tab_drag_offset / TAB_WIDTH).round() as i32;
+                    let slot_offset = (offset / TAB_WIDTH).round() as i32;
                     let raw_target = drag_idx as i32 + slot_offset;
                     let clamped = raw_target.clamp(0, self.tabs.len() as i32 - 1) as usize;
                     self.tab_drag_target = Some(clamped);
@@ -1847,7 +1856,7 @@ impl App {
                     }
                 }
                 self.tab_drag_index = None;
-                self.tab_drag_offset = 0.0;
+                self.tab_drag_start_x = 0.0;
                 self.tab_drag_target = None;
                 iced::Task::none()
             }

@@ -59,14 +59,13 @@ impl App {
                     left: 16.0,
                 });
 
-                // mouse_area can help us detect when the user started dragging
                 mouse_area(
                     container(tab_content)
                         .style(move |_theme| {
                             if is_dragging {
                                 container::Style {
                                     background: Some(iced::Background::Color(
-                                        iced::Color::from_rgba(1.0, 1.0, 1.0, 0.08),     
+                                        iced::Color::from_rgba(1.0, 1.0, 1.0, 0.08),
                                     )),
                                     border: iced::Border {
                                         color: iced::Color::from_rgba(1.0, 1.0, 1.0, 0.15),
@@ -80,7 +79,8 @@ impl App {
                             }
                         }),
                 )
-                .on_press(Message::TabDragStart(real_idx))
+                .on_enter(Message::TabHoverEnter(real_idx))
+                .on_exit(Message::TabHoverExit)
                 .into()
             })
             .collect();
