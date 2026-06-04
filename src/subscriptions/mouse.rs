@@ -15,3 +15,18 @@ pub fn sidebar_resize() -> Subscription<Message> {
         _ => None,
     })
 }
+
+pub fn tab_drag() -> Subscription<Message> {
+    iced::event::listen_with(|event, _status, _id| match event {
+        Event::Mouse(iced::mouse::Event::CursorMoved { position }) => {
+            Some(Message::TabDragMove(position.x))
+        }
+        Event::Mouse(iced::mouse::Event::ButtonPressed(iced::mouse::Button::Left)) => {
+            Some(Message::TabDragInitiate)
+        }
+        Event::Mouse(iced::mouse::Event::ButtonReleased(iced::mouse::Button::Left)) => {
+            Some(Message::TabDragEnd)
+        }
+        _ => None,
+    })
+}

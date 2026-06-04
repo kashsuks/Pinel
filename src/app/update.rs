@@ -1814,6 +1814,52 @@ impl App {
                 self.vim_refresh_cursor_style();
                 iced::Task::none()
             }
+            Message::TabHoverEnter(idx) => {
+                self.tab_hover_index = Some(idx);
+                iced::Task::none()
+            }
+            Message::TabHoverExit => {
+                self.tab_hover_index = None;
+                iced::Task::none()
+            }
+            Message::TabDragInitiate => {
+                if let Some(idx) = self.tab_hover_index {
+                    self.tab_drag_index = Some(idx);
+                    self.tab_drag_start_x = self.tab_drag_curent_x;
+                    self.tab_drag_target = Some(idx);
+                }
+                iced::Task::none()
+            }
+            Message::TabDragMove(abs_x) => {
+                self.tab_drag_curent_x = abs_x;
+                if let Some(drag_idx) = self.tab_drag_index {
+                    let offset = abs_x - self.tab_drag_start_x;
+                    const TAB_WIDTH: f32 = 120.0;
+                    let slot_offset = (offset / TAB_WIDTH).round() as i32;
+                    let raw_target = drag_idx as i32 + slot_offset;
+                    let clamped = raw_target.clamp(0, self.tabs.len() as i32 - 1) as usize;
+                    self.tab_drag_target = Some(clamped);
+                }
+                iced::Task::none()
+            }
+            Message::TabDragEnd => {
+                if let (Some(from), Some(to)) = (self.tab_drag_index, self.tab_drag_target) {
+                    if from != to {
+                        self.tabs.swap(from, to);
+                        if let Some(active) = self.active_tab {
+                            if active == from {
+                                self.active_tab = Some(to);
+                            } else if active == to {
+                                self.active_tab = Some(from);
+                            }
+                        }
+                    }
+                }
+                self.tab_drag_index = None;
+                self.tab_drag_start_x = 0.0;
+                self.tab_drag_target = None;
+                iced::Task::none()
+            }
             Message::SelectTabByIndex(idx) => {
                 if idx < self.tabs.len() {
                     return self.update(Message::TabSelected(idx));
