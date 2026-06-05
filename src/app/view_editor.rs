@@ -43,7 +43,7 @@ impl App {
                 if floating_mode && is_dragging {
                     return container(text(""))
                         .width(Length::Fixed(120.0))
-                        .height(Length::Fixed(36.0))
+                        .height(Length::Fixed(30.0))
                         .style(|_theme| container::Style {
                             background: Some(iced::Background::Color(
                                 iced::Color::from_rgba(1.0, 1.0, 1.0, 0.04),
@@ -58,13 +58,21 @@ impl App {
                         .into();
                 }
 
+                let tab_text_color = if is_dragging || is_active {
+                    theme().text_primary
+                } else {
+                    theme().text_muted
+                };
+
+                let tab_bg = if is_active {
+                    iced::Color::from_rgba(1.0, 1.0, 1.0, 0.10)
+                } else {
+                    iced::Color::TRANSPARENT
+                };
+
                 let tab_content = button(
                     row![
-                        text(&tab.name).size(12).color(if is_dragging {
-                            theme().text_primary
-                        } else {
-                            theme().text_muted
-                        }),
+                        text(&tab.name).size(12).color(tab_text_color),
                         button(close_icon)
                             .style(tab_close_button_style)
                             .on_press(Message::TabClosed(real_idx))
@@ -73,13 +81,29 @@ impl App {
                     .spacing(8)
                     .align_y(iced::Alignment::Center),
                 )
-                .style(tab_button_style(is_active))
+                .style(move |_theme, status| iced::widget::button::Style {
+                    background: Some(iced::Background::Color(
+                        if matches!(status, iced::widget::button::Status::Hovered) && !is_active {
+                            iced::Color::from_rgba(1.0,1.0, 1.0, 0.05)
+                        } else {
+                            tab_bg
+                        }
+                    )),
+                    text_color: tab_text_color,
+                    border: iced::Border {
+                        color: iced::Color::TRANSPARENT,
+                        width: 0.0,
+                        radius: 6.0.into()
+                    },
+                    shadow: iced::Shadow::default(),
+                    snap: false,
+                })
                 .on_press(Message::TabSelected(real_idx))
                 .padding(iced::Padding {
-                    top: 8.0,
-                    right: 16.0,
-                    bottom: 8.0,
-                    left: 16.0,
+                    top: 5.0,
+                    right: 12.0,
+                    bottom: 5.0,
+                    left: 12.0,
                 });
 
                 mouse_area(
@@ -126,16 +150,37 @@ impl App {
             }
         }
 
-        container(row(tabs).spacing(6).align_y(iced::Alignment::Center))
-            .padding(iced::Padding {
-                top: 8.0,
-                right: 12.0,
-                bottom: 8.0,
-                left: 12.0,
-            })
-            .width(Length::Fill)
-            .style(tab_bar_style)
-            .into()
+        let pill = container(
+            container(row(tabs).spacing(2)).align_y(iced::Alignment::Center)
+                .padding(iced::Padding {
+                    top: 3.0,
+                    right: 3.0,
+                    bottom: 3.0,
+                    left: 3.0,
+                })
+                .style(|_theme| container::Style {
+                    background: Some(iced::Background::Color(theme().bg_tab_bar)),
+                    border: iced::Border {
+                        color: iced::Color::from_rgba(1.0, 1.0, 1.0, 0.08),
+                        width: 1.0,
+                        radius: 10.0.into(),
+                    },
+                    ..Default::default()
+                }),
+        )
+        .padding(iced::Padding {
+            top: 5.0,
+            right: 10.0,
+            bottom: 5.0,
+            left: 10.0,
+        })
+        .width(Length::Fill)
+        .style(|_theme| container::Style {
+            background: Some(iced::Background::Color(theme().bg_editor)),
+            ..Default::default()
+        });
+
+        pill.into()
     }
 
     pub(super) fn view_search_panel(&self) -> Element<'_, Message> {

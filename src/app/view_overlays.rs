@@ -61,7 +61,7 @@ impl App {
         });
 
         // Center the ghost on the cursor (tabs are ~120px wide, ~36px tall).
-        let ghost_top = (cursor_y - 18.0).max(0.0);
+        let ghost_top = (cursor_y - 15.0).max(0.0);
         let ghost_left = (cursor_x - 60.0).max(0.0);
 
         let positioned = container(ghost)
