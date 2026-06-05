@@ -1718,6 +1718,11 @@ impl App {
                 let _ = prefs::save_preferences(&self.editor_preferences);
                 iced::Task::none()
             }
+            Message::SettingsToggleTabDragFloating => {
+                self.editor_preferences.tab_drag_floating =
+                    !self.editor_preferences.tab_drag_floating;
+                iced::Task::none()
+            }
             Message::SettingsLineNumberWidthChanged(val) => {
                 if let Ok(w) = val.parse::<f32>() {
                     self.editor_preferences.line_number_width = w.max(20.0).min(120.0);
@@ -1827,12 +1832,26 @@ impl App {
                     self.tab_drag_index = Some(idx);
                     self.tab_drag_start_x = self.tab_drag_curent_x;
                     self.tab_drag_target = Some(idx);
+                    self.tab_drag_cursor_pos = None;
                 }
                 iced::Task::none()
             }
             Message::TabDragMove(abs_x) => {
                 self.tab_drag_curent_x = abs_x;
                 if let Some(drag_idx) = self.tab_drag_index {
+                    let offset = abs_x - self.tab_drag_start_x;
+                    const TAB_WIDTH: f32 = 120.0;
+                    let slot_offset = (offset / TAB_WIDTH).round() as i32;
+                    let raw_target = drag_idx as i32 + slot_offset;
+                    let clamped = raw_target.clamp(0, self.tabs.len() as i32 - 1) as usize;
+                    self.tab_drag_target = Some(clamped);
+                }
+                iced::Task::none()
+            }
+            Message::TabDragFloatMove(abs_x, abs_y) => {
+                self.tab_drag_curent_x = abs_x;
+                if let Some(drag_idx) = self.tab_drag_index {
+                    self.tab_drag_cursor_pos = Some((abs_x, abs_y));
                     let offset = abs_x - self.tab_drag_start_x;
                     const TAB_WIDTH: f32 = 120.0;
                     let slot_offset = (offset / TAB_WIDTH).round() as i32;
@@ -1858,6 +1877,7 @@ impl App {
                 self.tab_drag_index = None;
                 self.tab_drag_start_x = 0.0;
                 self.tab_drag_target = None;
+                self.tab_drag_cursor_pos = None;
                 iced::Task::none()
             }
             Message::SelectTabByIndex(idx) => {

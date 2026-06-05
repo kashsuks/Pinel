@@ -2,6 +2,81 @@ use super::*;
 use iced::widget::column;
 
 impl App {
+    /// Returns a window-level ghost element for floating tab drag, or None when not dragging.
+    pub(super) fn view_floating_drag_ghost(&self) -> Option<Element<'_, Message>> {
+        if !self.editor_preferences.tab_drag_floating {
+            return None;
+        }
+        let (drag_idx, (cursor_x, cursor_y)) = match (self.tab_drag_index, self.tab_drag_cursor_pos) {
+            (Some(i), Some(pos)) => (i, pos),
+            _ => return None,
+        };
+        let tab = self.tabs.get(drag_idx)?;
+        let is_modified =
+            matches!(&tab.kind, TabKind::Editor { code_editor, .. } if code_editor.is_modified());
+
+        let close_icon = if is_modified {
+            text("●").size(10).color(theme().text_muted)
+        } else {
+            text("x").size(10).color(theme().text_dim)
+        };
+
+        let ghost = container(
+            button(
+                row![
+                    text(&tab.name).size(12).color(theme().text_primary),
+                    button(close_icon)
+                        .style(tab_close_button_style)
+                        .padding(2),
+                ]
+                .spacing(8)
+                .align_y(iced::Alignment::Center),
+            )
+            .style(tab_button_style(true))
+            .padding(iced::Padding {
+                top: 8.0,
+                right: 16.0,
+                bottom: 8.0,
+                left: 16.0,
+            }),
+        )
+        .style(|_theme| container::Style {
+            background: Some(iced::Background::Color(iced::Color::from_rgba(
+                theme().bg_tab_active.r,
+                theme().bg_tab_active.g,
+                theme().bg_tab_active.b,
+                0.92,
+            ))),
+            border: iced::Border {
+                color: iced::Color::from_rgba(1.0, 1.0, 1.0, 0.22),
+                width: 1.0,
+                radius: 8.0.into(),
+            },
+            shadow: iced::Shadow {
+                color: iced::Color::from_rgba(0.0, 0.0, 0.0, 0.45),
+                offset: iced::Vector::new(0.0, 6.0),
+                blur_radius: 18.0,
+            },
+            ..Default::default()
+        });
+
+        // Center the ghost on the cursor (tabs are ~120px wide, ~36px tall).
+        let ghost_top = (cursor_y - 18.0).max(0.0);
+        let ghost_left = (cursor_x - 60.0).max(0.0);
+
+        let positioned = container(ghost)
+            .padding(iced::Padding {
+                top: ghost_top,
+                left: ghost_left,
+                bottom: 0.0,
+                right: 0.0,
+            })
+            .width(Length::Fill)
+            .height(Length::Fill);
+
+        Some(positioned.into())
+    }
+
     pub(super) fn view_notification_toast(&self) -> Element<'_, Message> {
         let check_circle = container(text("✓").size(14).color(Color::from_rgb(0.40, 0.90, 0.55)))
             .width(Length::Fixed(26.0))

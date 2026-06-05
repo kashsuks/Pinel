@@ -99,10 +99,17 @@ impl App {
             base_view
         };
 
-        if self.update_banner.is_some() {
-            stack![with_notification, self.view_update_banner()].into()
+        // Ghost tab follows the cursor at window level so it isn't clipped by the tab bar.
+        let with_drag_ghost: Element<'_, Message> = if let Some(ghost) = self.view_floating_drag_ghost() {
+            stack![with_notification, ghost].into()
         } else {
             with_notification
+        };
+
+        if self.update_banner.is_some() {
+            stack![with_drag_ghost, self.view_update_banner()].into()
+        } else {
+            with_drag_ghost
         }
     }
 }
