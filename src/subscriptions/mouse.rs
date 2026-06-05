@@ -19,7 +19,7 @@ pub fn sidebar_resize() -> Subscription<Message> {
 pub fn tab_drag() -> Subscription<Message> {
     iced::event::listen_with(|event, _status, _id| match event {
         Event::Mouse(iced::mouse::Event::CursorMoved { position }) => {
-            Some(Message::TabDragMove(position.x))
+            Some(Message::TabDragFloatMove(position.x, position.y))
         }
         Event::Mouse(iced::mouse::Event::ButtonPressed(iced::mouse::Button::Left)) => {
             Some(Message::TabDragInitiate)

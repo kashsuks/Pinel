@@ -367,6 +367,42 @@ impl App {
         .spacing(16)
         .align_y(iced::Alignment::Center);
 
+        let tab_drag_label = if self.editor_preferences.tab_drag_floating {
+            "Floating"
+        } else {
+            "Static"
+        };
+        let tab_drag_row = row![
+            column![
+                text("Tab Drag Style").size(13).color(theme().text_muted),
+                text("Floating: ghost follows cursor  ·  Static: tabs shift live")
+                    .size(11)
+                    .color(theme().text_dim),
+            ]
+            .spacing(2)
+            .width(Length::FillPortion(2)),
+            button(text(tab_drag_label).size(12).color(theme().text_primary))
+                .on_press(Message::SettingsToggleTabDragFloating)
+                .style(|_theme, _status| button::Style {
+                    background: Some(Background::Color(theme().bg_secondary)),
+                    border: iced::Border {
+                        color: Color::from_rgba(1.0, 1.0, 1.0, 0.08),
+                        width: 1.0,
+                        radius: 4.0.into(),
+                    },
+                    text_color: theme().text_primary,
+                    ..Default::default()
+                })
+                .padding(iced::Padding {
+                    top: 6.0,
+                    right: 16.0,
+                    bottom: 6.0,
+                    left: 16.0,
+                }),
+        ]
+        .spacing(16)
+        .align_y(iced::Alignment::Center);
+
         let line_number_width_row = row![
             column![
                 text("Line Number Width").size(13).color(theme().text_muted),
@@ -557,6 +593,13 @@ impl App {
                 }
             ),
             line_number_width_row,
+            container(Space::new().width(Length::Fill).height(Length::Fixed(1.0))).style(
+                |_theme| container::Style {
+                    background: Some(Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.03))),
+                    ..Default::default()
+                }
+            ),
+            tab_drag_row,
             container(Space::new().width(Length::Fill).height(Length::Fixed(1.0))).style(
                 |_theme| container::Style {
                     background: Some(Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.03))),

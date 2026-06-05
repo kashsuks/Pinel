@@ -8,32 +8,55 @@ impl App {
             return container(text("")).into();
         }
 
-        // create a display so that the tabs can shift into their new slots
-        let display_order: Vec<usize> = if let (Some(from), Some(to)) =
-            (self.tab_drag_index, self.tab_drag_target)
-        {
-            let mut order: Vec<usize> = (0..self.tabs.len()).collect();
-            // remove the dragged tab from the original slot and insert at the target
-            order.remove(from);
-            order.insert(to, from);
-            order
+        let floating_mode = self.editor_preferences.tab_drag_floating;
+
+        // In static mode: reorder display slots live as you drag.
+        // In floating mode: keep original order and leave a ghost gap for the dragged tab.
+        let display_order: Vec<usize> = if !floating_mode {
+            if let (Some(from), Some(to)) = (self.tab_drag_index, self.tab_drag_target) {
+                let mut order: Vec<usize> = (0..self.tabs.len()).collect();
+                order.remove(from);
+                order.insert(to, from);
+                order
+            } else {
+                (0..self.tabs.len()).collect()
+            }
         } else {
             (0..self.tabs.len()).collect()
         };
 
-        let tabs: Vec<Element<'_, Message>> = display_order
+        let mut tabs: Vec<Element<'_, Message>> = display_order
             .iter()
             .map(|&real_idx| {
                 let tab = &self.tabs[real_idx];
                 let is_active = self.active_tab == Some(real_idx);
                 let is_dragging = self.tab_drag_index == Some(real_idx);
-                let is_modified = matches!(&tab.kind, TabKind::Editor { code_editor, ..} if code_editor.is_modified());
+                let is_modified = matches!(&tab.kind, TabKind::Editor { code_editor, .. } if code_editor.is_modified());
 
                 let close_icon = if is_modified {
                     text("●").size(10).color(theme().text_muted)
                 } else {
                     text("x").size(10).color(theme().text_dim)
                 };
+
+                // In floating mode, replace the dragged tab with a transparent placeholder.
+                if floating_mode && is_dragging {
+                    return container(text(""))
+                        .width(Length::Fixed(120.0))
+                        .height(Length::Fixed(36.0))
+                        .style(|_theme| container::Style {
+                            background: Some(iced::Background::Color(
+                                iced::Color::from_rgba(1.0, 1.0, 1.0, 0.04),
+                            )),
+                            border: iced::Border {
+                                color: iced::Color::from_rgba(1.0, 1.0, 1.0, 0.08),
+                                width: 1.0,
+                                radius: 6.0.into(),
+                            },
+                            ..Default::default()
+                        })
+                        .into();
+                }
 
                 let tab_content = button(
                     row![
@@ -60,24 +83,23 @@ impl App {
                 });
 
                 mouse_area(
-                    container(tab_content)
-                        .style(move |_theme| {
-                            if is_dragging {
-                                container::Style {
-                                    background: Some(iced::Background::Color(
-                                        iced::Color::from_rgba(1.0, 1.0, 1.0, 0.08),
-                                    )),
-                                    border: iced::Border {
-                                        color: iced::Color::from_rgba(1.0, 1.0, 1.0, 0.15),
-                                        width: 1.0,
-                                        radius: 6.0.into(),
-                                    },
-                                    ..Default::default()
-                                }
-                            } else {
-                                container::Style::default()
+                    container(tab_content).style(move |_theme| {
+                        if is_dragging {
+                            container::Style {
+                                background: Some(iced::Background::Color(
+                                    iced::Color::from_rgba(1.0, 1.0, 1.0, 0.08),
+                                )),
+                                border: iced::Border {
+                                    color: iced::Color::from_rgba(1.0, 1.0, 1.0, 0.15),
+                                    width: 1.0,
+                                    radius: 6.0.into(),
+                                },
+                                ..Default::default()
                             }
-                        }),
+                        } else {
+                            container::Style::default()
+                        }
+                    }),
                 )
                 .on_enter(Message::TabHoverEnter(real_idx))
                 .on_exit(Message::TabHoverExit)
@@ -85,7 +107,26 @@ impl App {
             })
             .collect();
 
-        container(row(tabs).spacing(6))
+        // Drop indicator: white 2px bar inserted at the target slot in floating mode.
+        if floating_mode {
+            if let (Some(_), Some(target)) = (self.tab_drag_index, self.tab_drag_target) {
+                let indicator: Element<'_, Message> = container(text(""))
+                    .width(Length::Fixed(2.0))
+                    .height(Length::Fixed(36.0))
+                    .style(|_theme| container::Style {
+                        background: Some(iced::Background::Color(iced::Color::WHITE)),
+                        border: iced::Border {
+                            radius: 1.0.into(),
+                            ..Default::default()
+                        },
+                        ..Default::default()
+                    })
+                    .into();
+                tabs.insert(target.min(tabs.len()), indicator);
+            }
+        }
+
+        container(row(tabs).spacing(6).align_y(iced::Alignment::Center))
             .padding(iced::Padding {
                 top: 8.0,
                 right: 12.0,

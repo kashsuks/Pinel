@@ -14,6 +14,7 @@ pub struct EditorPreferences {
     pub window_height: f32,
     /// Width of the line-number gutter in logical pixels (default 40).
     pub line_number_width: f32,
+    pub tab_drag_floating: bool,
     /// Enable developer mode with debug logging
     #[cfg(feature = "unstable-comet")]
     pub developer_mode: bool,
@@ -30,6 +31,7 @@ impl Default for EditorPreferences {
             window_width: 1200.0,
             window_height: 800.0,
             line_number_width: 40.0,
+            tab_drag_floating: true,
             #[cfg(feature = "unstable-comet")]
             developer_mode: false,
         }
@@ -142,6 +144,9 @@ fn parse_preferences(content: &str) -> EditorPreferences {
                         prefs.line_number_width = w.max(20.0).min(120.0);
                     }
                 }
+                "tab_drag_floating" => {
+                    prefs.tab_drag_floating = value == "true";
+                }
                 #[cfg(feature = "unstable-comet")]
                 "developer_mode" => {
                     prefs.developer_mode = value == "true";
@@ -238,6 +243,8 @@ return {{
     window_height = {},
     -- Width of the line-number gutter in logical pixels (20–120)
     line_number_width = {},
+    -- Tab drag style: true = floating ghost (default), false = static shift
+    tab_drag_floating = {},
 {}}}
 "#,
         prefs.tab_size,
@@ -248,6 +255,7 @@ return {{
         prefs.window_width,
         prefs.window_height,
         prefs.line_number_width,
+        prefs.tab_drag_floating,
         developer_mode_config,
     );
     let mut file = fs::File::create(path)?;

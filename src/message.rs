@@ -88,6 +88,7 @@ pub enum Message {
     SettingsSelectTheme(String),
     SettingsReloadTheme,
     SettingsLineNumberWidthChanged(String),
+    SettingsToggleTabDragFloating,
 
     ToggleCommandInput,
     CommandInputChanged(String),
@@ -102,6 +103,7 @@ pub enum Message {
     TabDragInitiate,
     TabDragMove(f32),
     TabDragEnd,
+    TabDragFloatMove(f32, f32),
 
     WakaTimeApiKeyChanged(String),
     WakaTimeApiKeyHoverStart,

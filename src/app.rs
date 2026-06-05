@@ -205,6 +205,7 @@ pub struct App {
     tab_drag_start_x: f32,
     tab_drag_curent_x: f32,
     tab_drag_target: Option<usize>,
+    tab_drag_cursor_pos: Option<(f32, f32)>,
     tab_hover_index: Option<usize>,
 
     autocomplete: Autocomplete,
@@ -343,6 +344,7 @@ impl Default for App {
             tab_drag_start_x: 0.0,
             tab_drag_curent_x: 0.0,
             tab_drag_target: None,
+            tab_drag_cursor_pos: None,
             tab_hover_index: None,
 
             autocomplete: Autocomplete::new(),
