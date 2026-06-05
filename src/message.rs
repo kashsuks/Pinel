@@ -7,6 +7,7 @@ use iced_term::Event as TerminalEvent;
 use std::path::PathBuf;
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub enum Message {
     CodeEditorEvent(iced_code_editor::Message),
 

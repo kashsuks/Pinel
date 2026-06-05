@@ -141,6 +141,7 @@ impl FuzzyFinder {
         self.preview_cache = Some((entry.path.clone(), truncated));
     }
 
+    #[allow(dead_code)]
     pub fn selected_extension(&self) -> &str {
         self.filtered_files
             .get(self.selected_index)

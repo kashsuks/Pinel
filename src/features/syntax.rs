@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use iced::advanced::text::highlighter;
 use iced::advanced::text::highlighter::Highlighter as IcedHighlighter;
 use iced::{Color, Font};

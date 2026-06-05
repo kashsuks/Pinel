@@ -2,6 +2,7 @@ use super::*;
 use crate::autocomplete::engine::Autocomplete;
 use iced_code_editor::Message as EditorMessage;
 use rodio::Source;
+use std::path::Path;
 
 impl App {
     fn should_confirm_sensitive_open(path: &std::path::Path) -> bool {
@@ -24,6 +25,7 @@ impl App {
         )
     }
 
+    #[allow(dead_code)]
     fn is_video_path(path: &std::path::Path) -> bool {
         matches!(
             path.extension().and_then(|ext| ext.to_str()),
@@ -191,7 +193,7 @@ impl App {
             return iced::Task::none();
         };
 
-        if tab.path == PathBuf::from("untitled")
+        if tab.path == Path::new("untitled")
             || !code_editor.is_modified()
             || tab.autosave_in_flight
         {
@@ -273,6 +275,7 @@ impl App {
     /// # Arguments
     ///
     /// * `message` - The event to process.
+    #[allow(clippy::arc_with_non_send_sync)]
     pub fn update(&mut self, message: Message) -> iced::Task<Message> {
         match message {
             Message::ModifierStateChanged(modifiers) => {
@@ -333,13 +336,13 @@ impl App {
                     let mut lsp_content: Option<String> = None;
                     let mut cursor_sync: Option<(EditorMessage, String, String)> = None;
                     let mut autocomplete_refresh: Option<(EditorMessage, String, PathBuf)> = None;
-                    let mut manual_cursor_update: Option<(usize, usize)> = None;
+                    let manual_cursor_update: Option<(usize, usize)> = None;
                     let mut hover_candidate: Option<(
                         PathBuf,
                         iced_code_editor::LspPosition,
                         iced::Point,
                     )> = None;
-                    let cursor_line_before = self.cursor_line;
+                    let _cursor_line_before = self.cursor_line;
 
                     if let Some(tab) = self.tabs.get_mut(idx) {
                         if let TabKind::Editor {
@@ -1135,7 +1138,7 @@ impl App {
 
                             let path = tab.path.clone();
                             let content = code_editor.content();
-                            if path == PathBuf::from("untitled") {
+                            if path == Path::new("untitled") {
                                 return iced::Task::perform(async {}, |_| Message::SaveAs);
                             }
                             return iced::Task::perform(
@@ -1548,15 +1551,13 @@ impl App {
             Message::ToggleTerminal => self.toggle_terminal_panel(),
             Message::TerminalEvent(iced_term::Event::BackendCall(id, cmd)) => {
                 if let Some(term) = self.terminal_pane.as_mut() {
-                    if term.id == id {
-                        match term.handle(iced_term::Command::ProxyToBackend(cmd)) {
-                            iced_term::actions::Action::Shutdown => {
-                                self.terminal_open = false;
-                                self.focused_pane = FocusPane::Editor;
-                                self.vim_refresh_cursor_style();
-                            }
-                            _ => {}
-                        }
+                    if term.id == id
+                        && term.handle(iced_term::Command::ProxyToBackend(cmd))
+                            == iced_term::actions::Action::Shutdown
+                    {
+                        self.terminal_open = false;
+                        self.focused_pane = FocusPane::Editor;
+                        self.vim_refresh_cursor_style();
                     }
                 }
                 iced::Task::none()
@@ -1667,7 +1668,7 @@ impl App {
             }
             Message::SettingsTabSizeChanged(val) => {
                 if let Ok(size) = val.parse::<usize>() {
-                    self.editor_preferences.tab_size = size.max(1).min(16);
+                    self.editor_preferences.tab_size = size.clamp(1, 16);
                 }
                 iced::Task::none()
             }
@@ -1725,7 +1726,7 @@ impl App {
             }
             Message::SettingsLineNumberWidthChanged(val) => {
                 if let Ok(w) = val.parse::<f32>() {
-                    self.editor_preferences.line_number_width = w.max(20.0).min(120.0);
+                    self.editor_preferences.line_number_width = w.clamp(20.0, 120.0);
                 }
                 iced::Task::none()
             }
@@ -2156,7 +2157,7 @@ impl App {
                                 if let Ok(file) = std::fs::File::open(file_path) {
                                     let buf = std::io::BufReader::new(file);
                                     if let Ok(new_sink) = rodio::Sink::try_new(&stream.as_ref().1) {
-                                        let _ = new_sink.append(rodio::Decoder::new(buf).unwrap());
+                                        new_sink.append(rodio::Decoder::new(buf).unwrap());
                                         *guard = Some(new_sink);
                                     }
                                 }
@@ -2423,12 +2424,14 @@ impl App {
         idx
     }
 
+    #[allow(dead_code)]
     fn leading_whitespace(line: &str) -> String {
         line.chars()
             .take_while(|ch| *ch == ' ' || *ch == '\t')
             .collect()
     }
 
+    #[allow(dead_code)]
     fn should_increase_indent(line: &str) -> bool {
         let trimmed = line.trim_end();
         trimmed.ends_with('{')
@@ -2438,6 +2441,7 @@ impl App {
             || trimmed.ends_with('\\')
     }
 
+    #[allow(dead_code)]
     fn should_decrease_indent(line: &str) -> bool {
         let trimmed = line.trim();
         trimmed == "}"

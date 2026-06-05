@@ -38,6 +38,7 @@ impl Default for EditorPreferences {
     }
 }
 
+#[allow(dead_code)]
 impl EditorPreferences {
     pub fn indent_unit(&self) -> String {
         if self.use_spaces {
@@ -52,6 +53,7 @@ pub fn get_preferences_path() -> PathBuf {
     get_config_dir().join("preferences.lua")
 }
 
+#[allow(dead_code)]
 pub fn get_themes_dir() -> PathBuf {
     get_config_dir().join("themes")
 }
@@ -61,7 +63,7 @@ pub fn load_preferences() -> EditorPreferences {
     let legacy = legacy_preferences_path();
 
     let primary_prefs = read_preferences_from(&primary);
-    let legacy_prefs = legacy.as_ref().and_then(|path| read_preferences_from(path));
+    let legacy_prefs = legacy.as_ref().and_then(read_preferences_from);
 
     match (primary_prefs, legacy_prefs) {
         (Some(prefs), None) => prefs,
@@ -112,7 +114,7 @@ fn parse_preferences(content: &str) -> EditorPreferences {
             match key {
                 "tab_size" => {
                     if let Ok(size) = value.parse::<usize>() {
-                        prefs.tab_size = size.max(1).min(16);
+                        prefs.tab_size = size.clamp(1, 16);
                     }
                 }
                 "use_spaces" => {
@@ -131,17 +133,17 @@ fn parse_preferences(content: &str) -> EditorPreferences {
                 }
                 "window_width" => {
                     if let Ok(width) = value.parse::<f32>() {
-                        prefs.window_width = width.max(640.0).min(10000.0);
+                        prefs.window_width = width.clamp(640.0, 10000.0);
                     }
                 }
                 "window_height" => {
                     if let Ok(height) = value.parse::<f32>() {
-                        prefs.window_height = height.max(480.0).min(10000.0);
+                        prefs.window_height = height.clamp(480.0, 10000.0);
                     }
                 }
                 "line_number_width" => {
                     if let Ok(w) = value.parse::<f32>() {
-                        prefs.line_number_width = w.max(20.0).min(120.0);
+                        prefs.line_number_width = w.clamp(20.0, 120.0);
                     }
                 }
                 "tab_drag_floating" => {
@@ -163,6 +165,7 @@ pub fn save_preferences(prefs: &EditorPreferences) -> Result<(), std::io::Error>
     save_preferences_to_path(prefs, &path)
 }
 
+#[allow(dead_code)]
 pub fn list_available_themes() -> Vec<String> {
     let mut themes = vec!["default".to_string()];
     let themes_dir = get_themes_dir();
@@ -178,6 +181,7 @@ pub fn list_available_themes() -> Vec<String> {
     themes
 }
 
+#[allow(dead_code)]
 pub fn load_theme_by_name(name: &str) -> ThemeColors {
     if name == "default" {
         return ThemeColors::default();

@@ -1,6 +1,7 @@
 /// Find and Replace - In-editor find and replace with case-sensitive toggle,
 /// match navigation, replace-one, and replace-all.
 /// Ported from pinel's hotkey/find_replace.rs, adapted for iced.
+#[derive(Default)]
 pub struct FindReplace {
     pub open: bool,
     pub find_text: String,
@@ -9,20 +10,6 @@ pub struct FindReplace {
     pub match_count: usize,
     pub current_match: usize,
     pub matches: Vec<usize>,
-}
-
-impl Default for FindReplace {
-    fn default() -> Self {
-        Self {
-            open: false,
-            find_text: String::new(),
-            replace_text: String::new(),
-            case_sensitive: false,
-            match_count: 0,
-            current_match: 0,
-            matches: Vec::new(),
-        }
-    }
 }
 
 /// Provides implementation types for the Find and Replace modal

@@ -2,6 +2,7 @@ use super::*;
 use iced::widget::column;
 
 impl App {
+    #[allow(dead_code)]
     pub(super) fn view_settings_theme(&self) -> Element<'_, Message> {
         use iced::widget::Space;
 

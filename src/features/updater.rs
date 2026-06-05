@@ -4,6 +4,7 @@ const CURRENT_VERSION: &str = env!("CARGO_PKG_VERSION");
 const RELEASES_URL: &str = "https://api.github.com/repos/kashsuks/pinel/releases/latest";
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct UpdateInfo {
     pub version: String,
     pub url: String,

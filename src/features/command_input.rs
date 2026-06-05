@@ -1,18 +1,10 @@
-/// Vim-style `:` command input bar
-/// Ported from pinel's hotkey/command_input.rs, adapted for iced.
+//! Vim-style `:` command input bar
+//! Ported from pinel's hotkey/command_input.rs, adapted for iced.
 
+#[derive(Default)]
 pub struct CommandInput {
     pub open: bool,
     pub input: String,
-}
-
-impl Default for CommandInput {
-    fn default() -> Self {
-        Self {
-            open: false,
-            input: String::new(),
-        }
-    }
 }
 
 impl CommandInput {

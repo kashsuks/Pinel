@@ -139,6 +139,7 @@ pub fn tab_bar_style(_theme: &Theme) -> container::Style {
     }
 }
 
+#[allow(dead_code)]
 pub fn text_editor_style(_theme: &Theme, _status: text_editor::Status) -> text_editor::Style {
     text_editor::Style {
         background: Background::Color(theme().bg_editor),
@@ -153,6 +154,7 @@ pub fn text_editor_style(_theme: &Theme, _status: text_editor::Status) -> text_e
     }
 }
 
+#[allow(dead_code)]
 pub fn drag_handle_style(_theme: &Theme, status: ButtonStatus) -> ButtonStyle {
     let background = match status {
         ButtonStatus::Hovered => Some(Background::Color(theme().bg_hover)),

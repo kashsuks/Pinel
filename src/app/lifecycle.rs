@@ -5,6 +5,7 @@ use super::*;
 
 impl App {
     /// Creates the application state and schedules an initial update check.
+    #[allow(dead_code)]
     pub fn new() -> (Self, iced::Task<Message>) {
         Self::new_with_path(None)
     }

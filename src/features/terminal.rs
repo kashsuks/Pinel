@@ -1,18 +1,11 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 /// External terminal launcher - opens the OS-native terminal
 /// in the current working directory or last opened directory.
+#[derive(Default)]
 pub struct Terminal {
     last_opened_directory: Option<PathBuf>,
-}
-
-impl Default for Terminal {
-    fn default() -> Self {
-        Self {
-            last_opened_directory: None,
-        }
-    }
 }
 
 impl Terminal {
@@ -46,7 +39,7 @@ impl Terminal {
         }
     }
 
-    fn open_macos_terminal(&self, directory: &PathBuf) -> std::io::Result<()> {
+    fn open_macos_terminal(&self, directory: &Path) -> std::io::Result<()> {
         let dir_str = directory.display().to_string();
 
         // Try iTerm2 first
@@ -83,11 +76,11 @@ impl Terminal {
         Ok(())
     }
 
-    fn open_windows_terminal(&self, directory: &PathBuf) -> std::io::Result<()> {
+    fn open_windows_terminal(&self, directory: &Path) -> std::io::Result<()> {
         let dir_str = directory.display().to_string();
 
         if Command::new("wt.exe")
-            .args(&["-d", &dir_str])
+            .args(["-d", &dir_str])
             .spawn()
             .is_ok()
         {
@@ -95,7 +88,7 @@ impl Terminal {
         }
 
         if Command::new("powershell.exe")
-            .args(&["-NoExit", "-Command", &format!("cd '{}'", dir_str)])
+            .args(["-NoExit", "-Command", &format!("cd '{}'", dir_str)])
             .spawn()
             .is_ok()
         {
@@ -103,13 +96,13 @@ impl Terminal {
         }
 
         Command::new("cmd.exe")
-            .args(&["/K", "cd", "/D", &dir_str])
+            .args(["/K", "cd", "/D", &dir_str])
             .spawn()?;
 
         Ok(())
     }
 
-    fn open_linux_terminal(&self, directory: &PathBuf) -> std::io::Result<()> {
+    fn open_linux_terminal(&self, directory: &Path) -> std::io::Result<()> {
         let dir_str = directory.display().to_string();
         let xterm_cmd = format!("cd '{}' && exec $SHELL", dir_str);
 
@@ -126,7 +119,7 @@ impl Terminal {
         ];
 
         for (terminal, args) in terminals {
-            if Command::new(terminal).args(&args).spawn().is_ok() {
+            if Command::new(terminal).args(args).spawn().is_ok() {
                 return Ok(());
             }
         }

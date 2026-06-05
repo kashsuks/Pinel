@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use std::path::PathBuf;
 
 /// Returns the base directory where bundled resources live (assets are now under src/assets/).

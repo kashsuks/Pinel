@@ -1,10 +1,10 @@
-/// This file is responsible for defining methods and processes
-/// For the configuration files of `Pinel`
-///
-/// This includes (but is not restricted to):
-/// - Wakatime/Hackatime CLI Config
-/// - Config file (.config/pinel) location
-/// - Parsing and/or writing to and from lua to theme code
+//! This file is responsible for defining methods and processes
+//! For the configuration files of `Pinel`
+//!
+//! This includes (but is not restricted to):
+//! - Wakatime/Hackatime CLI Config
+//! - Config file (.config/pinel) location
+//! - Parsing and/or writing to and from lua to theme code
 
 use std::fs;
 use std::io::Write;
@@ -70,7 +70,7 @@ fn to_lua(cfg: &WakaTimeConfig) -> String {
 ///
 /// Returns:
 /// - Result<WakatimeConfig, String>: The final wakatime config as a string with the
-///                                   wakatime url and extra info
+///   wakatime url and extra info
 fn from_lua(content: &str) -> Result<WakaTimeConfig, String> {
     let mut cfg = WakaTimeConfig::default();
 

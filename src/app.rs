@@ -48,12 +48,14 @@ mod view_overlays;
 mod view_root;
 mod view_settings;
 
+#[allow(clippy::large_enum_variant)]
 pub enum TabKind {
     Editor {
         code_editor: CodeEditor,
         buffer: crate::features::editor_buffer::EditorBuffer,
     },
     /// markdown preview for an editor tab.
+    #[allow(dead_code)]
     Preview {
         md_items: Vec<markdown::Item>,
     },
@@ -111,6 +113,7 @@ pub struct MarkdownPreviewPane {
 
 /// toast notification metadata.
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct Notification {
     pub message: String,
     pub shown_at: Instant,

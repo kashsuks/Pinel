@@ -157,7 +157,7 @@ impl LanguageDefinitions {
 
         self.types.insert(
             "python".to_string(),
-            vec![
+            [
                 "int",
                 "float",
                 "str",
@@ -201,11 +201,13 @@ impl LanguageDefinitions {
         all_types.into_iter().collect()
     }
 
+    #[allow(dead_code)]
     pub fn add_language(&mut self, language: String, keywords: Vec<String>, types: Vec<String>) {
         self.keywords.insert(language.clone(), keywords);
         self.types.insert(language, types);
     }
 
+    #[allow(dead_code)]
     pub fn supports(&self, language: &str) -> bool {
         self.keywords.contains_key(language)
     }

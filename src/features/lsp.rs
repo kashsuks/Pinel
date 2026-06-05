@@ -124,6 +124,7 @@ fn path_to_file_uri(path: &Path) -> String {
 /// };
 /// ```
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct InlineDiagnostic {
     pub line: usize,
     pub severity: lsp_types::DiagnosticSeverity,
@@ -131,6 +132,7 @@ pub struct InlineDiagnostic {
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct DiagnosticUpdate {
     pub path: PathBuf,
     pub diagnostics: Vec<InlineDiagnostic>,

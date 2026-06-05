@@ -42,10 +42,8 @@ use std::path::{Path, PathBuf};
 /// # Examples
 ///
 /// ```no_run
-/// fn main() {
-///     pinel_editor::lsp_setup::ensure_lsp_paths();
-///     // … rest of startup
-/// }
+/// pinel_editor::lsp_setup::ensure_lsp_paths();
+/// // … rest of startup
 /// ```
 pub fn ensure_lsp_paths() {
     let mut candidates: LinkedList<PathBuf> = LinkedList::new();
@@ -168,6 +166,7 @@ pub fn ensure_lsp_paths() {
 ///     println!("rust-analyzer found at {}", p.display());
 /// }
 /// ```
+#[allow(dead_code)]
 pub fn find_lsp_server(binary: &str) -> Option<PathBuf> {
     let path_var = std::env::var("PATH").unwrap_or_default();
     for dir in path_var.split(':') {
@@ -185,6 +184,7 @@ pub fn find_lsp_server(binary: &str) -> Option<PathBuf> {
 /// The returned `Vec` contains `(server_key, Option<path>)` pairs for every
 /// server that Pinel can use.  Entries with `None` mean the server is not
 /// installed / not on `PATH`.
+#[allow(dead_code)]
 pub fn lsp_server_status() -> Vec<(&'static str, Option<PathBuf>)> {
     const SERVERS: &[(&str, &str)] = &[
         ("rust-analyzer", "rust-analyzer"),

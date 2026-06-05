@@ -159,11 +159,7 @@ impl App {
 
                     let mut spans: Vec<iced::widget::text::Span<'_, iced::Font>> = Vec::new();
                     for (style, fragment) in &ranges {
-                        let txt = if fragment.ends_with('\n') {
-                            &fragment[..fragment.len() - 1]
-                        } else {
-                            fragment
-                        };
+                        let txt = fragment.strip_suffix('\n').unwrap_or(fragment);
                         if txt.is_empty() {
                             continue;
                         }

@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 #[derive(Default, Debug, Clone)]
 pub struct CompletionContext {
     pub is_member_access: bool,

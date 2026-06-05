@@ -70,15 +70,16 @@ impl Autocomplete {
             if ch.is_alphanumeric() || ch == '_' {
                 current_word.push(ch);
             } else {
-                if !current_word.is_empty() && current_word.len() > 1 {
-                    if !current_word.chars().next().unwrap().is_numeric() {
-                        identifiers.insert(current_word.clone());
+                if !current_word.is_empty()
+                    && current_word.len() > 1
+                    && !current_word.chars().next().unwrap().is_numeric()
+                {
+                    identifiers.insert(current_word.clone());
 
-                        if !self.recent_identifiers.contains(&current_word) {
-                            self.recent_identifiers.push(current_word.clone());
-                            if self.recent_identifiers.len() > self.max_recent {
-                                self.recent_identifiers.remove(0);
-                            }
+                    if !self.recent_identifiers.contains(&current_word) {
+                        self.recent_identifiers.push(current_word.clone());
+                        if self.recent_identifiers.len() > self.max_recent {
+                            self.recent_identifiers.remove(0);
                         }
                     }
                 }
@@ -113,7 +114,7 @@ impl Autocomplete {
         if identifier
             .chars()
             .next()
-            .map_or(false, |c| c.is_uppercase())
+            .is_some_and(|c| c.is_uppercase())
         {
             return SuggestionKind::Type;
         }

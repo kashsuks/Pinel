@@ -17,6 +17,7 @@ pub struct EditorBuffer {
 /// # Arguments
 ///
 /// - `text` (`&str`) - Passed argument text used to perform actions.
+#[allow(dead_code)]
 impl EditorBuffer {
     pub fn from_text(text: &str) -> Self {
         Self {

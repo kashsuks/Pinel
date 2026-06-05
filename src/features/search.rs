@@ -1,5 +1,6 @@
 use fuzzy_matcher::skim::SkimMatcherV2;
 use fuzzy_matcher::FuzzyMatcher;
+use std::cmp::Reverse;
 use std::path::PathBuf;
 
 #[derive(Debug, Clone)]
@@ -109,7 +110,7 @@ pub fn fuzzy_find_files(
         })
         .collect();
 
-    scored.sort_by(|a, b| b.0.cmp(&a.0));
+    scored.sort_by_key(|b| Reverse(b.0));
     scored.truncate(max_results);
     scored
 }

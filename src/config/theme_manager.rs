@@ -65,6 +65,7 @@ impl Default for ThemeColors {
     }
 }
 
+#[allow(dead_code)]
 impl ThemeColors {
     pub fn to_lua(&self) -> String {
         format!(
@@ -201,6 +202,7 @@ pub fn load_theme() -> ThemeColors {
     }
 }
 
+#[allow(dead_code)]
 pub fn save_theme(theme: &ThemeColors) -> Result<(), std::io::Error> {
     let path = get_theme_path();
     if let Some(parent) = path.parent() {

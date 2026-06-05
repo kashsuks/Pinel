@@ -126,7 +126,7 @@ fn scan_directory(path: &Path) -> Vec<FileEntry> {
         (FileEntry::File { .. }, FileEntry::Directory { .. }) => std::cmp::Ordering::Greater,
     });
 
-    return entries;
+    entries
 }
 
 /// Lazily load the children of a folder by only storing parent dirs
@@ -136,7 +136,7 @@ fn scan_directory(path: &Path) -> Vec<FileEntry> {
 ///
 /// - `entries` (`&mut Vec<FileEntry>`) - Related parent directory entries.
 /// - `target` (`&Path`) - Final target child file.
-fn populate_children(entries: &mut Vec<FileEntry>, target: &Path) {
+fn populate_children(entries: &mut [FileEntry], target: &Path) {
     for entry in entries.iter_mut() {
         if let FileEntry::Directory { path, children, .. } = entry {
             if path == target {

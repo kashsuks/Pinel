@@ -61,7 +61,7 @@ impl App {
 
             row![sidebar, separator, resize_zone, editor_area].into()
         } else {
-            editor_area.into()
+            editor_area
         };
 
         let wrapped = container(base_content)
