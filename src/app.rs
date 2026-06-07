@@ -181,6 +181,12 @@ pub struct App {
     command_input: CommandInput,
     command_input_id: iced::widget::Id,
 
+    startup_page_open: bool,
+    startup_vim_mode: bool,
+    startup_helix_mode: bool,
+    startup_run_on_startup: bool,
+    startup_selected_theme: String,
+
     settings_open: bool,
     settings_section: String,
     editor_preferences: EditorPreferences,
@@ -318,6 +324,12 @@ impl Default for App {
 
             command_input: CommandInput::default(),
             command_input_id: iced::widget::Id::unique(),
+
+            startup_page_open: editor_preferences.first_launch,
+            startup_vim_mode: false,
+            startup_helix_mode: false,
+            startup_run_on_startup: true,
+            startup_selected_theme: editor_preferences.theme_name.clone(),
 
             settings_open: false,
             settings_section: "general".to_string(),

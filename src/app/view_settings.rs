@@ -920,4 +920,52 @@ impl App {
         .width(Length::Fill)
         .into()
     }
+
+    pub(super) fn view_startup_page(&self) -> iced::Element<'_, Message> {
+        use crate::theme::BUILTIN_THEMES;
+        use iced::widget::{column, container, row, scrollable, text};
+        use iced::{Background, Color, Length};
+
+        let themes_to_show = BUILTIN_THEMES;
+
+        // allow the switch helper to toggle
+        let toggle = |label: &str, sublabel: &str, on: bool, msg: Message| -> iced::Element<'_, Message> {
+            let track_color = if on {
+                Color::from_rgb(0.133, 0.773, 0.369) // green
+            } else {
+                Color::from_rgba(1.0, 1.0, 1.0, 0.15)
+            };
+            let knob_x = if on { 22.0_f32 } else { 4.0_f32 };
+
+            let track = container(
+                container(iced::widget::Space::new())
+                    .width(Length::Fixed(16.0))
+                    .height(Length::Fixed(16.0))
+                    .style(mpve |_t| container::Style {
+                        background: Some(Background::Color(Color::WHITE)),
+                        border: iced::Border {
+                            radius: 8.0.into(),
+                            ..Default::default()
+                        },
+                        ..Default::default()
+                    })
+                    .padding(iced::Padding {
+                        top:0.0,
+                        left: knob_x,
+                        bottom: 0.0,
+                        right: 0.0,
+                    }),
+            )
+            .width(Length::Fixed(42.0))
+            .height(Length::Fixed(24.0))
+            .style(move |_t| container::Style {
+                background: Some(Background::Color(track_color)),
+                border: iced::Border {
+                    radius: 12.0.into(),
+                    ..Default::default()
+                },
+                ..Default::default()
+            });
+        }
+    }
 }
