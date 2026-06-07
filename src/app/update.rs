@@ -1829,11 +1829,32 @@ impl App {
                 iced::Task::none()
             }
             Message::TabDragInitiate => {
+                // just record when the hold started
+                // drag only activates after the hold threshold is reached
                 if let Some(idx) = self.tab_hover_index {
-                    self.tab_drag_index = Some(idx);
-                    self.tab_drag_start_x = self.tab_drag_curent_x;
-                    self.tab_drag_target = Some(idx);
-                    self.tab_drag_cursor_pos = None;
+                    self.tab_hold_started_at = Some(Instant::now());
+                    self.tab_hold_index = Some(idx);
+                }
+                iced::Task::none()
+            }
+            Message::TabHoldTick => {
+                const HOLD_THRESHOLD: Duration = Duration::from_millis(300);
+
+                if self.tab_drag_index.is_some() {
+                    return iced::Task::none();
+                }
+
+                if let (Some(started_at), Some(idx)) =
+                    (self.tab_hold_started_at, self.tab_hold_index)
+                {
+                    if started_at.elapsed() >= HOLD_THRESHOLD {
+                        self.tab_drag_index = Some(idx);
+                        self.tab_drag_start_x = self.tab_drag_curent_x;
+                        self.tab_drag_target = Some(idx);
+                        self.tab_drag_cursor_pos = None;
+                        self.tab_hold_started_at = None;
+                        self.tab_hold_index = None;
+                    }
                 }
                 iced::Task::none()
             }
@@ -1863,6 +1884,10 @@ impl App {
                 iced::Task::none()
             }
             Message::TabDragEnd => {
+                // cancel a pending hold that never crossed the threshold
+                self.tab_hold_started_at = None;
+                self.tab_hold_index = None;
+
                 if let (Some(from), Some(to)) = (self.tab_drag_index, self.tab_drag_target) {
                     if from != to {
                         self.tabs.swap(from, to);

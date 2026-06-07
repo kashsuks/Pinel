@@ -216,6 +216,8 @@ pub struct App {
     tab_drag_target: Option<usize>,
     tab_drag_cursor_pos: Option<(f32, f32)>,
     tab_hover_index: Option<usize>,
+    tab_hold_started_at: Option<Instant>,
+    tab_hold_index: Option<usize>,
 
     autocomplete: Autocomplete,
     modifier_state: Modifiers,
@@ -361,6 +363,8 @@ impl Default for App {
             tab_drag_target: None,
             tab_drag_cursor_pos: None,
             tab_hover_index: None,
+            tab_hold_started_at: None,
+            tab_hold_index: None,
 
             autocomplete: Autocomplete::new(),
             modifier_state: Modifiers::default(),

@@ -102,6 +102,7 @@ pub enum Message {
     TabHoverEnter(usize),
     TabHoverExit,
     TabDragInitiate,
+    TabHoldTick,
     TabDragMove(f32),
     TabDragEnd,
     TabDragFloatMove(f32, f32),

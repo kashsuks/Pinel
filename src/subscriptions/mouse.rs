@@ -30,3 +30,7 @@ pub fn tab_drag() -> Subscription<Message> {
         _ => None,
     })
 }
+
+pub fn tab_hold_tick() -> Subscription<Message> {
+    iced::time::every(std::time::Duration::from_millis(16)).map(|_| Message::TabHoldTick)
+}

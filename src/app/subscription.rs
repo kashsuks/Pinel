@@ -14,6 +14,7 @@ impl App {
         ];
 
         subs.push(crate::subscriptions::mouse::tab_drag());
+        subs.push(crate::subscriptions::mouse::tab_hold_tick());
 
         if self.editor_preferences.autosave_enabled {
             subs.push(
