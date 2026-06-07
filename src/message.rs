@@ -126,6 +126,12 @@ pub enum Message {
     SettingsToggleDeveloperMode,
     ToggleLsp,
 
+    StartupPageDone,
+    StartupThemeSelected(String),
+    StartupToggleVimMode,
+    StartupToggleHelixMode,
+    StartupToggleRunOnStartup,
+
     CheckForUpdate,
     UpdateAvailable(crate::features::updater::UpdateInfo),
     DismissUpdateBanner,

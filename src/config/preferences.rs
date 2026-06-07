@@ -5,6 +5,7 @@ use std::path::PathBuf;
 
 #[derive(Debug, Clone)]
 pub struct EditorPreferences {
+    pub first_launch: bool,
     pub tab_size: usize,
     pub use_spaces: bool,
     pub autosave_enabled: bool,
@@ -23,6 +24,7 @@ pub struct EditorPreferences {
 impl Default for EditorPreferences {
     fn default() -> Self {
         Self {
+            first_launch: true,
             tab_size: 4,
             use_spaces: true,
             autosave_enabled: true,
@@ -146,6 +148,9 @@ fn parse_preferences(content: &str) -> EditorPreferences {
                         prefs.line_number_width = w.clamp(20.0, 120.0);
                     }
                 }
+                "first_launch" => {
+                    prefs.first_launch = value == "true";
+                }
                 "tab_drag_floating" => {
                     prefs.tab_drag_floating = value == "true";
                 }
@@ -237,6 +242,7 @@ fn save_preferences_to_path(
 -- Edit these values to customize your editor
 
 return {{
+    first_launch = {},
     tab_size = {},
     use_spaces = {},
     autosave_enabled = {},
@@ -251,6 +257,7 @@ return {{
     tab_drag_floating = {},
 {}}}
 "#,
+        prefs.first_launch,
         prefs.tab_size,
         prefs.use_spaces,
         prefs.autosave_enabled,

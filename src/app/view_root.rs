@@ -5,6 +5,10 @@ impl App {
     pub fn view(&self) -> Element<'_, Message> {
         use iced::widget::stack;
 
+        if self.startup_page_open {
+            return self.view_startup_page();
+        }
+
         let editor_area: Element<'_, Message> = if self.settings_open {
             self.view_settings_panel()
         } else {

@@ -2239,6 +2239,42 @@ impl App {
                 iced::Task::none()
             }
             Message::AudioSeek(_) => iced::Task::none(), // rodio doesnt seek support natively
+            Message::StartupPageDone => {
+                self.editor_preferences.first_launch = false;
+                self.startup_page_open = false;
+                let name = self.startup_selected_theme.clone();
+                let new_theme = crate::theme::builtin_theme(&name);
+                crate::theme::set_theme(new_theme);
+                self.apply_editor_theme_to_tabs();
+                self.editor_preferences.theme_name = name;
+                let _ = crate::config::preferences::save_preferences(&self.editor_preferences);
+                iced::Task::none()
+            }
+            Message::StartupThemeSelected(name) => {
+                self.startup_selected_theme = name.clone();
+                let new_theme = crate::theme::builtin_theme(&name);
+                crate::theme::set_theme(new_theme);
+                self.apply_editor_theme_to_tabs();
+                iced::Task::none()
+            }
+            Message::StartupToggleVimMode => {
+                self.startup_vim_mode = self.startup_vim_mode;
+                if self.startup_vim_mode {
+                    self.startup_helix_mode = false;
+                }
+                iced::Task::none()
+            }
+            Message::StartupToggleHelixMode => {
+                self.startup_helix_mode = !self.startup_helix_mode;
+                if self.startup_helix_mode {
+                    self.startup_vim_mode = false;
+                }
+                iced::Task::none()
+            }
+            Message::StartupToggleRunOnStartup => {
+                self.startup_run_on_startup != self.startup_run_on_startup;
+                iced::Task::none()
+            }
             Message::CheckForUpdate => {
                 iced::Task::perform(crate::features::updater::check_for_update(), |result| {
                     match result {
