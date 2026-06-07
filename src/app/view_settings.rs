@@ -941,7 +941,7 @@ impl App {
                 container(iced::widget::Space::new())
                     .width(Length::Fixed(16.0))
                     .height(Length::Fixed(16.0))
-                    .style(mpve |_t| container::Style {
+                    .style(move |_t| container::Style {
                         background: Some(Background::Color(Color::WHITE)),
                         border: iced::Border {
                             radius: 8.0.into(),
@@ -966,6 +966,272 @@ impl App {
                 },
                 ..Default::default()
             });
+
+            iced::widget::button(
+                row![
+                    column![
+                        text(label.to_string()).size(13).color(theme().text_primary),
+                        text(sublabel.to_string()).size(11).color(theme().text_dim),
+                    ]
+                    .spacing(2)
+                    .width(Length::Fill),
+                    track,
+                ]
+                .spacing(16)
+                .align_y(iced::Alignment::Center),
+            )
+            .on_press(msg)
+            .style(|_t, _s| iced::widget::button::Style {
+                background: None,
+                border: iced::Border::default(),
+                text_color: Color::TRANSPARENT,
+                ..Default::default()
+            })
+            .padding(iced::Padding {
+                top: 10.0,
+                right: 16.0,
+                bottom: 10.0,
+                left: 16.0,
+            })
+            .width(Length::Fill)
+            .into()
+        };
+
+        let theme_items: Vec<iced::Element<'_, Message>> = themes_to_show
+            .iter()
+            .map(|&name| {
+                let is_selected = self.startup_selected_theme == name;
+                let accent = if is_selected {
+                    crate::theme::ACCENT_PURPLE
+                } else {
+                    Color::from_rgba(1.0, 1.0, 1.0, 0.0)
+                };
+                let bg = if is_selected {
+                    Color::from_rgba(
+                        crate::theme::ACCENT_PURPLE.r,
+                        crate::theme::ACCENT_PURPLE.g,
+                        crate::theme::ACCENT_PURPLE.b,
+                        0.15,
+                    )
+                } else {
+                    Color::from_rgba(1.0, 1.0, 1.0, 0.04)
+                };
+                iced::widget::button(
+                    row![
+                        text(if is_selected { "●" } else { "○" })
+                            .size(10)
+                            .color(if is_selected {
+                                crate::theme::ACCENT_PURPLE
+                            } else {
+                                theme().text_dim
+                            }),
+                        text(name).size(12).color(if is_selected {
+                            theme().text_primary
+                        } else {
+                            theme().text_muted
+                        }),
+                    ]
+                    .spacing(8)
+                    .align_y(iced::Alignment::Center),
+                )
+                .on_press(Message::StartupThemeSelected(name.to_string()))
+                .style(move |_t, _s| iced::widget::button::Style {
+                    background: Some(Background::Color(bg)),
+                    border: iced::Border {
+                        color: accent,
+                        width: 1.0,
+                        radius: 8.0.into(),
+                    },
+                    text_color: Color::TRANSPARENT,
+                    ..Default::default()
+                })
+                .padding(iced::Padding {
+                    top: 8.0,
+                    right: 14.0,
+                    bottom: 8.0,
+                    left: 14.0,
+                })
+                .width(Length::Fill)
+                .into()
+            })
+            .collect();
+
+        let mut theme_rows: Vec<iced::Element<'_, Message>> = Vec::new();
+        let mut iter = theme_items.into_iter().peekable();
+        while iter.peek().is_some() {
+            let a = iter.next().unwrap();
+            if let Some(b) = iter.next() {
+                theme_rows.push(row![a, b].spacing(8).into());
+            } else {
+                theme_rows.push(row![a].spacing(8).into());
+            }
         }
+
+        let continue_btn = iced::widget::button(
+            text("Get Started →")
+                .size(14)
+                .color(Color::WHITE),
+        )
+        .on_press(Message::StartupPageDone)
+        .style(|_t, _s| iced::widget::button::Style {
+            background: Some(Background::Color(crate::theme::ACCENT_PURPLE)),
+            border: iced::Border {
+                radius: 8.0.into(),
+                ..Default::default()
+            },
+            text_color: Color::WHITE,
+            ..Default::default()
+        })
+        .padding(iced::Padding {
+            top: 12.0,
+            right: 32.0,
+            bottom: 12.0,
+            left: 32.0,
+        });
+
+        let left_panel = container(
+            scrollable(
+                column![
+                    text("Welcome to Pinel")
+                        .size(28)
+                        .color(theme().text_primary),
+                    text("A lightweight editor built with Rust.")
+                        .size(13)
+                        .color(theme().text_dim),
+                    iced::widget::Space::new().height(Length::Fixed(24.0)),
+                    text("Choose a theme")
+                        .size(14)
+                        .color(theme().text_muted),
+                    iced::widget::Space::new().height(Length::Fixed(8.0)),
+                    column(theme_rows).spacing(8),
+                ]
+                .spacing(8)
+                .padding(iced::Padding {
+                    top: 48.0,
+                    right: 32.0,
+                    bottom: 48.0,
+                    left: 48.0,
+                })
+                .width(Length::Fill),
+            )
+            .height(Length::Fill),
+        )
+        .width(Length::FillPortion(3))
+        .height(Length::Fill)
+        .style(|_t| container::Style {
+            background: Some(Background::Color(theme().bg_editor)),
+            ..Default::default()
+        });
+
+        let divider = container(iced::widget::Space::new())
+            .width(Length::Fixed(1.0))
+            .height(Length::Fill)
+            .style(|_t| container::Style {
+                background: Some(Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.06))),
+                ..Default::default()
+            });
+
+        let right_panel = container(
+            scrollable(
+                column![
+                    iced::widget::Space::new().height(Length::Fixed(48.0)),
+                    text("Editor Mode")
+                        .size(14)
+                        .color(theme().text_muted)
+                        .width(Length::Fill),
+                    container(
+                        column![
+                            toggle(
+                                "Vim Mode",
+                                "hjkl navigation, normal/insert modes",
+                                self.startup_vim_mode,
+                                Message::StartupToggleVimMode
+                            ),
+                            container(iced::widget::Space::new())
+                                .width(Length::Fill)
+                                .height(Length::Fixed(1.0))
+                                .style(|_t| container::Style {
+                                    background: Some(Background::Color(Color::from_rgba(
+                                        1.0, 1.0, 1.0, 0.05,
+                                    ))),
+                                    ..Default::default()
+                                }),
+                            toggle(
+                                "Helix Mode",
+                                "Selection-first, motion-based editing",
+                                self.startup_helix_mode,
+                                Message::StartupToggleHelixMode
+                            ),
+                        ]
+                        .spacing(0),
+                    )
+                    .style(|_t| container::Style {
+                        background: Some(Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.04))),
+                        border: iced::Border {
+                            color: Color::from_rgba(1.0, 1.0, 1.0, 0.08),
+                            width: 1.0,
+                            radius: 10.0.into(),
+                        },
+                        ..Default::default()
+                    })
+                    .width(Length::Fill),
+                    iced::widget::Space::new().height(Length::Fixed(20.0)),
+                    text("System")
+                        .size(14)
+                        .color(theme().text_muted)
+                        .width(Length::Fill),
+                    container(toggle(
+                        "Run on Startup",
+                        "Launch Pinel automatically at login",
+                        self.startup_run_on_startup,
+                        Message::StartupToggleRunOnStartup,
+                    ))
+                    .style(|_t| container::Style {
+                        background: Some(Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.04))),
+                        border: iced::Border {
+                            color: Color::from_rgba(1.0, 1.0, 1.0, 0.08),
+                            width: 1.0,
+                            radius: 10.0.into(),
+                        },
+                        ..Default::default()
+                    })
+                    .width(Length::Fill),
+                    iced::widget::Space::new().height(Length::Fill),
+                    container(continue_btn)
+                        .width(Length::Fill)
+                        .center_x(Length::Fill)
+                        .padding(iced::Padding {
+                            top: 32.0,
+                            right: 0.0,
+                            bottom: 48.0,
+                            left: 0.0,
+                        }),
+                ]
+                .spacing(8)
+                .padding(iced::Padding {
+                    top: 0.0,
+                    right: 40.0,
+                    bottom: 0.0,
+                    left: 32.0,
+                })
+                .width(Length::Fill),
+            )
+            .height(Length::Fill),
+        )
+        .width(Length::FillPortion(2))
+        .height(Length::Fill)
+        .style(|_t| container::Style {
+            background: Some(Background::Color(theme().bg_secondary)),
+            ..Default::default()
+        });
+
+        container(
+            row![left_panel, divider, right_panel]
+                .width(Length::Fill)
+                .height(Length::Fill),
+        )
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .into()
     }
 }
