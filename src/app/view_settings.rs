@@ -929,53 +929,60 @@ impl App {
         let themes_to_show = BUILTIN_THEMES;
 
         // allow the switch helper to toggle
-        let toggle = |label: &str, sublabel: &str, on: bool, msg: Message| -> iced::Element<'_, Message> {
-            let track_color = if on {
-                Color::from_rgb(0.133, 0.773, 0.369) // green
+        let toggle = |label: &'static str, sublabel: &'static str, on: bool, msg: Message| -> iced::Element<'_, Message> {
+            use crate::features::icons::{icon_handle, IconAsset, IconFormat};
+
+            // use the lucide toggle svgs directly
+            static TOGGLE_LEFT_SVG: &[u8] = include_bytes!("../assets/icons/toggle-left.svg");
+            static TOGGLE_RIGHT_SVG: &[u8] = include_bytes!("../assets/icons/toggle-right.svg");
+
+            let icon_bytes: &'static [u8] = if on { TOGGLE_RIGHT_SVG } else { TOGGLE_LEFT_SVG };
+            let icon_color = if on {
+                Color::from_rgb(0.133, 0.773, 0.369) // green when on
             } else {
-                Color::from_rgba(1.0, 1.0, 1.0, 0.15)
+                Color::from_rgba(1.0, 1.0, 1.0, 0.35) // dim when off
             };
-            let knob_x = if on { 22.0_f32 } else { 4.0_f32 };
 
-            let track = container(
-                container(iced::widget::Space::new())
-                    .width(Length::Fixed(16.0))
-                    .height(Length::Fixed(16.0))
-                    .style(move |_t| container::Style {
-                        background: Some(Background::Color(Color::WHITE)),
-                        border: iced::Border {
-                            radius: 8.0.into(),
-                            ..Default::default()
-                        },
+            let asset = IconAsset { format: IconFormat::Svg, bytes: icon_bytes };
+             
+            // tint the svg by drawing it inside a coloured container
+            // should use stroke="currentColor" so we wrap in a container
+            // and apply a colour titned image widget
+            let icon_widget: iced::Element<'_, Message> =
+                iced::widget::image::Image::new(icon_handle(asset, 28))
+                    .width(Length::Fixed(28.0))
+                    .height(Length::Fixed(28.0))
+                    .into();
+
+            // now wrap in a container to apply the tint
+            // via opacity/colour overlay
+            let icon_container = container(icon_widget)
+                .width(Length::Fixed(32.0))
+                .height(Length::Fixed(32.0))
+                .center_x(Length::Fixed(32.0))
+                .center_y(Length::Fixed(32.0))
+                .style(move |_t| container::Style {
+                    background: Some(Background::Color(Color::from_rgba(
+                        icon_color.r,
+                        icon_color.g,
+                        icon_color.b,
+                        0.08,
+                    ))),
+                    border: iced::Border {
+                        radius: 6.0.into(),
                         ..Default::default()
-                    })
-                    .padding(iced::Padding {
-                        top:0.0,
-                        left: knob_x,
-                        bottom: 0.0,
-                        right: 0.0,
-                    }),
-            )
-            .width(Length::Fixed(42.0))
-            .height(Length::Fixed(24.0))
-            .style(move |_t| container::Style {
-                background: Some(Background::Color(track_color)),
-                border: iced::Border {
-                    radius: 12.0.into(),
+                    },
                     ..Default::default()
-                },
-                ..Default::default()
-            });
-
+                });
             iced::widget::button(
                 row![
                     column![
-                        text(label.to_string()).size(13).color(theme().text_primary),
-                        text(sublabel.to_string()).size(11).color(theme().text_dim),
+                        text(label).size(13).color(theme().text_primary),
+                        text(sublabel).size(11).color(theme().text_dim),
                     ]
                     .spacing(2)
                     .width(Length::Fill),
-                    track,
+                    icon_container,
                 ]
                 .spacing(16)
                 .align_y(iced::Alignment::Center),
@@ -996,6 +1003,7 @@ impl App {
             .width(Length::Fill)
             .into()
         };
+
 
         let theme_items: Vec<iced::Element<'_, Message>> = themes_to_show
             .iter()
