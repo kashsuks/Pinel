@@ -93,6 +93,22 @@ Go to [the website](https://pinel.netlify.app) and look at the video demo linked
 
 --- 
 
+## Dev Tools
+
+There is an inbuilt script for developers to quickly test and clean code accessible [here](https://github.com/kashsuks/Pinel/blob/master/utils/clean.sh)
+
+Below are the commands related to it:
+
+``` bash
+./utils/check.sh              # standard run
+./utils/check.sh --fix        # auto-fix fmt + clippy where possible
+./utils/check.sh --full       # + audit, udeps, bloat, dep tree
+./utils/check.sh --skip-tests # skip cargo test (faster iteration)
+./utils/check.sh --fix --full # kitchen sink
+```
+
+---
+
 # License
 
 Copyright (c) 2025-Present [Kashyap](https://github.com/kashsuks) and [Contributors](https://github.com/kashsuks/Pinel/graphs/contributors). `Pinel` is a free and open-source software licensed under the [GNU General Public License Version 3](https://www.gnu.org/licenses/gpl-3.0.en.html). Official logo was created by [Kashyap Sukshavasi](https://github.com/kashsuks).
