@@ -40,7 +40,7 @@ pub fn shortcuts() -> Subscription<Message> {
                 } else if primary {
                     match c.as_str() {
                         "b" | "r" => return Some(Message::ToggleSidebar),
-                        "o" | "O" => return Some(Message::OpenFileDialog),
+                        "o" | "O" => return Some(Message::OpenFileOrFolder),
                         "w" | "W" => return Some(Message::CloseActiveTab),
                         "s" | "S" => return Some(Message::SaveFile),
                         "t" | "T" => return Some(Message::ToggleFileFinder),

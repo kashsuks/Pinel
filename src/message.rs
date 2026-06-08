@@ -22,8 +22,8 @@ pub enum Message {
     FileTreeRefresh,
     ToggleSidebar,
 
-    OpenFileDialog,
     OpenFolderDialog,
+    OpenFileOrFolder,
     FolderOpened(PathBuf),
 
     SaveFile,

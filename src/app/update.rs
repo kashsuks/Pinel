@@ -692,16 +692,52 @@ impl App {
                 }
                 Self::open_path_task(path)
             }
-            Message::OpenFileDialog => iced::Task::perform(
+            Message::OpenFileOrFolder => iced::Task::perform(
                 async {
-                    rfd::AsyncFileDialog::new()
-                        .set_title("Open File")
-                        .pick_file()
-                        .await
-                        .map(|handle| handle.path().to_path_buf())
+                    #[cfg(target_os = "macos")]
+                    {
+                        // NSOpenPanel doesn't support canChooseFiles + canChooseDirectories
+                        // simultaneously via rfd, so use osascript which shows a single
+                        // native dialog that accepts both files and folders.
+                        let result = tokio::process::Command::new("osascript")
+                            .args([
+                                "-e",
+                                "POSIX path of (choose file or folder with prompt \"Open File or Folder\")",
+                            ])
+                            .output()
+                            .await;
+                        if let Ok(out) = result {
+                            if out.status.success() {
+                                let raw = String::from_utf8_lossy(&out.stdout);
+                                let path_str = raw.trim().trim_end_matches('/');
+                                if !path_str.is_empty() {
+                                    let path = std::path::PathBuf::from(path_str);
+                                    let is_dir = path.is_dir();
+                                    return Some((path, is_dir));
+                                }
+                            }
+                        }
+                        return None;
+                    }
+                    #[cfg(not(target_os = "macos"))]
+                    {
+                        if let Some(handle) = rfd::AsyncFileDialog::new()
+                            .set_title("Open File or Folder")
+                            .pick_file()
+                            .await
+                        {
+                            return Some((handle.path().to_path_buf(), false));
+                        }
+                        rfd::AsyncFileDialog::new()
+                            .set_title("Open Folder")
+                            .pick_folder()
+                            .await
+                            .map(|h| (h.path().to_path_buf(), true))
+                    }
                 },
                 |result| match result {
-                    Some(path) => Message::FileClicked(path),
+                    Some((path, true)) => Message::FolderOpened(path),
+                    Some((path, false)) => Message::FileClicked(path),
                     None => Message::FileTreeRefresh,
                 },
             ),

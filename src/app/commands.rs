@@ -24,7 +24,7 @@ impl App {
                 self.sidebar_visible = !self.sidebar_visible;
             }
             "Open File" => {
-                return iced::Task::perform(async {}, |_| Message::OpenFileDialog);
+                return iced::Task::perform(async {}, |_| Message::OpenFileOrFolder);
             }
             "Open Folder" => {
                 return iced::Task::perform(async {}, |_| Message::OpenFolderDialog);
