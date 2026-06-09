@@ -180,7 +180,7 @@ pub struct App {
 
     command_input: CommandInput,
     command_input_id: iced::widget::Id,
-
+    
     startup_page_open: bool,
     startup_vim_mode: bool,
     startup_helix_mode: bool,
