@@ -886,7 +886,7 @@ impl App {
             .map(|tab| tab.name.clone())
             .unwrap_or_default();
 
-        let left = row![text(file_info).size(10).color(theme().text_dim),]
+        let left = row![text(file_info).size(12).color(theme().text_dim),]
             .spacing(8)
             .align_y(iced::Alignment::Center);
 
@@ -901,10 +901,10 @@ impl App {
 
         let right = row![
             text(format!("Ln {}, Col {}", self.cursor_line, self.cursor_col))
-                .size(10)
+                .size(12)
                 .color(theme().text_placeholder),
             text(current_line_diag)
-                .size(10)
+                .size(12)
                 .color(theme().text_secondary),
         ]
         .spacing(8)
@@ -915,10 +915,10 @@ impl App {
                 .align_y(iced::Alignment::Center),
         )
         .padding(iced::Padding {
-            top: 4.0,
-            right: 12.0,
-            bottom: 6.0,
-            left: 12.0,
+            top: 6.0,
+            right: 16.0,
+            bottom: 7.0,
+            left: 16.0,
         })
         .width(Length::Fill)
         .style(status_bar_style)

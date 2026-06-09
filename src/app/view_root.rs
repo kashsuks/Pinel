@@ -14,7 +14,6 @@ impl App {
         } else {
             let tab_bar = self.view_tab_bar();
             let editor_widget = self.view_editor();
-            let status_bar = self.view_status_bar();
 
             let mut editor_col_items: Vec<Element<'_, Message>> = Vec::new();
             if self.find_replace.open {
@@ -29,7 +28,6 @@ impl App {
             if self.command_input.open {
                 editor_col_items.push(self.view_command_input_bar());
             }
-            editor_col_items.push(status_bar);
 
             let editor_container =
                 if self.active_tab.is_some() || self.pending_sensitive_open.is_some() {
@@ -68,7 +66,20 @@ impl App {
             editor_area
         };
 
-        let wrapped = container(base_content)
+        let status_bar = self.view_status_bar();
+
+        let with_status = iced::widget::column![
+            container(base_content)
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .style(|_theme| container::Style {
+                    background: Some(Background::Color(theme().bg_editor)),
+                    ..Default::default()
+                }),
+            status_bar,
+        ];
+
+        let wrapped = container(with_status)
             .width(Length::Fill)
             .height(Length::Fill)
             .style(|_theme| container::Style {
