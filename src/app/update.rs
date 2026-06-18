@@ -1289,6 +1289,50 @@ impl App {
                 self.resize_start_x = None;
                 iced::Task::none()
             }
+            Message::SetActivePanel(panel) => {
+                use crate::app::ActivePanel;
+                if self.active_panel == panel {
+                    self.sidebar_visible = !self.sidebar_visible;
+                } else {
+                    self.active_panel = panel;
+                    self.sidebar_visible = true;
+                    if panel == ActivePanel::Git {
+                        return iced::Task::perform(async {}, |_| Message::RefreshGitStatus);
+                    }
+                }
+                iced::Task::none()
+            }
+            Message::RefreshGitStatus => {
+                let root = self.file_tree.as_ref().map(|t| t.root.clone());
+                iced::Task::perform(
+                    async move {
+                        let mut cmd = std::process::Command::new("git");
+                        cmd.arg("status").arg("--porcelain");
+                        if let Some(dir) = root {
+                            cmd.current_dir(dir);
+                        }
+                        let output = cmd.output().ok();
+                        let mut changes = Vec::new();
+                        if let Some(out) = output {
+                            let text = String::from_utf8_lossy(&out.stdout).to_string();
+                            for line in text.lines() {
+                                if line.len() < 3 {
+                                    continue;
+                                }
+                                let status = line[..2].trim().to_string();
+                                let file = line[3..].to_string();
+                                changes.push((status, file));
+                            }
+                        }
+                        changes
+                    },
+                    Message::GitStatusLoaded,
+                )
+            }
+            Message::GitStatusLoaded(changes) => {
+                self.git_changes = changes;
+                iced::Task::none()
+            }
             Message::ToggleSidebar => {
                 self.sidebar_visible = !self.sidebar_visible;
                 iced::Task::none()

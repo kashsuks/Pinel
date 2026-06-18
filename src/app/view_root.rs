@@ -45,8 +45,86 @@ impl App {
                 .into()
         };
 
+        use crate::app::ActivePanel;
+        use crate::features::icons::{icon_handle, IconAsset, IconFormat};
+
+        static ICON_FILES: &[u8] = include_bytes!("../assets/icons/activity-bar-files.svg");
+        static ICON_GIT: &[u8] = include_bytes!("../assets/icons/activity-bar-git.svg");
+
+        let make_activity_icon = |bytes: &'static [u8], panel: ActivePanel| -> Element<'_, Message> {
+            let is_active = self.active_panel == panel && self.sidebar_visible;
+            let icon_color = if is_active {
+                iced::Color::from_rgba(1.0, 1.0, 1.0, 0.88)
+            } else {
+                iced::Color::from_rgba(1.0, 1.0, 1.0, 0.35)
+            };
+
+            let asset = IconAsset { format: IconFormat::Svg, bytes };
+            let img = iced::widget::image::Image::new(icon_handle(asset, 40))
+                .width(Length::Fixed(20.0))
+                .height(Length::Fixed(20.0));
+
+            let bg = if is_active {
+                iced::Color::from_rgba(1.0, 1.0, 1.0, 0.08)
+            } else {
+                iced::Color::TRANSPARENT
+            };
+
+            iced::widget::button(
+                container(img)
+                    .width(Length::Fixed(40.0))
+                    .height(Length::Fixed(40.0))
+                    .center_x(Length::Fixed(40.0))
+                    .center_y(Length::Fixed(40.0))
+                    .style(move |_t| container::Style {
+                        background: Some(Background::Color(bg)),
+                        border: iced::Border {
+                            radius: 6.0.into(),
+                            ..Default::default()
+                        },
+                        ..Default::default()
+                    }),
+            )
+            .on_press(Message::SetActivePanel(panel))
+            .style(move |_t, status| iced::widget::button::Style {
+                background: Some(Background::Color(match status {
+                    iced::widget::button::Status::Hovered => {
+                        iced::Color::from_rgba(1.0, 1.0, 1.0, 0.06)
+                    }
+                    _ => iced::Color::TRANSPARENT,
+                })),
+                border: iced::Border {
+                    radius: 6.0.into(),
+                    ..Default::default()
+                },
+                text_color: icon_color,
+                ..Default::default()
+            })
+            .padding(0)
+            .into()
+        };
+
+        let activity_bar: Element<'_, Message> = container(
+            iced::widget::column![
+                make_activity_icon(ICON_FILES, ActivePanel::Files),
+                make_activity_icon(ICON_GIT, ActivePanel::Git),
+            ]
+            .spacing(4)
+            .padding(iced::Padding { top: 8.0, right: 4.0, bottom: 4.0, left: 4.0 }),
+        )
+        .width(Length::Fixed(48.0))
+        .height(Length::Fill)
+        .style(|_t| container::Style {
+            background: Some(Background::Color(crate::theme::theme().bg_secondary)),
+            ..Default::default()
+        })
+        .into();
+
         let base_content: Element<'_, Message> = if self.sidebar_visible {
-            let sidebar = view_sidebar(self.file_tree.as_ref(), self.sidebar_width);
+            let panel: Element<'_, Message> = match self.active_panel {
+                ActivePanel::Files => view_sidebar(self.file_tree.as_ref(), self.sidebar_width),
+                ActivePanel::Git => crate::ui::view_git_panel(&self.git_changes, self.sidebar_width),
+            };
 
             let separator = container(text(""))
                 .width(Length::Fixed(1.0))
@@ -61,9 +139,9 @@ impl App {
             .on_press(Message::SidebarResizeStart)
             .interaction(iced::mouse::Interaction::ResizingHorizontally);
 
-            row![sidebar, separator, resize_zone, editor_area].into()
+            row![activity_bar, panel, separator, resize_zone, editor_area].into()
         } else {
-            editor_area
+            row![activity_bar, editor_area].into()
         };
 
         let status_bar = self.view_status_bar();

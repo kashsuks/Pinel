@@ -130,6 +130,12 @@ struct PendingHoverRequest {
 
 const HOVER_TRIGGER_DELAY: Duration = Duration::from_secs(2);
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ActivePanel {
+    Files,
+    Git,
+}
+
 pub struct App {
     tabs: Vec<Tab>,
     active_tab: Option<usize>,
@@ -180,7 +186,10 @@ pub struct App {
 
     command_input: CommandInput,
     command_input_id: iced::widget::Id,
-    
+
+    active_panel: ActivePanel,
+    git_changes: Vec<(String, String)>,
+
     startup_page_open: bool,
     startup_vim_mode: bool,
     startup_helix_mode: bool,
@@ -326,6 +335,9 @@ impl Default for App {
 
             command_input: CommandInput::default(),
             command_input_id: iced::widget::Id::unique(),
+
+            active_panel: ActivePanel::Files,
+            git_changes: Vec::new(),
 
             startup_page_open: editor_preferences.first_launch,
             startup_vim_mode: false,

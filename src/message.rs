@@ -21,6 +21,7 @@ pub enum Message {
 
     FileTreeRefresh,
     ToggleSidebar,
+    SetActivePanel(crate::app::ActivePanel),
 
     OpenFolderDialog,
     OpenFileOrFolder,
@@ -132,6 +133,9 @@ pub enum Message {
     StartupToggleVimMode,
     StartupToggleHelixMode,
     StartupToggleRunOnStartup,
+
+    RefreshGitStatus,
+    GitStatusLoaded(Vec<(String, String)>),
 
     CheckForUpdate,
     UpdateAvailable(crate::features::updater::UpdateInfo),
