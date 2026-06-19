@@ -84,7 +84,15 @@ pub fn editor_container_style(_theme: &Theme) -> container::Style {
 
 pub fn sidebar_editor_separator_style(_theme: &Theme) -> container::Style {
     container::Style {
-        background: Some(Background::Color(theme().border_subtle)),
+        background: Some(Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.18))),
+        border: Border::default(),
+        ..Default::default()
+    }
+}
+
+pub fn activity_panel_separator_style(_theme: &Theme) -> container::Style {
+    container::Style {
+        background: Some(Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.18))),
         border: Border::default(),
         ..Default::default()
     }
@@ -110,23 +118,6 @@ pub fn status_bar_style(_theme: &Theme) -> container::Style {
         background: Some(Background::Color(bg_subtle)),
         border: Border {
             color: theme().border_very_subtle,
-            width: 0.0,
-            radius: Radius {
-                top_left: 0.0,
-                top_right: 0.0,
-                bottom_right: 0.0,
-                bottom_left: 0.0,
-            },
-        },
-        ..Default::default()
-    }
-}
-
-pub fn tab_bar_style(_theme: &Theme) -> container::Style {
-    container::Style {
-        background: Some(Background::Color(theme().bg_tab_bar)),
-        border: Border {
-            color: Color::TRANSPARENT,
             width: 0.0,
             radius: Radius {
                 top_left: 0.0,

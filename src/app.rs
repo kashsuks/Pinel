@@ -31,9 +31,9 @@ use crate::message::Message;
 use crate::scripting::{self, EditorCommand};
 use crate::theme::*;
 use crate::ui::{
-    editor_container_style, empty_editor, file_finder_item_style, file_finder_panel_style,
-    search_input_style, search_panel_style, sidebar_editor_separator_style, status_bar_style,
-    tab_bar_style, tab_button_style, tab_close_button_style, tree_button_style, view_sidebar,
+    activity_panel_separator_style, editor_container_style, empty_editor, file_finder_item_style,
+    file_finder_panel_style, search_input_style, search_panel_style, sidebar_editor_separator_style,
+    status_bar_style, tab_button_style, tab_close_button_style, tree_button_style, view_sidebar,
 };
 use crate::wakatime::{self, WakaTimeConfig};
 
@@ -130,6 +130,12 @@ struct PendingHoverRequest {
 
 const HOVER_TRIGGER_DELAY: Duration = Duration::from_secs(2);
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ActivePanel {
+    Files,
+    Git,
+}
+
 pub struct App {
     tabs: Vec<Tab>,
     active_tab: Option<usize>,
@@ -180,6 +186,9 @@ pub struct App {
 
     command_input: CommandInput,
     command_input_id: iced::widget::Id,
+
+    active_panel: ActivePanel,
+    git_changes: Vec<(String, String)>,
 
     startup_page_open: bool,
     startup_vim_mode: bool,
@@ -326,6 +335,9 @@ impl Default for App {
 
             command_input: CommandInput::default(),
             command_input_id: iced::widget::Id::unique(),
+
+            active_panel: ActivePanel::Files,
+            git_changes: Vec::new(),
 
             startup_page_open: editor_preferences.first_launch,
             startup_vim_mode: false,
