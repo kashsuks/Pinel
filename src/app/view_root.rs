@@ -126,6 +126,11 @@ impl App {
                 ActivePanel::Git => crate::ui::view_git_panel(&self.git_changes, self.sidebar_width),
             };
 
+            let activity_separator = container(text(""))
+                .width(Length::Fixed(1.0))
+                .height(Length::Fill)
+                .style(activity_panel_separator_style);
+
             let separator = container(text(""))
                 .width(Length::Fixed(1.0))
                 .height(Length::Fill)
@@ -139,9 +144,14 @@ impl App {
             .on_press(Message::SidebarResizeStart)
             .interaction(iced::mouse::Interaction::ResizingHorizontally);
 
-            row![activity_bar, panel, separator, resize_zone, editor_area].into()
+            row![activity_bar, activity_separator, panel, separator, resize_zone, editor_area].into()
         } else {
-            row![activity_bar, editor_area].into()
+            let activity_separator = container(text(""))
+                .width(Length::Fixed(1.0))
+                .height(Length::Fill)
+                .style(activity_panel_separator_style);
+
+            row![activity_bar, activity_separator, editor_area].into()
         };
 
         let status_bar = self.view_status_bar();

@@ -31,9 +31,9 @@ use crate::message::Message;
 use crate::scripting::{self, EditorCommand};
 use crate::theme::*;
 use crate::ui::{
-    editor_container_style, empty_editor, file_finder_item_style, file_finder_panel_style,
-    search_input_style, search_panel_style, sidebar_editor_separator_style, status_bar_style,
-    tab_bar_style, tab_button_style, tab_close_button_style, tree_button_style, view_sidebar,
+    activity_panel_separator_style, editor_container_style, empty_editor, file_finder_item_style,
+    file_finder_panel_style, search_input_style, search_panel_style, sidebar_editor_separator_style,
+    status_bar_style, tab_button_style, tab_close_button_style, tree_button_style, view_sidebar,
 };
 use crate::wakatime::{self, WakaTimeConfig};
 

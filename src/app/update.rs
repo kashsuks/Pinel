@@ -2363,7 +2363,7 @@ impl App {
                 iced::Task::none()
             }
             Message::StartupToggleVimMode => {
-                self.startup_vim_mode = self.startup_vim_mode;
+                self.startup_vim_mode = !self.startup_vim_mode;
                 if self.startup_vim_mode {
                     self.startup_helix_mode = false;
                 }
@@ -2377,7 +2377,7 @@ impl App {
                 iced::Task::none()
             }
             Message::StartupToggleRunOnStartup => {
-                self.startup_run_on_startup != self.startup_run_on_startup;
+                self.startup_run_on_startup = !self.startup_run_on_startup;
                 iced::Task::none()
             }
             Message::CheckForUpdate => {
