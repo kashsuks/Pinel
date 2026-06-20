@@ -26,26 +26,22 @@
 (function() {
   var btn = document.getElementById('downloadBtn');
   if (!btn) return;
-  var downloads = {
-    mac: 'https://github.com/kashsuks/Pinel/releases/download/v0.5.1/pinel-macos-arm64',
-    linux: 'https://github.com/kashsuks/Pinel/releases/download/v0.5.1/pinel-linux-x86_64'
-  };
+  var base = 'https://github.com/kashsuks/Pinel/releases/latest/download/';
   var ua = navigator.userAgent;
   if (/Mac/i.test(ua)) {
-    btn.textContent = 'Download for macOS';
-    btn.href = downloads.mac;
+    var arch = /arm|aarch/i.test(navigator.userAgent) || (typeof navigator.userAgentData !== 'undefined' && navigator.userAgentData.architecture === 'arm') ? 'arm64' : 'x86_64';
+    btn.textContent = 'Download for macOS (' + arch + ')';
+    btn.href = base + 'pinel-macos-' + arch;
   } else if (/Win/i.test(ua)) {
     btn.textContent = 'Download for Windows';
-    btn.href = '#';
-    btn.classList.add('btn-disabled');
-    btn.title = 'Not supported for Windows';
-    btn.setAttribute('aria-disabled', 'true');
-    btn.addEventListener('click', function(evt) {
-      evt.preventDefault();
-    });
+    btn.href = base + 'pinel-windows-x86_64.exe';
   } else if (/Linux/i.test(ua)) {
     btn.textContent = 'Download for Linux';
-    btn.href = downloads.linux;
+    btn.href = '#';
+    btn.classList.add('btn-disabled');
+    btn.title = 'Linux binary not yet available';
+    btn.setAttribute('aria-disabled', 'true');
+    btn.addEventListener('click', function(evt) { evt.preventDefault(); });
   }
 
   window.copyInstall = function() {
