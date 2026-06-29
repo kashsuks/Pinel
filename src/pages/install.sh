@@ -157,6 +157,9 @@ main() {
       log "  export PATH=\"${INSTALL_DIR}:\$PATH\""
       ;;
   esac
+
+  log "launching ${BIN_NAME}..."
+  exec "${INSTALL_DIR}/${BIN_NAME}"
 }
 
 main "$@"

@@ -82,12 +82,18 @@ There is no windows installation currently due to cross-platform dependency issu
 
 ## 2.3 Linux
 
-For Arch Linux users installation is simple.
+The easiest way to install on Linux is with the install script:
+```bash
+curl -fsSL https://pinel.netlify.app/install.sh | sh
+```
+The script automatically detects your architecture and downloads the correct binary.
 
-On the most recent release, look for `pinel-linux-x86_64` and install it.
+Alternatively, grab the binary directly from the [latest release](https://github.com/kashsuks/Pinel/releases):
 
-Once that is done, run `chmod +x <path of the install>` and then run `./<path of the install>`.
-This will make the binary executable and then run it.
+- **x86_64 (most desktops/servers):** `pinel-linux-x86_64`
+- **ARM64 (Raspberry Pi, ARM servers):** `pinel-linux-arm64`
+
+Once downloaded, run `chmod +x <path of the install>` and then `./<path of the install>` to make it executable and launch it.
 
 ## 2.4 Package managers
 
