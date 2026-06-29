@@ -38,10 +38,9 @@
     platformSpan.textContent = 'Download for Windows (x86_64)';
     downloadLink.href = base + 'pinel-windows-x86_64.exe';
   } else if (/Linux/i.test(ua)) {
-    platformSpan.textContent = 'Linux binary not yet available';
-    downloadLink.href = '#';
-    downloadLink.setAttribute('aria-disabled', 'true');
-    downloadLink.addEventListener('click', function(evt) { evt.preventDefault(); });
+    var arch = /aarch64|arm64/i.test(ua) ? 'arm64' : 'x86_64';
+    platformSpan.textContent = 'Download for Linux (' + arch + ')';
+    downloadLink.href = base + 'pinel-linux-' + arch;
   } else {
     platformSpan.textContent = 'Download';
   }
