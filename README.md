@@ -14,10 +14,10 @@ Pinel is shipped across multiple platforms, mainly *Github Releases* and [crates
 ## Quick Install
 
 ```bash
-curl -fsSL https://pinel.netlify.app/install.sh | sh
+curl -fsSL https://pinel.netlify.app/install.sh | bash
 ```
 
-The installer downloads the latest matching GitHub release for your platform and installs `pinel` into `~/.local/bin` by default. If no prebuilt release asset exists for the current platform, it falls back to `cargo install pinel --locked`.
+The installer downloads the latest matching GitHub release for your platform and installs `pinel` into `~/.local/bin` by default. If no prebuilt release asset exists for the current platform, it falls back to `cargo install pinel --locked` (requires rustc 1.88+; run `rustup update stable` if needed).
 
 ## Compiling from Source
 

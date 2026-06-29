@@ -103,8 +103,25 @@ download_from_release() {
   return 1
 }
 
+check_rustc_version() {
+  local rustc_version required_major required_minor actual_major actual_minor
+  required_major=1
+  required_minor=88
+  rustc_version="$(rustc --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+' | head -n1)"
+  actual_major="${rustc_version%%.*}"
+  actual_minor="${rustc_version##*.}"
+  if [ -z "$rustc_version" ] || \
+     [ "$actual_major" -lt "$required_major" ] || \
+     { [ "$actual_major" -eq "$required_major" ] && [ "$actual_minor" -lt "$required_minor" ]; }; then
+    log "error: rustc ${rustc_version:-unknown} is too old; pinel requires rustc ${required_major}.${required_minor}+"
+    log "update with: rustup update stable"
+    exit 1
+  fi
+}
+
 install_with_cargo() {
   need_cmd cargo
+  check_rustc_version
   cargo install "${BIN_NAME}" --locked
   log "installed ${BIN_NAME} with cargo"
 }
