@@ -1757,6 +1757,12 @@ impl App {
                 self.apply_indent_style_to_tabs();
                 iced::Task::none()
             }
+            Message::SettingsToggleAutoIndent => {
+                self.editor_preferences.auto_indent_enabled =
+                    !self.editor_preferences.auto_indent_enabled;
+                self.apply_auto_indent_to_tabs();
+                iced::Task::none()
+            }
             Message::SettingsToggleAutosave => {
                 self.editor_preferences.autosave_enabled =
                     !self.editor_preferences.autosave_enabled;
@@ -1771,6 +1777,7 @@ impl App {
             Message::SettingsSavePreferences => {
                 let _ = prefs::save_preferences(&self.editor_preferences);
                 self.apply_indent_style_to_tabs();
+                self.apply_auto_indent_to_tabs();
                 self.notification = Some(Notification {
                     message: "Preferences saved".to_string(),
                     shown_at: Instant::now(),
