@@ -265,6 +265,18 @@ fn editor_style(
         scrollbar_background,
         scroller_color,
         current_line_highlight,
+        whitespace_color: line_number_color,
+        indent_guide_color: gutter_border,
+        search_match_color: Color::from_rgba(scroller_color.r, scroller_color.g, scroller_color.b, 0.25),
+        search_match_current_color: Color::from_rgba(
+            scroller_color.r,
+            scroller_color.g,
+            scroller_color.b,
+            0.5,
+        ),
+        selection_color: Color::from_rgba(scroller_color.r, scroller_color.g, scroller_color.b, 0.25),
+        bracket_match_color: Color::from_rgba(scroller_color.r, scroller_color.g, scroller_color.b, 0.35),
+        ime_preedit_background_color: current_line_highlight,
     }
 }
 
