@@ -8,6 +8,8 @@ pub struct EditorPreferences {
     pub first_launch: bool,
     pub tab_size: usize,
     pub use_spaces: bool,
+    /// copy the leading whitespaces of the current line onto the new line on enter
+    pub auto_indent_enabled: bool,
     pub autosave_enabled: bool,
     pub autosave_interval_ms: u64,
     pub theme_name: String,
@@ -27,6 +29,7 @@ impl Default for EditorPreferences {
             first_launch: true,
             tab_size: 4,
             use_spaces: true,
+            auto_indent_enabled: true,
             autosave_enabled: true,
             autosave_interval_ms: 300,
             theme_name: "Pinel Blueberry Dark".to_string(),
@@ -121,6 +124,9 @@ fn parse_preferences(content: &str) -> EditorPreferences {
                 }
                 "use_spaces" => {
                     prefs.use_spaces = value == "true";
+                }
+                "auto_indent_enabled" => {
+                    prefs.auto_indent_enabled = value == "true";
                 }
                 "autosave_enabled" => {
                     prefs.autosave_enabled = value == "true";
@@ -245,6 +251,7 @@ return {{
     first_launch = {},
     tab_size = {},
     use_spaces = {},
+    auto_indent_enabled = {},
     autosave_enabled = {},
     -- Autosave interval in milliseconds (30–1000)
     autosave_interval_ms = {},
@@ -260,6 +267,7 @@ return {{
         prefs.first_launch,
         prefs.tab_size,
         prefs.use_spaces,
+        prefs.auto_indent_enabled,
         prefs.autosave_enabled,
         prefs.autosave_interval_ms,
         prefs.theme_name,

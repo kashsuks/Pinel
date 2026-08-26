@@ -84,6 +84,7 @@ pub enum Message {
     SettingsNavigate(String),
     SettingsTabSizeChanged(String),
     SettingsToggleUseSpaces,
+    SettingsToggleAutoIndent,
     SettingsToggleAutosave,
     SettingsAutosaveIntervalChanged(String),
     SettingsSavePreferences,

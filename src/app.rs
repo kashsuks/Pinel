@@ -471,6 +471,7 @@ impl App {
             iced_code_editor::IndentStyle::Tab
         };
         editor.set_indent_style(indent_style);
+        editor.set_auto_indent_enabled(self.editor_preferences.auto_indent_enabled);
 
         editor
     }
@@ -497,6 +498,16 @@ impl App {
         for tab in &mut self.tabs {
             if let TabKind::Editor { code_editor, .. } = &mut tab.kind {
                 code_editor.set_indent_style(indent_style);
+            }
+        }
+    }
+
+    pub(super) fn apply_auto_indent_to_tabs(&mut self) {
+        let enabled = self.editor_preferences.auto_indent_enabled;
+
+        for tab in &mut self.tabs {
+            if let TabKind::Editor { code_editor, .. } = &mut tab.kind {
+                code_editor.set_auto_indent_enabled(enabled);
             }
         }
     }
