@@ -1,5 +1,7 @@
-use std::fs;
-use std::path::{Path, PathBuf};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
 
 /// A single file entry produced by scanning a directory.
 #[derive(Debug, Clone)]
@@ -94,9 +96,7 @@ impl FuzzyFinder {
                 .collect();
 
             scored.sort_by(|(a, a_score), (b, b_score)| {
-                b_score
-                    .cmp(a_score)
-                    .then_with(|| a.display_name.cmp(&b.display_name))
+                b_score.cmp(a_score).then_with(|| a.display_name.cmp(&b.display_name))
             });
 
             self.filtered_files = scored.into_iter().map(|(file, _)| file).collect();
@@ -116,10 +116,7 @@ impl FuzzyFinder {
     }
 
     pub fn select(&mut self) -> Option<PathBuf> {
-        let path = self
-            .filtered_files
-            .get(self.selected_index)
-            .map(|f| f.path.clone());
+        let path = self.filtered_files.get(self.selected_index).map(|f| f.path.clone());
         self.close();
         path
     }
@@ -175,11 +172,8 @@ fn scan_directory(dir: &Path, root: &Path) -> Vec<FileEntry> {
         }
 
         if path.is_file() {
-            let display_name = path
-                .strip_prefix(root)
-                .unwrap_or(&path)
-                .to_string_lossy()
-                .to_string();
+            let display_name =
+                path.strip_prefix(root).unwrap_or(&path).to_string_lossy().to_string();
             files.push(FileEntry { path, display_name });
         } else if path.is_dir() {
             files.extend(scan_directory(&path, root));

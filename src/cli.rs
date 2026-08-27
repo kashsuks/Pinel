@@ -1,9 +1,10 @@
+use std::path::PathBuf;
+
 /// This file is responsible for providing strctures
 /// for the following features:
 /// - SSH connectivity
 /// - CLI/TUI tool
 use clap::{Parser, Subcommand};
-use std::path::PathBuf;
 
 #[derive(Debug, Parser)]
 #[command(name = "pinel", version, about = "Pinel Editor")]

@@ -1,8 +1,11 @@
-use iced::border::Radius;
-use iced::widget::button::{Status as ButtonStatus, Style as ButtonStyle};
-use iced::widget::container;
-use iced::widget::text_editor;
-use iced::{Background, Border, Color, Theme, Vector};
+use iced::{
+    border::Radius,
+    widget::{
+        button::{Status as ButtonStatus, Style as ButtonStyle},
+        container, text_editor,
+    },
+    Background, Border, Color, Theme, Vector,
+};
 
 use crate::theme::*;
 

@@ -1,4 +1,9 @@
-use crate::ssh::session::{RemoteEntry, SshSession};
+use std::{
+    io,
+    path::{Path, PathBuf},
+    process::Command,
+};
+
 use anyhow::{bail, Context, Result};
 use crossterm::{
     event::{self, Event, KeyCode},
@@ -9,10 +14,9 @@ use ratatui::{
     prelude::*,
     widgets::{Block, Borders, List, ListItem, ListState, Paragraph},
 };
-use std::io;
-use std::path::{Path, PathBuf};
-use std::process::Command;
 use tempfile::tempdir;
+
+use crate::ssh::session::{RemoteEntry, SshSession};
 
 pub fn run(target: String, start_path: String) -> Result<()> {
     let session = SshSession::connect(&target)?;
@@ -60,7 +64,7 @@ impl RemoteBrowser {
                         KeyCode::Down => self.next(),
                         KeyCode::Backspace => self.go_up()?,
                         KeyCode::Enter => self.activate()?,
-                        _ => {}
+                        _ => {},
                     }
                 }
             }
@@ -81,7 +85,11 @@ impl RemoteBrowser {
         let footer = layout[1];
 
         let items = self.entries.iter().map(|entry| {
-            let prefix = if entry.is_dir { "[D]" } else { "[F]" };
+            let prefix = if entry.is_dir {
+                "[D]"
+            } else {
+                "[F]"
+            };
             ListItem::new(format!("{prefix} {}", entry.name))
         });
 
@@ -142,11 +150,7 @@ impl RemoteBrowser {
 
     fn edit_remote_file(&mut self, remote_path: &Path) -> Result<()> {
         let temp_dir = tempdir().context("failed to create temp dir for remote file")?;
-        let file_name = remote_path
-            .file_name()
-            .unwrap_or_default()
-            .to_string_lossy()
-            .to_string();
+        let file_name = remote_path.file_name().unwrap_or_default().to_string_lossy().to_string();
         let local_path = temp_dir.path().join(file_name);
 
         self.session.download_file(remote_path, &local_path)?;

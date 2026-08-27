@@ -1,12 +1,17 @@
-use iced::widget::image;
-use iced::widget::{button, column, container, row, scrollable, text};
-use iced::{Element, Length};
+use iced::{
+    widget::{button, column, container, image, row, scrollable, text},
+    Element, Length,
+};
 
-use crate::features::file_tree::{FileEntry, FileTree};
-use crate::features::icons::{get_file_icon, get_folder_icon, icon_handle, IconAsset};
-use crate::message::Message;
-use crate::theme::*;
-use crate::ui::styles::{sidebar_container_style, tree_button_style};
+use crate::{
+    features::{
+        file_tree::{FileEntry, FileTree},
+        icons::{get_file_icon, get_folder_icon, icon_handle, IconAsset},
+    },
+    message::Message,
+    theme::*,
+    ui::styles::{sidebar_container_style, tree_button_style},
+};
 
 /// Create an icon element from embedded bytes.
 fn icon_widget<'a>(icon: IconAsset) -> Element<'a, Message> {
@@ -21,9 +26,7 @@ pub fn view_git_panel<'a>(changes: &'a [(String, String)], width: f32) -> Elemen
         container(
             column![
                 text("No changes").size(13).color(theme().text_muted),
-                text("Working tree is clean")
-                    .size(11)
-                    .color(theme().text_placeholder),
+                text("Working tree is clean").size(11).color(theme().text_placeholder),
             ]
             .spacing(4)
             .align_x(iced::Alignment::Center),
@@ -34,15 +37,17 @@ pub fn view_git_panel<'a>(changes: &'a [(String, String)], width: f32) -> Elemen
         .center_y(Length::Fill)
         .into()
     } else {
-        let header = text(format!("Changes ({})", changes.len()))
-            .size(11)
-            .color(theme().text_muted);
+        let header =
+            text(format!("Changes ({})", changes.len())).size(11).color(theme().text_muted);
 
-        let mut items: Vec<Element<'a, Message>> = vec![
-            container(header)
-                .padding(iced::Padding { top: 4.0, right: 4.0, bottom: 4.0, left: 4.0 })
-                .into(),
-        ];
+        let mut items: Vec<Element<'a, Message>> = vec![container(header)
+            .padding(iced::Padding {
+                top: 4.0,
+                right: 4.0,
+                bottom: 4.0,
+                left: 4.0,
+            })
+            .into()];
 
         for (status, file) in changes {
             let status_color = match status.as_str() {
@@ -74,7 +79,12 @@ pub fn view_git_panel<'a>(changes: &'a [(String, String)], width: f32) -> Elemen
 
             items.push(
                 container(row_item)
-                    .padding(iced::Padding { top: 3.0, right: 4.0, bottom: 3.0, left: 8.0 })
+                    .padding(iced::Padding {
+                        top: 3.0,
+                        right: 4.0,
+                        bottom: 3.0,
+                        left: 8.0,
+                    })
                     .width(Length::Fill)
                     .into(),
             );
@@ -86,7 +96,12 @@ pub fn view_git_panel<'a>(changes: &'a [(String, String)], width: f32) -> Elemen
     container(scrollable(content).height(Length::Fill))
         .width(Length::Fixed(width))
         .height(Length::Fill)
-        .padding(iced::Padding { top: 2.0, right: 2.0, bottom: 2.0, left: 4.0 })
+        .padding(iced::Padding {
+            top: 2.0,
+            right: 2.0,
+            bottom: 2.0,
+            left: 4.0,
+        })
         .style(sidebar_container_style)
         .into()
 }
@@ -121,9 +136,7 @@ fn view_empty_sidebar<'a>() -> Element<'a, Message> {
     container(
         column![
             text("No folder open").size(13).color(theme().text_muted),
-            text("Cmd+O to open")
-                .size(11)
-                .color(theme().text_placeholder),
+            text("Cmd+O to open").size(11).color(theme().text_placeholder),
         ]
         .spacing(4)
         .align_x(iced::Alignment::Center),
@@ -177,7 +190,7 @@ fn render_entries<'a>(
                 if is_expanded {
                     render_entries(children, tree, depth + 1, items);
                 }
-            }
+            },
             FileEntry::File { path, name } => {
                 let icon: Element<'_, Message> = icon_widget(get_file_icon(name));
 
@@ -201,7 +214,7 @@ fn render_entries<'a>(
                 .width(Length::Fill);
 
                 items.push(btn.into());
-            }
+            },
         }
     }
 }

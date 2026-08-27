@@ -2,8 +2,10 @@
 /// sidebar. Toggling a folder, selecting files/folder, and others
 /// are part of this file
 use std::collections::HashSet;
-use std::fs;
-use std::path::{Path, PathBuf};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
 
 /// This enum provides the values needed for a file to be registered and accessed
 ///
@@ -118,10 +120,10 @@ fn scan_directory(path: &Path) -> Vec<FileEntry> {
     entries.sort_by(|a, b| match (a, b) {
         (FileEntry::Directory { name: name_a, .. }, FileEntry::Directory { name: name_b, .. }) => {
             name_a.to_lowercase().cmp(&name_b.to_lowercase())
-        }
+        },
         (FileEntry::File { name: name_a, .. }, FileEntry::File { name: name_b, .. }) => {
             name_a.to_lowercase().cmp(&name_b.to_lowercase())
-        }
+        },
         (FileEntry::Directory { .. }, FileEntry::File { .. }) => std::cmp::Ordering::Less,
         (FileEntry::File { .. }, FileEntry::Directory { .. }) => std::cmp::Ordering::Greater,
     });

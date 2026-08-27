@@ -1,9 +1,10 @@
+use std::path::PathBuf;
+
 /// This file is responsible for starting up the process
 /// and defining as well as starting up the cli tool
 /// for ssh connection
 use clap::Parser;
 use iced::window;
-use std::path::PathBuf;
 
 mod app;
 mod autocomplete;
@@ -34,7 +35,7 @@ fn main() -> iced::Result {
                 std::process::exit(1);
             }
             Ok(())
-        }
+        },
         None => run_gui(cli.path),
     }
 }

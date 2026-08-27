@@ -1,9 +1,8 @@
+use std::{str::FromStr, sync::RwLock};
+
 use iced::Color;
 use iced_code_editor::theme::Style as CodeEditorStyle;
 use once_cell::sync::Lazy;
-use std::str::FromStr;
-use std::sync::RwLock;
-
 use syntect::highlighting::{
     Color as SynColor, FontStyle, ScopeSelectors, StyleModifier, Theme as SynTheme, ThemeItem,
     ThemeSettings,
@@ -25,40 +24,60 @@ pub const BORDER_RADIUS_TAB: f32 = 10.0;
 // ═══════════════════════════════════════════════════════════════════════════
 
 // Accent Colours
-#[allow(dead_code)] pub const ACCENT_WARM_1: Color = Color::from_rgb(0.961, 0.878, 0.863); // #f5e0dc
-#[allow(dead_code)] pub const ACCENT_WARM_2: Color = Color::from_rgb(0.949, 0.804, 0.804); // #f2cdcd
-#[allow(dead_code)] pub const ACCENT_PINK: Color = Color::from_rgb(0.961, 0.761, 0.906); // #f5c2e7
+#[allow(dead_code)]
+pub const ACCENT_WARM_1: Color = Color::from_rgb(0.961, 0.878, 0.863); // #f5e0dc
+#[allow(dead_code)]
+pub const ACCENT_WARM_2: Color = Color::from_rgb(0.949, 0.804, 0.804); // #f2cdcd
+#[allow(dead_code)]
+pub const ACCENT_PINK: Color = Color::from_rgb(0.961, 0.761, 0.906); // #f5c2e7
 pub const ACCENT_PURPLE: Color = Color::from_rgb(0.796, 0.651, 0.969); // #cba6f7
-#[allow(dead_code)] pub const ACCENT_RED: Color = Color::from_rgb(0.953, 0.545, 0.659); // #f38ba8
-#[allow(dead_code)] pub const ACCENT_DARK_RED: Color = Color::from_rgb(0.922, 0.627, 0.675); // #eba0ac
-#[allow(dead_code)] pub const ACCENT_ORANGE: Color = Color::from_rgb(0.980, 0.702, 0.529); // #fab387
-#[allow(dead_code)] pub const ACCENT_YELLOW: Color = Color::from_rgb(0.976, 0.886, 0.686); // #f9e2af
-#[allow(dead_code)] pub const ACCENT_GREEN: Color = Color::from_rgb(0.651, 0.890, 0.631); // #a6e3a1
-#[allow(dead_code)] pub const ACCENT_TEAL: Color = Color::from_rgb(0.580, 0.886, 0.835); // #94e2d5
-#[allow(dead_code)] pub const ACCENT_SKY: Color = Color::from_rgb(0.537, 0.863, 0.922); // #89dceb
-#[allow(dead_code)] pub const ACCENT_MID_BLUE: Color = Color::from_rgb(0.455, 0.780, 0.925); // #74c7ec
+#[allow(dead_code)]
+pub const ACCENT_RED: Color = Color::from_rgb(0.953, 0.545, 0.659); // #f38ba8
+#[allow(dead_code)]
+pub const ACCENT_DARK_RED: Color = Color::from_rgb(0.922, 0.627, 0.675); // #eba0ac
+#[allow(dead_code)]
+pub const ACCENT_ORANGE: Color = Color::from_rgb(0.980, 0.702, 0.529); // #fab387
+#[allow(dead_code)]
+pub const ACCENT_YELLOW: Color = Color::from_rgb(0.976, 0.886, 0.686); // #f9e2af
+#[allow(dead_code)]
+pub const ACCENT_GREEN: Color = Color::from_rgb(0.651, 0.890, 0.631); // #a6e3a1
+#[allow(dead_code)]
+pub const ACCENT_TEAL: Color = Color::from_rgb(0.580, 0.886, 0.835); // #94e2d5
+#[allow(dead_code)]
+pub const ACCENT_SKY: Color = Color::from_rgb(0.537, 0.863, 0.922); // #89dceb
+#[allow(dead_code)]
+pub const ACCENT_MID_BLUE: Color = Color::from_rgb(0.455, 0.780, 0.925); // #74c7ec
 pub const ACCENT_BLUE: Color = Color::from_rgb(0.537, 0.706, 0.980); // #89b4fa
 pub const ACCENT_SOFT_BLUE: Color = Color::from_rgb(0.706, 0.745, 0.996); // #b4befe
 
 // Text hierarchy
-#[allow(dead_code)] pub const TEXT_1: Color = Color::from_rgb(0.804, 0.839, 0.957); // #cdd6f4
-#[allow(dead_code)] pub const TEXT_2: Color = Color::from_rgb(0.729, 0.761, 0.871); // #bac2de
-#[allow(dead_code)] pub const TEXT_3: Color = Color::from_rgb(0.651, 0.678, 0.784); // #a6adc8
+#[allow(dead_code)]
+pub const TEXT_1: Color = Color::from_rgb(0.804, 0.839, 0.957); // #cdd6f4
+#[allow(dead_code)]
+pub const TEXT_2: Color = Color::from_rgb(0.729, 0.761, 0.871); // #bac2de
+#[allow(dead_code)]
+pub const TEXT_3: Color = Color::from_rgb(0.651, 0.678, 0.784); // #a6adc8
 
 // Overlay Layers
-#[allow(dead_code)] pub const OVERLAY_3: Color = Color::from_rgb(0.576, 0.600, 0.698); // #9399b2
+#[allow(dead_code)]
+pub const OVERLAY_3: Color = Color::from_rgb(0.576, 0.600, 0.698); // #9399b2
 pub const OVERLAY_2: Color = Color::from_rgb(0.498, 0.518, 0.612); // #7f849c
-#[allow(dead_code)] pub const OVERLAY_1: Color = Color::from_rgb(0.424, 0.439, 0.525); // #6c7086
+#[allow(dead_code)]
+pub const OVERLAY_1: Color = Color::from_rgb(0.424, 0.439, 0.525); // #6c7086
 
 // Surface Layers
-#[allow(dead_code)] pub const SURFACE_3: Color = Color::from_rgb(0.345, 0.357, 0.439); // #585b70
+#[allow(dead_code)]
+pub const SURFACE_3: Color = Color::from_rgb(0.345, 0.357, 0.439); // #585b70
 pub const SURFACE_2: Color = Color::from_rgb(0.271, 0.278, 0.353); // #45475a
-#[allow(dead_code)] pub const SURFACE_1: Color = Color::from_rgb(0.192, 0.196, 0.267); // #313244
+#[allow(dead_code)]
+pub const SURFACE_1: Color = Color::from_rgb(0.192, 0.196, 0.267); // #313244
 
 // Background Layers
 pub const BG_BASE: Color = Color::from_rgb(0.118, 0.118, 0.180); // #1e1e2e
-#[allow(dead_code)] pub const BG_MANTLE: Color = Color::from_rgb(0.094, 0.094, 0.145); // #181825
-#[allow(dead_code)] pub const BG_CRUST: Color = Color::from_rgb(0.067, 0.067, 0.106); // #11111b
+#[allow(dead_code)]
+pub const BG_MANTLE: Color = Color::from_rgb(0.094, 0.094, 0.145); // #181825
+#[allow(dead_code)]
+pub const BG_CRUST: Color = Color::from_rgb(0.067, 0.067, 0.106); // #11111b
 
 // ═══════════════════════════════════════════════════════════════════════════
 // ThemeColors – the struct the rest of the app consumes
@@ -267,15 +286,30 @@ fn editor_style(
         current_line_highlight,
         whitespace_color: line_number_color,
         indent_guide_color: gutter_border,
-        search_match_color: Color::from_rgba(scroller_color.r, scroller_color.g, scroller_color.b, 0.25),
+        search_match_color: Color::from_rgba(
+            scroller_color.r,
+            scroller_color.g,
+            scroller_color.b,
+            0.25,
+        ),
         search_match_current_color: Color::from_rgba(
             scroller_color.r,
             scroller_color.g,
             scroller_color.b,
             0.5,
         ),
-        selection_color: Color::from_rgba(scroller_color.r, scroller_color.g, scroller_color.b, 0.25),
-        bracket_match_color: Color::from_rgba(scroller_color.r, scroller_color.g, scroller_color.b, 0.35),
+        selection_color: Color::from_rgba(
+            scroller_color.r,
+            scroller_color.g,
+            scroller_color.b,
+            0.25,
+        ),
+        bracket_match_color: Color::from_rgba(
+            scroller_color.r,
+            scroller_color.g,
+            scroller_color.b,
+            0.35,
+        ),
         ime_preedit_background_color: current_line_highlight,
     }
 }
@@ -384,7 +418,7 @@ pub fn parse_hex_color(input: &str) -> Result<Color, String> {
             let b = u8::from_str_radix(&hex[4..6], 16)
                 .map_err(|_| format!("invalid color: {input}"))?;
             Ok(Color::from_rgb8(r, g, b))
-        }
+        },
         8 => {
             let r = u8::from_str_radix(&hex[0..2], 16)
                 .map_err(|_| format!("invalid color: {input}"))?;
@@ -395,7 +429,7 @@ pub fn parse_hex_color(input: &str) -> Result<Color, String> {
             let a = u8::from_str_radix(&hex[6..8], 16)
                 .map_err(|_| format!("invalid color: {input}"))?;
             Ok(Color::from_rgba8(r, g, b, a as f32 / 255.0))
-        }
+        },
         _ => Err(format!("expected #RRGGBB or #RRGGBBAA, got: {input}")),
     }
 }

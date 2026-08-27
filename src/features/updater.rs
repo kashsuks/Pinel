@@ -25,14 +25,7 @@ pub async fn check_for_update() -> Option<UpdateInfo> {
         .build()
         .ok()?;
 
-    let release: GithubRelease = client
-        .get(RELEASES_URL)
-        .send()
-        .await
-        .ok()?
-        .json()
-        .await
-        .ok()?;
+    let release: GithubRelease = client.get(RELEASES_URL).send().await.ok()?.json().await.ok()?;
 
     let latest = release.tag_name.trim_start_matches('v');
 

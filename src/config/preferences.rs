@@ -1,7 +1,6 @@
+use std::{fs, io::Write, path::PathBuf};
+
 use super::theme_manager::{get_config_dir, load_theme, ThemeColors};
-use std::fs;
-use std::io::Write;
-use std::path::PathBuf;
 
 #[derive(Debug, Clone)]
 pub struct EditorPreferences {
@@ -75,7 +74,7 @@ pub fn load_preferences() -> EditorPreferences {
         (None, Some(prefs)) => {
             let _ = save_preferences_to_path(&prefs, &primary);
             prefs
-        }
+        },
         (Some(primary_prefs), Some(legacy_prefs)) => {
             if legacy_is_newer_than_primary(legacy.as_ref(), &primary) {
                 let _ = save_preferences_to_path(&legacy_prefs, &primary);
@@ -83,23 +82,18 @@ pub fn load_preferences() -> EditorPreferences {
             } else {
                 primary_prefs
             }
-        }
+        },
         (None, None) => {
             let prefs = EditorPreferences::default();
             let _ = save_preferences_to_path(&prefs, &primary);
             prefs
-        }
+        },
     }
 }
 
 fn legacy_preferences_path() -> Option<PathBuf> {
     let home = std::env::var("HOME").ok()?;
-    Some(
-        PathBuf::from(home)
-            .join(".config")
-            .join("pinel")
-            .join("preferences.lua"),
-    )
+    Some(PathBuf::from(home).join(".config").join("pinel").join("preferences.lua"))
 }
 
 fn parse_preferences(content: &str) -> EditorPreferences {
@@ -111,60 +105,56 @@ fn parse_preferences(content: &str) -> EditorPreferences {
         }
         if let Some((key, value)) = line.split_once('=') {
             let key = key.trim();
-            let value = value
-                .trim()
-                .trim_end_matches(',')
-                .trim_matches('"')
-                .trim_matches('\'');
+            let value = value.trim().trim_end_matches(',').trim_matches('"').trim_matches('\'');
             match key {
                 "tab_size" => {
                     if let Ok(size) = value.parse::<usize>() {
                         prefs.tab_size = size.clamp(1, 16);
                     }
-                }
+                },
                 "use_spaces" => {
                     prefs.use_spaces = value == "true";
-                }
+                },
                 "auto_indent_enabled" => {
                     prefs.auto_indent_enabled = value == "true";
-                }
+                },
                 "autosave_enabled" => {
                     prefs.autosave_enabled = value == "true";
-                }
+                },
                 "autosave_interval_ms" => {
                     if let Ok(interval) = value.parse::<u64>() {
                         prefs.autosave_interval_ms = interval.clamp(30, 1000);
                     }
-                }
+                },
                 "theme_name" => {
                     prefs.theme_name = value.to_string();
-                }
+                },
                 "window_width" => {
                     if let Ok(width) = value.parse::<f32>() {
                         prefs.window_width = width.clamp(640.0, 10000.0);
                     }
-                }
+                },
                 "window_height" => {
                     if let Ok(height) = value.parse::<f32>() {
                         prefs.window_height = height.clamp(480.0, 10000.0);
                     }
-                }
+                },
                 "line_number_width" => {
                     if let Ok(w) = value.parse::<f32>() {
                         prefs.line_number_width = w.clamp(20.0, 120.0);
                     }
-                }
+                },
                 "first_launch" => {
                     prefs.first_launch = value == "true";
-                }
+                },
                 "tab_drag_floating" => {
                     prefs.tab_drag_floating = value == "true";
-                }
+                },
                 #[cfg(feature = "unstable-comet")]
                 "developer_mode" => {
                     prefs.developer_mode = value == "true";
-                }
-                _ => {}
+                },
+                _ => {},
             }
         }
     }

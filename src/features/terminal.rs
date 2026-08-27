@@ -1,5 +1,7 @@
-use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::{
+    path::{Path, PathBuf},
+    process::Command,
+};
 
 /// External terminal launcher - opens the OS-native terminal
 /// in the current working directory or last opened directory.
@@ -79,11 +81,7 @@ impl Terminal {
     fn open_windows_terminal(&self, directory: &Path) -> std::io::Result<()> {
         let dir_str = directory.display().to_string();
 
-        if Command::new("wt.exe")
-            .args(["-d", &dir_str])
-            .spawn()
-            .is_ok()
-        {
+        if Command::new("wt.exe").args(["-d", &dir_str]).spawn().is_ok() {
             return Ok(());
         }
 
@@ -95,9 +93,7 @@ impl Terminal {
             return Ok(());
         }
 
-        Command::new("cmd.exe")
-            .args(["/K", "cd", "/D", &dir_str])
-            .spawn()?;
+        Command::new("cmd.exe").args(["/K", "cd", "/D", &dir_str]).spawn()?;
 
         Ok(())
     }

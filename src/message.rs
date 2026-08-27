@@ -1,10 +1,12 @@
+use std::path::PathBuf;
+
+use iced_code_editor::LspOverlayMessage;
+use iced_term::Event as TerminalEvent;
+
 /// This file is responsible for internal messages
 /// Used to send internal flags and data transfer to trigger
 /// Other instances of Message types.
 use crate::features::search::SearchResult;
-use iced_code_editor::LspOverlayMessage;
-use iced_term::Event as TerminalEvent;
-use std::path::PathBuf;
 
 #[derive(Debug, Clone)]
 #[allow(dead_code)]

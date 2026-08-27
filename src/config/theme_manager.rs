@@ -1,6 +1,4 @@
-use std::fs;
-use std::io::Write;
-use std::path::PathBuf;
+use std::{fs, io::Write, path::PathBuf};
 
 #[derive(Debug, Clone)]
 pub struct ThemeColors {
@@ -175,7 +173,7 @@ return {{
                     "base" => theme.base = value,
                     "mantle" => theme.mantle = value,
                     "crust" => theme.crust = value,
-                    _ => {}
+                    _ => {},
                 }
             }
         }

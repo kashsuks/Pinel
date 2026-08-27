@@ -1,7 +1,8 @@
 //! Window event subscription handlers.
 
-use crate::message::Message;
 use iced::{window, Event, Subscription};
+
+use crate::message::Message;
 
 /// Emits window resize messages to persist size preferences.
 pub fn resizes() -> Subscription<Message> {

@@ -1,6 +1,9 @@
+use std::{
+    path::{Path, PathBuf},
+    process::{Command, Output},
+};
+
 use anyhow::{bail, Context, Result};
-use std::path::{Path, PathBuf};
-use std::process::{Command, Output};
 
 #[derive(Debug, Clone)]
 pub struct RemoteEntry {

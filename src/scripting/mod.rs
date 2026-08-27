@@ -1,7 +1,10 @@
+use std::{
+    fs,
+    path::PathBuf,
+    sync::{Arc, Mutex},
+};
+
 use mlua::{Lua, Result as LuaResult};
-use std::fs;
-use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
 
 #[derive(Debug, Clone)]
 pub enum EditorCommand {
@@ -35,7 +38,7 @@ pub fn load_startup_script() -> StartupScriptLoad {
                 commands: Vec::new(),
                 error: Some(err.to_string()),
             };
-        }
+        },
     };
 
     match eval_script(&source) {
@@ -66,10 +69,7 @@ pub fn eval_script(source: &str) -> Result<Vec<EditorCommand>, String> {
         let commands = Arc::clone(&commands);
         let f = lua
             .create_function(move |_, name: String| -> LuaResult<()> {
-                commands
-                    .lock()
-                    .unwrap()
-                    .push(EditorCommand::UseBuiltinTheme(name));
+                commands.lock().unwrap().push(EditorCommand::UseBuiltinTheme(name));
                 Ok(())
             })
             .map_err(|e| e.to_string())?;
@@ -80,10 +80,7 @@ pub fn eval_script(source: &str) -> Result<Vec<EditorCommand>, String> {
         let commands = Arc::clone(&commands);
         let f = lua
             .create_function(move |_, (name, value): (String, String)| -> LuaResult<()> {
-                commands
-                    .lock()
-                    .unwrap()
-                    .push(EditorCommand::SetThemeColor { name, value });
+                commands.lock().unwrap().push(EditorCommand::SetThemeColor { name, value });
                 Ok(())
             })
             .map_err(|e| e.to_string())?;
@@ -94,10 +91,7 @@ pub fn eval_script(source: &str) -> Result<Vec<EditorCommand>, String> {
         let commands = Arc::clone(&commands);
         let f = lua
             .create_function(move |_, visible: bool| -> LuaResult<()> {
-                commands
-                    .lock()
-                    .unwrap()
-                    .push(EditorCommand::SetSidebarVisible(visible));
+                commands.lock().unwrap().push(EditorCommand::SetSidebarVisible(visible));
                 Ok(())
             })
             .map_err(|e| e.to_string())?;
@@ -108,10 +102,7 @@ pub fn eval_script(source: &str) -> Result<Vec<EditorCommand>, String> {
         let commands = Arc::clone(&commands);
         let f = lua
             .create_function(move |_, width: f32| -> LuaResult<()> {
-                commands
-                    .lock()
-                    .unwrap()
-                    .push(EditorCommand::SetSidebarWidth(width));
+                commands.lock().unwrap().push(EditorCommand::SetSidebarWidth(width));
                 Ok(())
             })
             .map_err(|e| e.to_string())?;
@@ -120,9 +111,7 @@ pub fn eval_script(source: &str) -> Result<Vec<EditorCommand>, String> {
 
     pinel.set("theme", theme).map_err(|e| e.to_string())?;
     pinel.set("ui", ui).map_err(|e| e.to_string())?;
-    lua.globals()
-        .set("pinel", pinel)
-        .map_err(|e| e.to_string())?;
+    lua.globals().set("pinel", pinel).map_err(|e| e.to_string())?;
 
     lua.load(source).exec().map_err(|e| e.to_string())?;
 

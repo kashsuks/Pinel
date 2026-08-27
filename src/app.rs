@@ -3,39 +3,44 @@
 //! This module defines [`App`] and splits its behavior into focused submodules:
 //! event updates, subscriptions, commands, and view builders.
 
-use frostmark::MarkState;
-use iced::keyboard::Modifiers;
-use iced::widget::{
-    button, column, container, markdown, mouse_area, row, scrollable, stack, text, text_input,
-};
-use iced::window;
-use iced::{Background, Color, Element, Length, Subscription};
-use iced_code_editor::CodeEditor;
-use iced_term::Terminal as IcedTerminal;
-use std::collections::HashMap;
 #[cfg(feature = "unstable-comet")]
 use std::collections::VecDeque;
-use std::path::PathBuf;
-use std::time::{Duration, Instant};
-
-use crate::autocomplete::engine::Autocomplete;
-use crate::config::preferences::{self as prefs, EditorPreferences};
-use crate::features::command_input::CommandInput;
-use crate::features::command_palette::CommandPalette;
-use crate::features::file_tree::FileTree;
-use crate::features::find_replace::FindReplace;
-use crate::features::fuzzy_finder::FuzzyFinder;
-use crate::features::terminal::Terminal;
-use crate::features::updater::UpdateInfo;
-use crate::message::Message;
-use crate::scripting::{self, EditorCommand};
-use crate::theme::*;
-use crate::ui::{
-    activity_panel_separator_style, editor_container_style, empty_editor, file_finder_item_style,
-    file_finder_panel_style, search_input_style, search_panel_style, sidebar_editor_separator_style,
-    status_bar_style, tab_button_style, tab_close_button_style, tree_button_style, view_sidebar,
+use std::{
+    collections::HashMap,
+    path::PathBuf,
+    time::{Duration, Instant},
 };
-use crate::wakatime::{self, WakaTimeConfig};
+
+use frostmark::MarkState;
+use iced::{
+    keyboard::Modifiers,
+    widget::{
+        button, column, container, markdown, mouse_area, row, scrollable, stack, text, text_input,
+    },
+    window, Background, Color, Element, Length, Subscription,
+};
+use iced_code_editor::CodeEditor;
+use iced_term::Terminal as IcedTerminal;
+
+use crate::{
+    autocomplete::engine::Autocomplete,
+    config::preferences::{self as prefs, EditorPreferences},
+    features::{
+        command_input::CommandInput, command_palette::CommandPalette, file_tree::FileTree,
+        find_replace::FindReplace, fuzzy_finder::FuzzyFinder, terminal::Terminal,
+        updater::UpdateInfo,
+    },
+    message::Message,
+    scripting::{self, EditorCommand},
+    theme::*,
+    ui::{
+        activity_panel_separator_style, editor_container_style, empty_editor,
+        file_finder_item_style, file_finder_panel_style, search_input_style, search_panel_style,
+        sidebar_editor_separator_style, status_bar_style, tab_button_style, tab_close_button_style,
+        tree_button_style, view_sidebar,
+    },
+    wakatime::{self, WakaTimeConfig},
+};
 
 mod commands;
 mod lifecycle;
@@ -255,9 +260,7 @@ impl Default for App {
                 crate::theme::set_theme(t);
                 "Pinel Blueberry Dark".to_string()
             } else {
-                let found = crate::theme::BUILTIN_THEMES
-                    .iter()
-                    .find(|&&t| t == name.as_str());
+                let found = crate::theme::BUILTIN_THEMES.iter().find(|&&t| t == name.as_str());
                 if let Some(&theme_name) = found {
                     let t = crate::theme::builtin_theme(theme_name);
                     crate::theme::set_theme(t);
@@ -322,7 +325,7 @@ impl Default for App {
                     Err(err) => {
                         eprintln!("Failed to initialize embedded terminal: {err}");
                         None
-                    }
+                    },
                 }
             },
             terminal_open: false,
@@ -407,10 +410,10 @@ impl Default for App {
                         app.push_developer_log(format!("lua> {line}"));
                     }
                     app.push_developer_log("startup lua source end".to_string());
-                }
+                },
                 None => {
                     app.push_developer_log("startup lua source not found".to_string());
-                }
+                },
             }
 
             if let Some(error) = &startup_script.error {
@@ -464,9 +467,7 @@ impl App {
 
         // iced-code-editor builtin indentation
         let indent_style = if self.editor_preferences.use_spaces {
-            iced_code_editor::IndentStyle::Spaces(
-                self.editor_preferences.tab_size.clamp(1, 8) as u8
-            )
+            iced_code_editor::IndentStyle::Spaces(self.editor_preferences.tab_size.clamp(1, 8) as u8)
         } else {
             iced_code_editor::IndentStyle::Tab
         };
@@ -488,9 +489,7 @@ impl App {
 
     pub(super) fn apply_indent_style_to_tabs(&mut self) {
         let indent_style = if self.editor_preferences.use_spaces {
-            iced_code_editor::IndentStyle::Spaces(
-                self.editor_preferences.tab_size.clamp(1, 8) as u8
-            )
+            iced_code_editor::IndentStyle::Spaces(self.editor_preferences.tab_size.clamp(1, 8) as u8)
         } else {
             iced_code_editor::IndentStyle::Tab
         };
@@ -520,14 +519,14 @@ impl App {
                 self.apply_editor_theme_to_tabs();
                 self.active_theme_name = name.clone();
                 self.editor_preferences.theme_name = name;
-            }
+            },
             EditorCommand::SetThemeColor { name, value } => {
                 let color = match crate::theme::parse_hex_color(&value) {
                     Ok(color) => color,
                     Err(err) => {
                         eprintln!("Lua theme error: {err}");
                         return;
-                    }
+                    },
                 };
 
                 let mut current = crate::theme::theme().clone();
@@ -540,13 +539,13 @@ impl App {
                 self.apply_editor_theme_to_tabs();
                 self.active_theme_name = "Custom (init.lua)".to_string();
                 self.editor_preferences.theme_name = "Custom (init.lua)".to_string();
-            }
+            },
             EditorCommand::SetSidebarVisible(visible) => {
                 self.sidebar_visible = visible;
-            }
+            },
             EditorCommand::SetSidebarWidth(width) => {
                 self.sidebar_width = width.clamp(SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH);
-            }
+            },
         }
     }
 }

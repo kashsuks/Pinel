@@ -1,10 +1,11 @@
+use std::collections::HashSet;
+
 use crate::autocomplete::{
     context::CompletionContext,
     language::LanguageDefinitions,
     scoring::FuzzyScorer,
     types::{Suggestion, SuggestionKind},
 };
-use std::collections::HashSet;
 
 /// Main autocomplete engine with fuzzy matching, context awareness,
 /// and language-specific suggestions.
@@ -111,11 +112,7 @@ impl Autocomplete {
             return SuggestionKind::Function;
         }
 
-        if identifier
-            .chars()
-            .next()
-            .is_some_and(|c| c.is_uppercase())
-        {
+        if identifier.chars().next().is_some_and(|c| c.is_uppercase()) {
             return SuggestionKind::Type;
         }
 

@@ -1,6 +1,7 @@
-use super::*;
 use frostmark::MarkWidget;
 use iced::widget::column;
+
+use super::*;
 
 impl App {
     pub(super) fn view_tab_bar(&self) -> Element<'_, Message> {
@@ -151,7 +152,8 @@ impl App {
         }
 
         let pill = container(
-            container(row(tabs).spacing(2)).align_y(iced::Alignment::Center)
+            container(row(tabs).spacing(2))
+                .align_y(iced::Alignment::Center)
                 .padding(iced::Padding {
                     top: 3.0,
                     right: 3.0,
@@ -199,18 +201,14 @@ impl App {
 
             for result in &self.search_results {
                 result_items.push(
-                    container(
-                        text(&result.file_name)
-                            .size(11)
-                            .color(theme().text_secondary),
-                    )
-                    .padding(iced::Padding {
-                        top: 6.0,
-                        right: 6.0,
-                        bottom: 2.0,
-                        left: 6.0,
-                    })
-                    .into(),
+                    container(text(&result.file_name).size(11).color(theme().text_secondary))
+                        .padding(iced::Padding {
+                            top: 6.0,
+                            right: 6.0,
+                            bottom: 2.0,
+                            left: 6.0,
+                        })
+                        .into(),
                 );
 
                 for m in result.matches.iter().take(3) {
@@ -338,18 +336,18 @@ impl App {
                                     SuggestionKind::Keyword => Color::from_rgb(0.796, 0.651, 0.969),
                                     SuggestionKind::Function => {
                                         Color::from_rgb(0.000, 0.663, 1.000)
-                                    }
+                                    },
                                     SuggestionKind::Method => Color::from_rgb(0.537, 0.863, 0.922),
                                     SuggestionKind::Type => Color::from_rgb(0.976, 0.886, 0.686),
                                     SuggestionKind::Constant => {
                                         Color::from_rgb(0.976, 0.886, 0.686)
-                                    }
+                                    },
                                     SuggestionKind::Variable => {
                                         Color::from_rgb(0.706, 0.745, 0.996)
-                                    }
+                                    },
                                     SuggestionKind::Property => {
                                         Color::from_rgb(0.000, 0.663, 1.000)
-                                    }
+                                    },
                                     SuggestionKind::Module => Color::from_rgb(0.537, 0.863, 0.922),
                                     SuggestionKind::Macro => Color::from_rgb(0.000, 1.000, 0.824),
                                     SuggestionKind::Snippet => Color::from_rgb(0.976, 0.886, 0.686),
@@ -364,12 +362,8 @@ impl App {
                             let mut items: Vec<Element<'_, Message>> = Vec::new();
                             let visible_count = self.autocomplete.suggestions.len().min(8);
 
-                            for (i, suggestion) in self
-                                .autocomplete
-                                .suggestions
-                                .iter()
-                                .take(visible_count)
-                                .enumerate()
+                            for (i, suggestion) in
+                                self.autocomplete.suggestions.iter().take(visible_count).enumerate()
                             {
                                 let is_selected = i == self.autocomplete.selected_index;
                                 let ic = kind_color(&suggestion.kind);
@@ -552,7 +546,7 @@ impl App {
                         }
 
                         return editor_stack;
-                    }
+                    },
                     TabKind::Preview { md_items } => {
                         return scrollable(
                             markdown::view(
@@ -565,7 +559,7 @@ impl App {
                         )
                         .height(Length::Fill)
                         .into();
-                    }
+                    },
                     TabKind::Image { handle } => {
                         return container(
                             scrollable(
@@ -588,7 +582,7 @@ impl App {
                             ..Default::default()
                         })
                         .into();
-                    }
+                    },
                     #[cfg(feature = "video")]
                     TabKind::Video { player } => {
                         return container(
@@ -608,9 +602,13 @@ impl App {
                                 container(
                                     row![
                                         button(
-                                            text(if player.paused() { "▶" } else { "⏸" })
-                                                .size(14)
-                                                .color(theme().text_primary)
+                                            text(if player.paused() {
+                                                "▶"
+                                            } else {
+                                                "⏸"
+                                            })
+                                            .size(14)
+                                            .color(theme().text_primary)
                                         )
                                         .on_press(Message::VideoTogglePause)
                                         .style(|_t, _s| button::Style {
@@ -667,7 +665,7 @@ impl App {
                             ..Default::default()
                         })
                         .into();
-                    }
+                    },
                     TabKind::Audio {
                         playing,
                         duration_secs,
@@ -687,16 +685,17 @@ impl App {
                             format!("{m}:{s:02}")
                         };
 
-                        let file_name = file_path
-                            .file_name()
-                            .unwrap_or_default()
-                            .to_string_lossy()
-                            .to_string();
+                        let file_name =
+                            file_path.file_name().unwrap_or_default().to_string_lossy().to_string();
 
                         let play_pause_btn = button(
-                            text(if *playing { "⏸  Pause" } else { "▶  Play" })
-                                .size(14)
-                                .color(theme().text_primary),
+                            text(if *playing {
+                                "⏸  Pause"
+                            } else {
+                                "▶  Play"
+                            })
+                            .size(14)
+                            .color(theme().text_primary),
                         )
                         .on_press(if *playing {
                             Message::AudioPause
@@ -789,9 +788,7 @@ impl App {
                                         .size(12)
                                         .color(theme().text_muted),
                                     iced::widget::Space::new().width(Length::Fill),
-                                    text(fmt_time(*duration_secs))
-                                        .size(12)
-                                        .color(theme().text_dim),
+                                    text(fmt_time(*duration_secs)).size(12).color(theme().text_dim),
                                 ]
                                 .width(Length::Fill),
                                 // Controls
@@ -813,7 +810,7 @@ impl App {
                             ..Default::default()
                         })
                         .into();
-                    }
+                    },
                 }
             }
         }
@@ -854,13 +851,14 @@ impl App {
                 mouse_area(iced_term::TerminalView::show(term).map(Message::TerminalEvent))
                     .on_press(Message::FocusTerminal);
 
-            let body = container(terminal_view)
-                .width(Length::Fill)
-                .height(Length::Fill)
-                .style(|_theme| container::Style {
-                    background: Some(Background::Color(theme().bg_editor)),
-                    ..Default::default()
-                });
+            let body =
+                container(terminal_view)
+                    .width(Length::Fill)
+                    .height(Length::Fill)
+                    .style(|_theme| container::Style {
+                        background: Some(Background::Color(theme().bg_editor)),
+                        ..Default::default()
+                    });
 
             return container(column![header, body].spacing(0))
                 .width(Length::Fill)
@@ -868,15 +866,11 @@ impl App {
                 .into();
         }
 
-        container(
-            text("Embedded terminal unavailable")
-                .size(12)
-                .color(theme().text_dim),
-        )
-        .padding(10)
-        .width(Length::Fill)
-        .height(height)
-        .into()
+        container(text("Embedded terminal unavailable").size(12).color(theme().text_dim))
+            .padding(10)
+            .width(Length::Fill)
+            .height(height)
+            .into()
     }
 
     pub(super) fn view_status_bar(&self) -> Element<'_, Message> {
@@ -903,9 +897,7 @@ impl App {
             text(format!("Ln {}, Col {}", self.cursor_line, self.cursor_col))
                 .size(12)
                 .color(theme().text_placeholder),
-            text(current_line_diag)
-                .size(12)
-                .color(theme().text_secondary),
+            text(current_line_diag).size(12).color(theme().text_secondary),
         ]
         .spacing(8)
         .align_y(iced::Alignment::Center);
@@ -929,13 +921,7 @@ impl App {
         let folder_name = self
             .file_tree
             .as_ref()
-            .map(|t| {
-                t.root
-                    .file_name()
-                    .unwrap_or_default()
-                    .to_string_lossy()
-                    .to_string()
-            })
+            .map(|t| t.root.file_name().unwrap_or_default().to_string_lossy().to_string())
             .unwrap_or_else(|| String::from("No folder open"));
 
         container(

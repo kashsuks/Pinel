@@ -1,7 +1,6 @@
-use fuzzy_matcher::skim::SkimMatcherV2;
-use fuzzy_matcher::FuzzyMatcher;
-use std::cmp::Reverse;
-use std::path::PathBuf;
+use std::{cmp::Reverse, path::PathBuf};
+
+use fuzzy_matcher::{skim::SkimMatcherV2, FuzzyMatcher};
 
 #[derive(Debug, Clone)]
 pub struct SearchMatch {
@@ -17,17 +16,14 @@ pub struct SearchResult {
 }
 
 pub fn search_workspace(root: &PathBuf, query: &str) -> Vec<SearchResult> {
-    use ignore::WalkBuilder;
     use std::fs;
+
+    use ignore::WalkBuilder;
 
     let query_lower = query.to_lowercase();
     let mut results = Vec::new();
 
-    let walker = WalkBuilder::new(root)
-        .hidden(true)
-        .git_ignore(true)
-        .git_global(true)
-        .build();
+    let walker = WalkBuilder::new(root).hidden(true).git_ignore(true).git_global(true).build();
 
     for entry in walker.flatten() {
         let path = entry.path();
@@ -53,11 +49,7 @@ pub fn search_workspace(root: &PathBuf, query: &str) -> Vec<SearchResult> {
         if !matches.is_empty() {
             results.push(SearchResult {
                 path: path.to_path_buf(),
-                file_name: path
-                    .file_name()
-                    .unwrap_or_default()
-                    .to_string_lossy()
-                    .to_string(),
+                file_name: path.file_name().unwrap_or_default().to_string_lossy().to_string(),
                 matches,
             });
         }
@@ -70,11 +62,7 @@ pub fn collect_all_files(root: &PathBuf) -> Vec<(String, PathBuf)> {
 
     let mut files = Vec::new();
 
-    let walker = WalkBuilder::new(root)
-        .hidden(true)
-        .git_ignore(true)
-        .git_global(true)
-        .build();
+    let walker = WalkBuilder::new(root).hidden(true).git_ignore(true).git_global(true).build();
 
     for entry in walker.flatten() {
         let path = entry.path();
@@ -82,11 +70,7 @@ pub fn collect_all_files(root: &PathBuf) -> Vec<(String, PathBuf)> {
             continue;
         }
 
-        let display = path
-            .strip_prefix(root)
-            .unwrap_or(path)
-            .to_string_lossy()
-            .to_string();
+        let display = path.strip_prefix(root).unwrap_or(path).to_string_lossy().to_string();
 
         files.push((display, path.to_path_buf()));
     }

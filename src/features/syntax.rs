@@ -1,16 +1,18 @@
 #![allow(dead_code)]
 
-use iced::advanced::text::highlighter;
-use iced::advanced::text::highlighter::Highlighter as IcedHighlighter;
-use iced::{Color, Font};
+use std::{ops::Range, sync::Arc};
 
-use syntect::highlighting::{
-    HighlightIterator, HighlightState, Highlighter as SyntectHighlighter, Style, Theme as SynTheme,
+use iced::{
+    advanced::text::{highlighter, highlighter::Highlighter as IcedHighlighter},
+    Color, Font,
 };
-use syntect::parsing::{ParseState, ScopeStack, SyntaxSet};
-
-use std::ops::Range;
-use std::sync::Arc;
+use syntect::{
+    highlighting::{
+        HighlightIterator, HighlightState, Highlighter as SyntectHighlighter, Style,
+        Theme as SynTheme,
+    },
+    parsing::{ParseState, ScopeStack, SyntaxSet},
+};
 
 use crate::theme::theme;
 
@@ -106,9 +108,7 @@ impl IcedHighlighter for VscodeHighlighter {
 
         let line_with_newline = format!("{}\n", line);
 
-        let ops = parse_state
-            .parse_line(&line_with_newline, &self.syntax_set)
-            .unwrap_or_default();
+        let ops = parse_state.parse_line(&line_with_newline, &self.syntax_set).unwrap_or_default();
 
         let ranges: Vec<(Style, &str)> =
             HighlightIterator::new(&mut highlight_state, &ops, &line_with_newline, &highlighter)

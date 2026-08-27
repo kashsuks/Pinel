@@ -1,5 +1,6 @@
-use super::*;
 use iced::widget::column;
+
+use super::*;
 
 impl App {
     /// Returns a window-level ghost element for floating tab drag, or None when not dragging.
@@ -7,7 +8,8 @@ impl App {
         if !self.editor_preferences.tab_drag_floating {
             return None;
         }
-        let (drag_idx, (cursor_x, cursor_y)) = match (self.tab_drag_index, self.tab_drag_cursor_pos) {
+        let (drag_idx, (cursor_x, cursor_y)) = match (self.tab_drag_index, self.tab_drag_cursor_pos)
+        {
             (Some(i), Some(pos)) => (i, pos),
             _ => return None,
         };
@@ -25,9 +27,7 @@ impl App {
             button(
                 row![
                     text(&tab.name).size(12).color(theme().text_primary),
-                    button(close_icon)
-                        .style(tab_close_button_style)
-                        .padding(2),
+                    button(close_icon).style(tab_close_button_style).padding(2),
                 ]
                 .spacing(8)
                 .align_y(iced::Alignment::Center),
@@ -93,28 +93,22 @@ impl App {
                 ..Default::default()
             });
 
-        let label = text("Preferences saved")
-            .size(13)
-            .color(Color::from_rgb(0.85, 0.97, 0.88));
+        let label = text("Preferences saved").size(13).color(Color::from_rgb(0.85, 0.97, 0.88));
 
-        let dismiss_btn = button(
-            text("×")
-                .size(14)
-                .color(Color::from_rgba(0.65, 0.90, 0.70, 0.7)),
-        )
-        .on_press(Message::DismissNotification)
-        .style(|_theme, _status| button::Style {
-            background: None,
-            border: iced::Border::default(),
-            text_color: Color::from_rgba(0.65, 0.90, 0.70, 0.7),
-            ..Default::default()
-        })
-        .padding(iced::Padding {
-            top: 0.0,
-            right: 4.0,
-            bottom: 0.0,
-            left: 8.0,
-        });
+        let dismiss_btn = button(text("×").size(14).color(Color::from_rgba(0.65, 0.90, 0.70, 0.7)))
+            .on_press(Message::DismissNotification)
+            .style(|_theme, _status| button::Style {
+                background: None,
+                border: iced::Border::default(),
+                text_color: Color::from_rgba(0.65, 0.90, 0.70, 0.7),
+                ..Default::default()
+            })
+            .padding(iced::Padding {
+                top: 0.0,
+                right: 4.0,
+                bottom: 0.0,
+                left: 8.0,
+            });
 
         let toast_inner = row![check_circle, label, dismiss_btn]
             .spacing(10)
@@ -166,51 +160,43 @@ impl App {
             .size(13)
             .color(Color::from_rgb(0.85, 0.93, 1.0));
 
-        let open_btn = button(
-            text("Open release page →")
-                .size(12)
-                .color(Color::from_rgb(0.55, 0.75, 1.0)),
-        )
-        .on_press(Message::DismissUpdateBanner)
-        .style(|_theme, _status| button::Style {
-            background: Some(Background::Color(Color::from_rgba(0.30, 0.55, 1.0, 0.15))),
-            border: iced::Border {
-                color: Color::from_rgba(0.40, 0.65, 1.0, 0.35),
-                width: 1.0,
-                radius: 6.0.into(),
-            },
-            text_color: Color::from_rgb(0.55, 0.75, 1.0),
-            ..Default::default()
-        })
-        .padding(iced::Padding {
-            top: 5.0,
-            right: 12.0,
-            bottom: 5.0,
-            left: 12.0,
-        });
+        let open_btn =
+            button(text("Open release page →").size(12).color(Color::from_rgb(0.55, 0.75, 1.0)))
+                .on_press(Message::DismissUpdateBanner)
+                .style(|_theme, _status| button::Style {
+                    background: Some(Background::Color(Color::from_rgba(0.30, 0.55, 1.0, 0.15))),
+                    border: iced::Border {
+                        color: Color::from_rgba(0.40, 0.65, 1.0, 0.35),
+                        width: 1.0,
+                        radius: 6.0.into(),
+                    },
+                    text_color: Color::from_rgb(0.55, 0.75, 1.0),
+                    ..Default::default()
+                })
+                .padding(iced::Padding {
+                    top: 5.0,
+                    right: 12.0,
+                    bottom: 5.0,
+                    left: 12.0,
+                });
 
-        let dismiss_btn = button(
-            text("×")
-                .size(14)
-                .color(Color::from_rgba(0.65, 0.80, 1.0, 0.7)),
-        )
-        .on_press(Message::DismissUpdateBanner)
-        .style(|_theme, _status| button::Style {
-            background: None,
-            border: iced::Border::default(),
-            text_color: Color::from_rgba(0.65, 0.80, 1.0, 0.7),
-            ..Default::default()
-        })
-        .padding(iced::Padding {
-            top: 0.0,
-            right: 4.0,
-            bottom: 0.0,
-            left: 8.0,
-        });
+        let dismiss_btn = button(text("×").size(14).color(Color::from_rgba(0.65, 0.80, 1.0, 0.7)))
+            .on_press(Message::DismissUpdateBanner)
+            .style(|_theme, _status| button::Style {
+                background: None,
+                border: iced::Border::default(),
+                text_color: Color::from_rgba(0.65, 0.80, 1.0, 0.7),
+                ..Default::default()
+            })
+            .padding(iced::Padding {
+                top: 0.0,
+                right: 4.0,
+                bottom: 0.0,
+                left: 8.0,
+            });
 
-        let banner_inner = row![label, open_btn, dismiss_btn]
-            .spacing(12)
-            .align_y(iced::Alignment::Center);
+        let banner_inner =
+            row![label, open_btn, dismiss_btn].spacing(12).align_y(iced::Alignment::Center);
 
         let banner = container(banner_inner)
             .padding(iced::Padding {
@@ -365,9 +351,7 @@ impl App {
             .style(search_input_style)
             .width(Length::Fill);
 
-        let match_info = text(self.find_replace.match_status())
-            .size(11)
-            .color(theme().text_dim);
+        let match_info = text(self.find_replace.match_status()).size(11).color(theme().text_dim);
 
         let case_btn = button(
             text(if self.find_replace.case_sensitive {

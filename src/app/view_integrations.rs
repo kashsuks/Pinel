@@ -1,5 +1,6 @@
-use super::*;
 use iced::widget::column;
+
+use super::*;
 
 impl App {
     #[allow(dead_code)]
@@ -40,28 +41,24 @@ impl App {
             .size(11)
             .color(theme().text_dim);
 
-        let reload_btn = button(
-            text("↻  Reload theme.lua")
-                .size(12)
-                .color(theme().text_primary),
-        )
-        .on_press(Message::SettingsReloadTheme)
-        .style(|_theme, _status| button::Style {
-            background: Some(Background::Color(theme().bg_secondary)),
-            border: iced::Border {
-                color: Color::from_rgba(1.0, 1.0, 1.0, 0.08),
-                width: 1.0,
-                radius: 6.0.into(),
-            },
-            text_color: theme().text_primary,
-            ..Default::default()
-        })
-        .padding(iced::Padding {
-            top: 8.0,
-            right: 16.0,
-            bottom: 8.0,
-            left: 16.0,
-        });
+        let reload_btn = button(text("↻  Reload theme.lua").size(12).color(theme().text_primary))
+            .on_press(Message::SettingsReloadTheme)
+            .style(|_theme, _status| button::Style {
+                background: Some(Background::Color(theme().bg_secondary)),
+                border: iced::Border {
+                    color: Color::from_rgba(1.0, 1.0, 1.0, 0.08),
+                    width: 1.0,
+                    radius: 6.0.into(),
+                },
+                text_color: theme().text_primary,
+                ..Default::default()
+            })
+            .padding(iced::Padding {
+                top: 8.0,
+                right: 16.0,
+                bottom: 8.0,
+                left: 16.0,
+            });
 
         column![
             heading,
@@ -213,9 +210,7 @@ impl App {
         let api_url_row = row![
             column![
                 text("API URL").size(13).color(theme().text_muted),
-                text("WakaTime API endpoint URL")
-                    .size(11)
-                    .color(theme().text_dim),
+                text("WakaTime API endpoint URL").size(11).color(theme().text_dim),
             ]
             .spacing(2)
             .width(Length::FillPortion(2)),
@@ -234,28 +229,24 @@ impl App {
         .spacing(16)
         .align_y(iced::Alignment::Center);
 
-        let save_btn = button(
-            text("Save WakaTime Settings")
-                .size(12)
-                .color(theme().text_primary),
-        )
-        .on_press(Message::SaveWakaTimeSettings)
-        .style(|_theme, _status| button::Style {
-            background: Some(Background::Color(ACCENT_PURPLE.scale_alpha(0.2))),
-            border: iced::Border {
-                color: ACCENT_PURPLE.scale_alpha(0.4),
-                width: 1.0,
-                radius: 4.0.into(),
-            },
-            text_color: theme().text_primary,
-            ..Default::default()
-        })
-        .padding(iced::Padding {
-            top: 8.0,
-            right: 20.0,
-            bottom: 8.0,
-            left: 20.0,
-        });
+        let save_btn = button(text("Save WakaTime Settings").size(12).color(theme().text_primary))
+            .on_press(Message::SaveWakaTimeSettings)
+            .style(|_theme, _status| button::Style {
+                background: Some(Background::Color(ACCENT_PURPLE.scale_alpha(0.2))),
+                border: iced::Border {
+                    color: ACCENT_PURPLE.scale_alpha(0.4),
+                    width: 1.0,
+                    radius: 4.0.into(),
+                },
+                text_color: theme().text_primary,
+                ..Default::default()
+            })
+            .padding(iced::Padding {
+                top: 8.0,
+                right: 20.0,
+                bottom: 8.0,
+                left: 20.0,
+            });
 
         column![
             heading,

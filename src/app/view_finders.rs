@@ -1,14 +1,15 @@
+use iced::widget::column;
+
 use super::*;
 use crate::features::icons::icon_handle;
-use iced::widget::column;
 
 impl App {
     pub(super) fn view_fuzzy_finder_overlay(&self) -> Element<'_, Message> {
         use iced::widget::{center, opaque, stack, Space};
-        use syntect::highlighting::{
-            HighlightIterator, HighlightState, Highlighter as SyntectHighlighter,
+        use syntect::{
+            highlighting::{HighlightIterator, HighlightState, Highlighter as SyntectHighlighter},
+            parsing::{ParseState, ScopeStack, SyntaxSet},
         };
-        use syntect::parsing::{ParseState, ScopeStack, SyntaxSet};
 
         let input = text_input("Search files...", &self.fuzzy_finder.input)
             .id(self.fuzzy_finder.input_id.clone())
@@ -25,18 +26,14 @@ impl App {
 
         let folder_label: Element<'_, Message> =
             if let Some(folder) = &self.fuzzy_finder.current_folder {
-                container(
-                    text(format!("{}", folder.display()))
-                        .size(10)
-                        .color(theme().text_dim),
-                )
-                .padding(iced::Padding {
-                    top: 0.0,
-                    right: 18.0,
-                    bottom: 0.0,
-                    left: 18.0,
-                })
-                .into()
+                container(text(format!("{}", folder.display())).size(10).color(theme().text_dim))
+                    .padding(iced::Padding {
+                        top: 0.0,
+                        right: 18.0,
+                        bottom: 0.0,
+                        left: 18.0,
+                    })
+                    .into()
             } else {
                 container(text("")).into()
             };
@@ -57,11 +54,7 @@ impl App {
                 let path = file.path.clone();
 
                 let icon_asset = crate::features::icons::get_file_icon(
-                    file.path
-                        .file_name()
-                        .unwrap_or_default()
-                        .to_str()
-                        .unwrap_or(""),
+                    file.path.file_name().unwrap_or_default().to_str().unwrap_or(""),
                 );
                 let icon: Element<'_, Message> =
                     iced::widget::image::Image::new(icon_handle(icon_asset, 14))
@@ -120,119 +113,103 @@ impl App {
                 ..Default::default()
             });
 
-        let preview: Element<'_, Message> =
-            if let Some((preview_path, content)) = &self.fuzzy_finder.preview_cache {
-                let ext = preview_path
-                    .extension()
-                    .and_then(|e| e.to_str())
-                    .unwrap_or("");
+        let preview: Element<'_, Message> = if let Some((preview_path, content)) =
+            &self.fuzzy_finder.preview_cache
+        {
+            let ext = preview_path.extension().and_then(|e| e.to_str()).unwrap_or("");
 
-                let syntax_set = SyntaxSet::load_defaults_newlines();
-                let syntax = syntax_set
-                    .find_syntax_by_extension(ext)
-                    .unwrap_or_else(|| syntax_set.find_syntax_plain_text());
-                let current_theme = theme();
-                let highlighter = SyntectHighlighter::new(&current_theme.syntax_theme);
-                let mut parse_state = ParseState::new(syntax);
-                let mut highlight_state = HighlightState::new(&highlighter, ScopeStack::new());
+            let syntax_set = SyntaxSet::load_defaults_newlines();
+            let syntax = syntax_set
+                .find_syntax_by_extension(ext)
+                .unwrap_or_else(|| syntax_set.find_syntax_plain_text());
+            let current_theme = theme();
+            let highlighter = SyntectHighlighter::new(&current_theme.syntax_theme);
+            let mut parse_state = ParseState::new(syntax);
+            let mut highlight_state = HighlightState::new(&highlighter, ScopeStack::new());
 
-                let mut line_elements: Vec<Element<'_, Message>> = Vec::new();
+            let mut line_elements: Vec<Element<'_, Message>> = Vec::new();
 
-                for (line_idx, line) in content.lines().enumerate().take(100) {
-                    let line_with_newline = format!("{}\n", line);
-                    let ops = parse_state
-                        .parse_line(&line_with_newline, &syntax_set)
-                        .unwrap_or_default();
-                    let ranges: Vec<_> = HighlightIterator::new(
-                        &mut highlight_state,
-                        &ops,
-                        &line_with_newline,
-                        &highlighter,
-                    )
-                    .collect();
+            for (line_idx, line) in content.lines().enumerate().take(100) {
+                let line_with_newline = format!("{}\n", line);
+                let ops =
+                    parse_state.parse_line(&line_with_newline, &syntax_set).unwrap_or_default();
+                let ranges: Vec<_> = HighlightIterator::new(
+                    &mut highlight_state,
+                    &ops,
+                    &line_with_newline,
+                    &highlighter,
+                )
+                .collect();
 
-                    let line_num: Element<'_, Message> =
-                        container(text(format!("{}", line_idx + 1)).size(11).color(OVERLAY_2))
-                            .width(Length::Fixed(36.0))
-                            .align_right(Length::Fixed(36.0))
-                            .into();
+                let line_num: Element<'_, Message> =
+                    container(text(format!("{}", line_idx + 1)).size(11).color(OVERLAY_2))
+                        .width(Length::Fixed(36.0))
+                        .align_right(Length::Fixed(36.0))
+                        .into();
 
-                    let mut spans: Vec<iced::widget::text::Span<'_, iced::Font>> = Vec::new();
-                    for (style, fragment) in &ranges {
-                        let txt = fragment.strip_suffix('\n').unwrap_or(fragment);
-                        if txt.is_empty() {
-                            continue;
-                        }
-                        spans.push(
-                            iced::widget::text::Span::new(txt.to_string())
-                                .color(iced::Color::from_rgba8(
-                                    style.foreground.r,
-                                    style.foreground.g,
-                                    style.foreground.b,
-                                    style.foreground.a as f32 / 255.0,
-                                ))
-                                .size(11.0),
-                        );
+                let mut spans: Vec<iced::widget::text::Span<'_, iced::Font>> = Vec::new();
+                for (style, fragment) in &ranges {
+                    let txt = fragment.strip_suffix('\n').unwrap_or(fragment);
+                    if txt.is_empty() {
+                        continue;
                     }
-
-                    line_elements.push(
-                        row![line_num, iced::widget::rich_text(spans)]
-                            .spacing(8)
-                            .into(),
+                    spans.push(
+                        iced::widget::text::Span::new(txt.to_string())
+                            .color(iced::Color::from_rgba8(
+                                style.foreground.r,
+                                style.foreground.g,
+                                style.foreground.b,
+                                style.foreground.a as f32 / 255.0,
+                            ))
+                            .size(11.0),
                     );
                 }
 
-                let preview_header = container(
-                    text(
-                        preview_path
-                            .file_name()
-                            .unwrap_or_default()
-                            .to_string_lossy()
-                            .to_string(),
-                    )
+                line_elements
+                    .push(row![line_num, iced::widget::rich_text(spans)].spacing(8).into());
+            }
+
+            let preview_header = container(
+                text(preview_path.file_name().unwrap_or_default().to_string_lossy().to_string())
                     .size(11)
                     .color(theme().text_dim),
-                )
-                .padding(iced::Padding {
-                    top: 8.0,
-                    right: 12.0,
-                    bottom: 6.0,
-                    left: 12.0,
+            )
+            .padding(iced::Padding {
+                top: 8.0,
+                right: 12.0,
+                bottom: 6.0,
+                left: 12.0,
+            });
+
+            let preview_sep = container(Space::new())
+                .width(Length::Fill)
+                .height(Length::Fixed(1.0))
+                .style(|_theme| container::Style {
+                    background: Some(Background::Color(SURFACE_2)),
+                    ..Default::default()
                 });
 
-                let preview_sep = container(Space::new())
-                    .width(Length::Fill)
-                    .height(Length::Fixed(1.0))
-                    .style(|_theme| container::Style {
-                        background: Some(Background::Color(SURFACE_2)),
-                        ..Default::default()
-                    });
+            let preview_content =
+                scrollable(column(line_elements).spacing(0).padding(iced::Padding {
+                    top: 4.0,
+                    right: 8.0,
+                    bottom: 8.0,
+                    left: 8.0,
+                }))
+                .height(Length::Fill);
 
-                let preview_content =
-                    scrollable(column(line_elements).spacing(0).padding(iced::Padding {
-                        top: 4.0,
-                        right: 8.0,
-                        bottom: 8.0,
-                        left: 8.0,
-                    }))
-                    .height(Length::Fill);
-
-                column![preview_header, preview_sep, preview_content]
-                    .width(Length::Fill)
-                    .height(Length::Fill)
-                    .into()
-            } else {
-                container(
-                    text("No preview available")
-                        .size(13)
-                        .color(theme().text_dim),
-                )
+            column![preview_header, preview_sep, preview_content]
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .into()
+        } else {
+            container(text("No preview available").size(13).color(theme().text_dim))
                 .width(Length::Fill)
                 .height(Length::Fill)
                 .center_x(Length::Fill)
                 .center_y(Length::Fill)
                 .into()
-            };
+        };
 
         let left_panel = column![input, folder_label, separator_h, file_list]
             .width(Length::FillPortion(2))
@@ -299,19 +276,12 @@ impl App {
             }
             for (idx, path) in self.recent_files.iter().enumerate() {
                 let is_selected = idx == self.file_finder_selected;
-                let display = path
-                    .file_name()
-                    .unwrap_or_default()
-                    .to_string_lossy()
-                    .to_string();
+                let display = path.file_name().unwrap_or_default().to_string_lossy().to_string();
                 let parent = path
                     .parent()
                     .and_then(|p| {
                         self.file_tree.as_ref().map(|t| {
-                            p.strip_prefix(&t.root)
-                                .unwrap_or(p)
-                                .to_string_lossy()
-                                .to_string()
+                            p.strip_prefix(&t.root).unwrap_or(p).to_string_lossy().to_string()
                         })
                     })
                     .unwrap_or_default();

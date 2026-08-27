@@ -1,9 +1,8 @@
 //! Keyboard event subscription handlers.
 
+use iced::{keyboard::Key, window, Event, Subscription};
+
 use crate::message::Message;
-use iced::keyboard::Key;
-use iced::window;
-use iced::{Event, Subscription};
 
 /// Emits keyboard shortcut messages for global editor actions.
 pub fn shortcuts() -> Subscription<Message> {
@@ -13,10 +12,10 @@ pub fn shortcuts() -> Subscription<Message> {
             let navigation_msg = match &key {
                 Key::Named(iced::keyboard::key::Named::ArrowUp) => {
                     Some(Message::FuzzyFinderNavigate(-1))
-                }
+                },
                 Key::Named(iced::keyboard::key::Named::ArrowDown) => {
                     Some(Message::FuzzyFinderNavigate(1))
-                }
+                },
                 Key::Named(iced::keyboard::key::Named::Enter) => Some(Message::FuzzyFinderSelect),
                 _ => None,
             };
@@ -35,7 +34,7 @@ pub fn shortcuts() -> Subscription<Message> {
                         "p" | "P" => return Some(Message::ToggleCommandPalette),
                         "s" | "S" => return Some(Message::ToggleSettings),
                         "o" | "O" => return Some(Message::OpenFolderDialog),
-                        _ => {}
+                        _ => {},
                     }
                 } else if primary {
                     match c.as_str() {
@@ -56,7 +55,7 @@ pub fn shortcuts() -> Subscription<Message> {
                         "7" => return Some(Message::SelectTabByIndex(6)),
                         "8" => return Some(Message::SelectTabByIndex(7)),
                         "9" => return Some(Message::SelectTabByIndex(8)),
-                        _ => {}
+                        _ => {},
                     }
                 }
             }
@@ -68,7 +67,7 @@ pub fn shortcuts() -> Subscription<Message> {
             }
 
             None
-        }
+        },
         _ => None,
     })
 }
@@ -77,13 +76,13 @@ pub fn modifier_state() -> Subscription<Message> {
     iced::event::listen_with(|event, _status, _id| match event {
         Event::Keyboard(iced::keyboard::Event::ModifiersChanged(modifiers)) => {
             Some(Message::ModifierStateChanged(modifiers))
-        }
+        },
         Event::Keyboard(iced::keyboard::Event::KeyPressed { modifiers, .. }) => {
             Some(Message::ModifierStateChanged(modifiers))
-        }
+        },
         Event::Keyboard(iced::keyboard::Event::KeyReleased { modifiers, .. }) => {
             Some(Message::ModifierStateChanged(modifiers))
-        }
+        },
 
         _ => None,
     })

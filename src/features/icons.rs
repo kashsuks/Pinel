@@ -1,10 +1,8 @@
-use include_dir::{include_dir, Dir};
-use once_cell::sync::Lazy;
-use std::collections::HashMap;
-use std::path::Path;
-use std::sync::Mutex;
+use std::{collections::HashMap, path::Path, sync::Mutex};
 
 use iced::widget::image;
+use include_dir::{include_dir, Dir};
+use once_cell::sync::Lazy;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum IconFormat {
@@ -91,13 +89,13 @@ pub fn icon_handle(icon: IconAsset, size: u32) -> image::Handle {
                 .unwrap_or_else(|| image::Handle::from_bytes(icon.bytes));
             cache.insert(key, handle.clone());
             handle
-        }
+        },
         IconFormat::Svg => {
             let handle = rasterize_svg_icon(icon.bytes, size.max(SVG_ICON_RASTER_SIZE))
                 .unwrap_or_else(|| image::Handle::from_bytes(icon.bytes));
             cache.insert(key, handle.clone());
             handle
-        }
+        },
     }
 }
 
@@ -426,10 +424,7 @@ pub fn get_file_icon(filename: &str) -> IconAsset {
 pub fn get_folder_icon(folder_name: &str, is_open: bool) -> IconAsset {
     let folder_lower = folder_name.to_lowercase();
 
-    let icon_base_name = FOLDER_NAME_MAP
-        .get(folder_lower.as_str())
-        .copied()
-        .unwrap_or("default");
+    let icon_base_name = FOLDER_NAME_MAP.get(folder_lower.as_str()).copied().unwrap_or("default");
 
     let name = if is_open {
         format!("{}-open", icon_base_name)

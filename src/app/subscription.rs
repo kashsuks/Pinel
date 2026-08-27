@@ -1,5 +1,6 @@
-use super::*;
 use std::time::Duration;
+
+use super::*;
 
 impl App {
     /// Registers global event listeners and maps them to [`Message`] values.

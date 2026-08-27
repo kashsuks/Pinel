@@ -3,9 +3,12 @@
 //! Provides hover documentation, auto-completion, and go-to-definition
 //! for supported language servers.
 
+use std::{
+    path::{Path, PathBuf},
+    sync::mpsc,
+};
+
 use iced_code_editor::{LspClient, LspEvent, LspProcessClient};
-use std::path::{Path, PathBuf};
-use std::sync::mpsc;
 
 pub struct LspManager {
     sender: mpsc::Sender<LspEvent>,
@@ -50,7 +53,7 @@ impl LspManager {
                     Err(mpsc::TryRecvError::Disconnected) => {
                         self.receiver = None;
                         break;
-                    }
+                    },
                 }
             }
         }

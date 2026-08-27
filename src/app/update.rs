@@ -1,8 +1,10 @@
-use super::*;
-use crate::autocomplete::engine::Autocomplete;
+use std::path::Path;
+
 use iced_code_editor::Message as EditorMessage;
 use rodio::Source;
-use std::path::Path;
+
+use super::*;
+use crate::autocomplete::engine::Autocomplete;
 
 impl App {
     fn should_confirm_sensitive_open(path: &std::path::Path) -> bool {
@@ -39,10 +41,8 @@ impl App {
         separator: char,
         candidates: impl IntoIterator<Item = std::path::PathBuf>,
     ) {
-        let mut paths: Vec<std::path::PathBuf> = candidates
-            .into_iter()
-            .filter(|path| path.exists())
-            .collect();
+        let mut paths: Vec<std::path::PathBuf> =
+            candidates.into_iter().filter(|path| path.exists()).collect();
 
         if let Some(existing) = std::env::var_os(key) {
             paths.extend(std::env::split_paths(&existing));
@@ -127,11 +127,9 @@ impl App {
     }
 
     fn active_tab_supports_markdown_preview(&self) -> bool {
-        self.active_tab
-            .and_then(|idx| self.tabs.get(idx))
-            .is_some_and(|tab| {
-                matches!(tab.kind, TabKind::Editor { .. }) && Self::is_markdown_path(&tab.path)
-            })
+        self.active_tab.and_then(|idx| self.tabs.get(idx)).is_some_and(|tab| {
+            matches!(tab.kind, TabKind::Editor { .. }) && Self::is_markdown_path(&tab.path)
+        })
     }
 
     fn sync_markdown_preview_from_active_editor(&mut self) {
@@ -193,9 +191,7 @@ impl App {
             return iced::Task::none();
         };
 
-        if tab.path == Path::new("untitled")
-            || !code_editor.is_modified()
-            || tab.autosave_in_flight
+        if tab.path == Path::new("untitled") || !code_editor.is_modified() || tab.autosave_in_flight
         {
             return iced::Task::none();
         }
@@ -281,7 +277,7 @@ impl App {
             Message::ModifierStateChanged(modifiers) => {
                 self.modifier_state = modifiers;
                 iced::Task::none()
-            }
+            },
             Message::FocusEditor => {
                 self.focused_pane = FocusPane::Editor;
                 if let Some(idx) = self.active_tab {
@@ -295,7 +291,7 @@ impl App {
                     }
                 }
                 iced::Task::none()
-            }
+            },
             Message::FocusTerminal => {
                 if !self.terminal_open {
                     return iced::Task::none();
@@ -305,7 +301,7 @@ impl App {
                     return iced::widget::operation::focus(term.widget_id().clone());
                 }
                 iced::Task::none()
-            }
+            },
             Message::CodeEditorEvent(event) => {
                 if matches!(event, EditorMessage::CharacterInput(_))
                     && (self.modifier_state.command() || self.modifier_state.control())
@@ -320,12 +316,12 @@ impl App {
                             iced_code_editor::ArrowDirection::Up => {
                                 self.autocomplete.select_previous();
                                 return iced::Task::none();
-                            }
+                            },
                             iced_code_editor::ArrowDirection::Down => {
                                 self.autocomplete.select_next();
                                 return iced::Task::none();
-                            }
-                            _ => {}
+                            },
+                            _ => {},
                         }
                     }
                 }
@@ -491,7 +487,7 @@ impl App {
                                 if pending.path == path && pending.position == position =>
                             {
                                 pending.anchor_point = anchor_point;
-                            }
+                            },
                             _ => {
                                 if !self.lsp_overlay.hover_interactive {
                                     self.lsp_overlay.clear_hover();
@@ -503,7 +499,7 @@ impl App {
                                     started_at: Instant::now(),
                                     requested: false,
                                 });
-                            }
+                            },
                         }
                     } else if matches!(event, EditorMessage::MouseHover(_)) {
                         self.pending_hover_request = None;
@@ -537,7 +533,7 @@ impl App {
                             match (&self.last_wakatime_entity, &self.last_wakatime_sent_at) {
                                 (Some(last_entity), Some(last_time)) => {
                                     &entity != last_entity || last_time.elapsed().as_secs() >= 120
-                                }
+                                },
                                 _ => true,
                             };
                         if should_send {
@@ -586,7 +582,7 @@ impl App {
                     }
                 }
                 iced::Task::none()
-            }
+            },
             Message::CodeEditorContentChanged => iced::Task::none(),
             Message::LspOverlay(event) => {
                 match event {
@@ -640,13 +636,13 @@ impl App {
                             }
                             self.lsp_overlay = iced_code_editor::LspOverlayState::new();
                         }
-                    }
+                    },
                     iced_code_editor::LspOverlayMessage::CompletionNavigateUp => {
                         self.lsp_overlay.navigate(-1);
-                    }
+                    },
                     iced_code_editor::LspOverlayMessage::CompletionNavigateDown => {
                         self.lsp_overlay.navigate(1);
-                    }
+                    },
                     iced_code_editor::LspOverlayMessage::CompletionConfirm => {
                         if self.lsp_overlay.selected_item().is_some() {
                             return self.update(Message::LspOverlay(
@@ -655,25 +651,25 @@ impl App {
                                 ),
                             ));
                         }
-                    }
+                    },
                     iced_code_editor::LspOverlayMessage::CompletionClosed => {
                         self.lsp_overlay = iced_code_editor::LspOverlayState::new();
-                    }
+                    },
                     iced_code_editor::LspOverlayMessage::HoverEntered => {
                         self.lsp_overlay.hover_interactive = true;
-                    }
+                    },
                     iced_code_editor::LspOverlayMessage::HoverExited => {
                         self.lsp_overlay.hover_interactive = false;
-                    }
+                    },
                 }
                 iced::Task::none()
-            }
+            },
             Message::FolderToggled(path) => {
                 if let Some(ref mut tree) = self.file_tree {
                     tree.toggle_folder(&path);
                 }
                 iced::Task::none()
-            }
+            },
             Message::FileClicked(path) => {
                 if self.fuzzy_finder.open {
                     self.fuzzy_finder.close();
@@ -691,7 +687,7 @@ impl App {
                     return iced::Task::none();
                 }
                 Self::open_path_task(path)
-            }
+            },
             Message::OpenFileOrFolder => iced::Task::perform(
                 async {
                     #[cfg(target_os = "macos")]
@@ -780,7 +776,7 @@ impl App {
                 self.pending_hover_request = None;
                 self.vim_refresh_cursor_style();
                 iced::Task::none()
-            }
+            },
             Message::CloseActiveTab => {
                 if let Some(idx) = self.active_tab {
                     let path = self.tabs[idx].path.clone();
@@ -817,7 +813,7 @@ impl App {
                 self.pending_hover_request = None;
                 self.vim_refresh_cursor_style();
                 iced::Task::none()
-            }
+            },
             Message::FileOpened(path, content) => {
                 if let Some(idx) = self.tabs.iter().position(|t| t.path == path) {
                     self.active_tab = Some(idx);
@@ -842,17 +838,9 @@ impl App {
                 self.last_wakatime_entity = Some(entity);
                 self.last_wakatime_sent_at = Some(Instant::now());
 
-                let name = path
-                    .file_name()
-                    .unwrap_or_default()
-                    .to_string_lossy()
-                    .to_string();
+                let name = path.file_name().unwrap_or_default().to_string_lossy().to_string();
                 let opened_path = path.clone();
-                let ext = path
-                    .extension()
-                    .and_then(|e| e.to_str())
-                    .unwrap_or("txt")
-                    .to_string();
+                let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("txt").to_string();
 
                 #[cfg(feature = "video")]
                 let tab_kind = if Self::is_image_path(&path) {
@@ -869,7 +857,7 @@ impl App {
                                 code_editor: self.configured_code_editor("", &ext),
                                 buffer: crate::features::editor_buffer::EditorBuffer::from_text(""),
                             }
-                        }
+                        },
                     }
                 } else if Self::is_audio_path(&path) {
                     match rodio::OutputStream::try_default() {
@@ -895,14 +883,14 @@ impl App {
                                 duration_secs,
                                 position_secs: 0.0,
                             }
-                        }
+                        },
                         Err(e) => {
                             eprintln!("Audio init error: {e}");
                             TabKind::Editor {
                                 code_editor: self.configured_code_editor("", &ext),
                                 buffer: crate::features::editor_buffer::EditorBuffer::from_text(""),
                             }
-                        }
+                        },
                     }
                 } else {
                     TabKind::Editor {
@@ -942,14 +930,14 @@ impl App {
                                 duration_secs,
                                 position_secs: 0.0,
                             }
-                        }
+                        },
                         Err(e) => {
                             eprintln!("Audio init error: {e}");
                             TabKind::Editor {
                                 code_editor: self.configured_code_editor("", &ext),
                                 buffer: crate::features::editor_buffer::EditorBuffer::from_text(""),
                             }
-                        }
+                        },
                     }
                 } else {
                     TabKind::Editor {
@@ -1010,17 +998,16 @@ impl App {
                                         code_editor.attach_lsp(client, document);
                                     }
                                 }
-                                self.lsp_server_keys
-                                    .insert(opened_path, language.server_key);
+                                self.lsp_server_keys.insert(opened_path, language.server_key);
                                 self.dev_log(format!(
                                     "LSP: Successfully attached {} server",
                                     language.server_key
                                 ));
-                            }
+                            },
                             Err(e) => {
                                 self.dev_log(format!("LSP: Failed to attach: {}", e));
                                 eprintln!("LSP: {}", e);
-                            }
+                            },
                         }
                     } else {
                         self.dev_log(format!(
@@ -1036,7 +1023,7 @@ impl App {
                     ));
                 }
                 iced::Task::none()
-            }
+            },
             Message::TabSelected(idx) => {
                 if idx < self.tabs.len() {
                     // Detach LSP from all tabs first
@@ -1085,11 +1072,11 @@ impl App {
                                     } else {
                                         None
                                     }
-                                }
+                                },
                                 Err(e) => {
                                     self.dev_log(format!("LSP: Failed to reattach: {}", e));
                                     None
-                                }
+                                },
                             }
                         } else {
                             None
@@ -1121,7 +1108,7 @@ impl App {
                     self.pending_hover_request = None;
                 }
                 iced::Task::none()
-            }
+            },
             Message::FileTreeRefresh => {
                 if let Some(ref mut tree) = self.file_tree {
                     tree.refresh();
@@ -1138,7 +1125,7 @@ impl App {
                 }
 
                 iced::Task::none()
-            }
+            },
             Message::OpenFolderDialog => iced::Task::perform(
                 async {
                     rfd::AsyncFileDialog::new()
@@ -1159,7 +1146,7 @@ impl App {
                 self.lsp.set_workspace_root(path.clone());
                 self.lsp_enabled = true;
                 iced::Task::none()
-            }
+            },
             Message::SaveFile => {
                 if let Some(idx) = self.active_tab {
                     if let Some(tab) = self.tabs.get(idx) {
@@ -1186,7 +1173,7 @@ impl App {
                 }
                 self.lsp_overlay = iced_code_editor::LspOverlayState::new();
                 iced::Task::none()
-            }
+            },
             Message::SaveCurrentFileAs(path) => {
                 if let Some(idx) = self.active_tab {
                     if let Some(tab) = self.tabs.get(idx) {
@@ -1210,15 +1197,12 @@ impl App {
                     }
                 }
                 iced::Task::none()
-            }
+            },
             Message::CurrentFileSavedAs(path) => {
                 if let Some(idx) = self.active_tab {
                     if let Some(tab) = self.tabs.get_mut(idx) {
-                        tab.name = path
-                            .file_name()
-                            .unwrap_or_default()
-                            .to_string_lossy()
-                            .to_string();
+                        tab.name =
+                            path.file_name().unwrap_or_default().to_string_lossy().to_string();
                         tab.path = path.clone();
 
                         if let TabKind::Editor {
@@ -1246,7 +1230,7 @@ impl App {
                 self.last_wakatime_sent_at = Some(Instant::now());
 
                 iced::Task::none()
-            }
+            },
             Message::FileSaved(result) => {
                 if let Err(e) = result {
                     eprintln!("Failed to save file: {}", e);
@@ -1265,13 +1249,13 @@ impl App {
                     }
                 }
                 iced::Task::none()
-            }
+            },
             Message::SidebarResizeStart => {
                 self.resizing_sidebar = true;
                 self.resize_start_x = None;
                 self.resize_start_width = self.sidebar_width;
                 iced::Task::none()
-            }
+            },
             Message::SidebarResizing(x) => {
                 if self.resizing_sidebar {
                     if let Some(start_x) = self.resize_start_x {
@@ -1283,12 +1267,12 @@ impl App {
                     }
                 }
                 iced::Task::none()
-            }
+            },
             Message::SidebarResizeEnd => {
                 self.resizing_sidebar = false;
                 self.resize_start_x = None;
                 iced::Task::none()
-            }
+            },
             Message::SetActivePanel(panel) => {
                 use crate::app::ActivePanel;
                 if self.active_panel == panel {
@@ -1301,7 +1285,7 @@ impl App {
                     }
                 }
                 iced::Task::none()
-            }
+            },
             Message::RefreshGitStatus => {
                 let root = self.file_tree.as_ref().map(|t| t.root.clone());
                 iced::Task::perform(
@@ -1328,18 +1312,18 @@ impl App {
                     },
                     Message::GitStatusLoaded,
                 )
-            }
+            },
             Message::GitStatusLoaded(changes) => {
                 self.git_changes = changes;
                 iced::Task::none()
-            }
+            },
             Message::ToggleSidebar => {
                 self.sidebar_visible = !self.sidebar_visible;
                 iced::Task::none()
-            }
+            },
             Message::ToggleFullscreen(_mode) => {
                 window::oldest().and_then(move |id| window::maximize(id, true))
-            }
+            },
             Message::PreviewMarkdown => {
                 let Some(idx) = self.active_tab else {
                     return iced::Task::none();
@@ -1374,7 +1358,7 @@ impl App {
                 }
 
                 iced::Task::none()
-            }
+            },
             Message::MarkdownLinkClicked(_uri) => iced::Task::none(),
             Message::ToggleSearch => {
                 if self.search_visible {
@@ -1388,7 +1372,7 @@ impl App {
                 }
                 self.vim_refresh_cursor_style();
                 iced::Task::none()
-            }
+            },
             Message::SearchQueryChanged(query) => {
                 self.search_query = query.clone();
                 if query.len() < 2 {
@@ -1404,11 +1388,11 @@ impl App {
                 } else {
                     iced::Task::none()
                 }
-            }
+            },
             Message::SearchCompleted(results) => {
                 self.search_results = results;
                 iced::Task::none()
-            }
+            },
             Message::SearchResultClicked(path, _line_number) => {
                 self.search_visible = false;
                 self.search_query.clear();
@@ -1426,7 +1410,7 @@ impl App {
                     return iced::Task::none();
                 }
                 Self::open_path_task(path)
-            }
+            },
             Message::ToggleFileFinder => {
                 self.file_finder_visible = !self.file_finder_visible;
                 if !self.file_finder_visible {
@@ -1438,7 +1422,7 @@ impl App {
                 }
                 self.vim_refresh_cursor_style();
                 iced::widget::operation::focus(self.file_finder_input_id.clone())
-            }
+            },
             Message::FileFinderQueryChanged(query) => {
                 self.file_finder_query = query.clone();
                 self.file_finder_selected = 0;
@@ -1452,7 +1436,7 @@ impl App {
                     );
                 }
                 iced::widget::operation::focus(self.file_finder_input_id.clone())
-            }
+            },
             Message::FileFinderNavigate(delta) => {
                 if !self.file_finder_visible {
                     return iced::Task::none();
@@ -1469,7 +1453,7 @@ impl App {
                 let next = (current + delta).rem_euclid(count as i32) as usize;
                 self.file_finder_selected = next;
                 iced::Task::none()
-            }
+            },
             Message::FileFinderSelect => {
                 if !self.file_finder_visible {
                     return iced::Task::none();
@@ -1489,7 +1473,7 @@ impl App {
                     return self.update(Message::FileClicked(path));
                 }
                 iced::Task::none()
-            }
+            },
             Message::ToggleFuzzyFinder => {
                 if self.fuzzy_finder.open {
                     self.fuzzy_finder.close();
@@ -1501,7 +1485,7 @@ impl App {
                     self.vim_refresh_cursor_style();
                     iced::widget::operation::focus(self.fuzzy_finder.input_id.clone())
                 }
-            }
+            },
             Message::FuzzyFinderQueryChanged(query) => {
                 if !self.fuzzy_finder.open {
                     return iced::Task::none();
@@ -1510,7 +1494,7 @@ impl App {
                 self.fuzzy_finder.filter();
                 self.fuzzy_finder.update_preview();
                 iced::widget::operation::focus(self.fuzzy_finder.input_id.clone())
-            }
+            },
             Message::FuzzyFinderNavigate(delta) => {
                 if self.command_palette.open {
                     let count = self.command_palette.filtered_commands.len();
@@ -1528,13 +1512,11 @@ impl App {
                 }
                 self.fuzzy_finder.navigate(delta);
                 iced::Task::none()
-            }
+            },
             Message::FuzzyFinderSelect => {
                 if self.command_palette.open {
-                    if let Some(cmd) = self
-                        .command_palette
-                        .filtered_commands
-                        .get(self.command_palette_selected)
+                    if let Some(cmd) =
+                        self.command_palette.filtered_commands.get(self.command_palette_selected)
                     {
                         let command_name = cmd.name.clone();
                         self.command_palette.close();
@@ -1550,7 +1532,7 @@ impl App {
                     return self.update(Message::FileClicked(path));
                 }
                 iced::Task::none()
-            }
+            },
             Message::EscapePressed => {
                 if self.autocomplete.active {
                     self.autocomplete.cancel();
@@ -1583,7 +1565,7 @@ impl App {
                 }
                 self.vim_refresh_cursor_style();
                 iced::Task::none()
-            }
+            },
             Message::SensitiveFileOpenConfirm(confirmed) => {
                 let path = self.pending_sensitive_open.take();
                 if confirmed {
@@ -1592,7 +1574,7 @@ impl App {
                     }
                 }
                 iced::Task::none()
-            }
+            },
             Message::ToggleCommandPalette => {
                 let include_markdown_render = self.active_tab_supports_markdown_preview();
                 self.command_palette.toggle(include_markdown_render);
@@ -1603,18 +1585,18 @@ impl App {
                 }
                 self.vim_refresh_cursor_style();
                 iced::Task::none()
-            }
+            },
             Message::CommandPaletteQueryChanged(query) => {
                 self.command_palette.input = query;
                 self.command_palette
                     .filter_commands(self.active_tab_supports_markdown_preview());
                 self.command_palette_selected = 0;
                 iced::widget::operation::focus(self.command_palette_input_id.clone())
-            }
+            },
             Message::CommandPaletteSelect(command_name) => {
                 self.command_palette.close();
                 self.execute_palette_command(&command_name)
-            }
+            },
             Message::CommandPaletteNavigate(delta) => {
                 if !self.command_palette.open {
                     return iced::Task::none();
@@ -1627,7 +1609,7 @@ impl App {
                 let next = (current + delta).rem_euclid(count as i32) as usize;
                 self.command_palette_selected = next;
                 iced::Task::none()
-            }
+            },
             Message::ToggleTerminal => self.toggle_terminal_panel(),
             Message::TerminalEvent(iced_term::Event::BackendCall(id, cmd)) => {
                 if let Some(term) = self.terminal_pane.as_mut() {
@@ -1641,7 +1623,7 @@ impl App {
                     }
                 }
                 iced::Task::none()
-            }
+            },
             Message::ToggleFindReplace => {
                 self.find_replace.toggle();
                 if self.find_replace.open {
@@ -1650,7 +1632,7 @@ impl App {
                 }
                 self.vim_refresh_cursor_style();
                 iced::Task::none()
-            }
+            },
             Message::FindQueryChanged(query) => {
                 self.find_replace.find_text = query;
                 if let Some(idx) = self.active_tab {
@@ -1665,19 +1647,19 @@ impl App {
                     }
                 }
                 iced::Task::none()
-            }
+            },
             Message::ReplaceQueryChanged(query) => {
                 self.find_replace.replace_text = query;
                 iced::Task::none()
-            }
+            },
             Message::FindNext => {
                 self.find_replace.go_to_next_match();
                 iced::Task::none()
-            }
+            },
             Message::FindPrev => {
                 self.find_replace.go_to_prev_match();
                 iced::Task::none()
-            }
+            },
             Message::ReplaceOne => {
                 if let Some(idx) = self.active_tab {
                     if let Some(tab) = self.tabs.get_mut(idx) {
@@ -1696,7 +1678,7 @@ impl App {
                 }
                 self.vim_refresh_cursor_style();
                 iced::Task::none()
-            }
+            },
             Message::ReplaceAll => {
                 if let Some(idx) = self.active_tab {
                     if let Some(tab) = self.tabs.get_mut(idx) {
@@ -1715,7 +1697,7 @@ impl App {
                 }
                 self.vim_refresh_cursor_style();
                 iced::Task::none()
-            }
+            },
             Message::ToggleCaseSensitive => {
                 self.find_replace.case_sensitive = !self.find_replace.case_sensitive;
                 if let Some(idx) = self.active_tab {
@@ -1730,13 +1712,13 @@ impl App {
                     }
                 }
                 iced::Task::none()
-            }
+            },
             Message::ToggleSettings => {
                 self.settings_open = !self.settings_open;
                 self.theme_dropdown_open = false;
                 self.vim_refresh_cursor_style();
                 iced::Task::none()
-            }
+            },
             Message::SettingsNavigate(section) => {
                 if section == "__toggle_theme_dropdown__" {
                     self.theme_dropdown_open = !self.theme_dropdown_open;
@@ -1745,35 +1727,35 @@ impl App {
                     self.theme_dropdown_open = false;
                 }
                 iced::Task::none()
-            }
+            },
             Message::SettingsTabSizeChanged(val) => {
                 if let Ok(size) = val.parse::<usize>() {
                     self.editor_preferences.tab_size = size.clamp(1, 16);
                 }
                 iced::Task::none()
-            }
+            },
             Message::SettingsToggleUseSpaces => {
                 self.editor_preferences.use_spaces = !self.editor_preferences.use_spaces;
                 self.apply_indent_style_to_tabs();
                 iced::Task::none()
-            }
+            },
             Message::SettingsToggleAutoIndent => {
                 self.editor_preferences.auto_indent_enabled =
                     !self.editor_preferences.auto_indent_enabled;
                 self.apply_auto_indent_to_tabs();
                 iced::Task::none()
-            }
+            },
             Message::SettingsToggleAutosave => {
                 self.editor_preferences.autosave_enabled =
                     !self.editor_preferences.autosave_enabled;
                 iced::Task::none()
-            }
+            },
             Message::SettingsAutosaveIntervalChanged(val) => {
                 if let Ok(interval) = val.parse::<u64>() {
                     self.editor_preferences.autosave_interval_ms = interval.clamp(30, 1000);
                 }
                 iced::Task::none()
-            }
+            },
             Message::SettingsSavePreferences => {
                 let _ = prefs::save_preferences(&self.editor_preferences);
                 self.apply_indent_style_to_tabs();
@@ -1783,7 +1765,7 @@ impl App {
                     shown_at: Instant::now(),
                 });
                 iced::Task::none()
-            }
+            },
             Message::SettingsSelectTheme(name) => {
                 let new_theme = crate::theme::builtin_theme(&name);
                 crate::theme::set_theme(new_theme);
@@ -1793,7 +1775,7 @@ impl App {
                 self.theme_dropdown_open = false;
                 let _ = prefs::save_preferences(&self.editor_preferences);
                 iced::Task::none()
-            }
+            },
             Message::SettingsReloadTheme => {
                 use crate::config::theme_manager;
                 let lua_theme = theme_manager::load_theme();
@@ -1805,18 +1787,18 @@ impl App {
                 self.theme_dropdown_open = false;
                 let _ = prefs::save_preferences(&self.editor_preferences);
                 iced::Task::none()
-            }
+            },
             Message::SettingsToggleTabDragFloating => {
                 self.editor_preferences.tab_drag_floating =
                     !self.editor_preferences.tab_drag_floating;
                 iced::Task::none()
-            }
+            },
             Message::SettingsLineNumberWidthChanged(val) => {
                 if let Ok(w) = val.parse::<f32>() {
                     self.editor_preferences.line_number_width = w.clamp(20.0, 120.0);
                 }
                 iced::Task::none()
-            }
+            },
             #[cfg(feature = "unstable-comet")]
             Message::SettingsToggleDeveloperMode => {
                 self.editor_preferences.developer_mode = !self.editor_preferences.developer_mode;
@@ -1830,7 +1812,7 @@ impl App {
                 ));
                 let _ = prefs::save_preferences(&self.editor_preferences);
                 iced::Task::none()
-            }
+            },
             Message::ToggleLsp => {
                 self.lsp_enabled = !self.lsp_enabled;
                 self.dev_log(format!(
@@ -1846,18 +1828,18 @@ impl App {
                     self.pending_hover_request = None;
                 }
                 iced::Task::none()
-            }
+            },
             #[cfg(feature = "unstable-comet")]
             Message::ToggleDeveloperPanel => {
                 self.developer_panel_visible = !self.developer_panel_visible;
                 iced::Task::none()
-            }
+            },
             #[cfg(feature = "unstable-comet")]
             Message::ClearDeveloperLogs => {
                 self.developer_logs.clear();
                 self.dev_log("Logs cleared".to_string());
                 iced::Task::none()
-            }
+            },
             Message::ToggleCommandInput => {
                 if self.command_input.open {
                     self.command_input.close();
@@ -1868,11 +1850,11 @@ impl App {
                 }
                 self.vim_refresh_cursor_style();
                 iced::Task::none()
-            }
+            },
             Message::CommandInputChanged(input) => {
                 self.command_input.input = input;
                 iced::Task::none()
-            }
+            },
             Message::CommandInputSubmit => {
                 if let Some(cmd) = self.command_input.process_command() {
                     self.command_input.close();
@@ -1880,13 +1862,13 @@ impl App {
                 }
                 self.command_input.close();
                 iced::Task::none()
-            }
+            },
             Message::WindowResized(width, height) => {
                 self.editor_preferences.window_width = (width as f32).max(640.0);
                 self.editor_preferences.window_height = (height as f32).max(480.0);
                 let _ = prefs::save_preferences(&self.editor_preferences);
                 iced::Task::none()
-            }
+            },
             Message::NewFile => {
                 let new_path = PathBuf::from("untitled");
                 let editor = self.configured_code_editor("", "txt");
@@ -1906,15 +1888,15 @@ impl App {
                 self.autocomplete.cancel();
                 self.vim_refresh_cursor_style();
                 iced::Task::none()
-            }
+            },
             Message::TabHoverEnter(idx) => {
                 self.tab_hover_index = Some(idx);
                 iced::Task::none()
-            }
+            },
             Message::TabHoverExit => {
                 self.tab_hover_index = None;
                 iced::Task::none()
-            }
+            },
             Message::TabDragInitiate => {
                 // just record when the hold started
                 // drag only activates after the hold threshold is reached
@@ -1923,7 +1905,7 @@ impl App {
                     self.tab_hold_index = Some(idx);
                 }
                 iced::Task::none()
-            }
+            },
             Message::TabHoldTick => {
                 const HOLD_THRESHOLD: Duration = Duration::from_millis(300);
 
@@ -1944,7 +1926,7 @@ impl App {
                     }
                 }
                 iced::Task::none()
-            }
+            },
             Message::TabDragMove(abs_x) => {
                 self.tab_drag_curent_x = abs_x;
                 if let Some(drag_idx) = self.tab_drag_index {
@@ -1956,7 +1938,7 @@ impl App {
                     self.tab_drag_target = Some(clamped);
                 }
                 iced::Task::none()
-            }
+            },
             Message::TabDragFloatMove(abs_x, abs_y) => {
                 self.tab_drag_curent_x = abs_x;
                 if let Some(drag_idx) = self.tab_drag_index {
@@ -1969,7 +1951,7 @@ impl App {
                     self.tab_drag_target = Some(clamped);
                 }
                 iced::Task::none()
-            }
+            },
             Message::TabDragEnd => {
                 // cancel a pending hold that never crossed the threshold
                 self.tab_hold_started_at = None;
@@ -1992,13 +1974,13 @@ impl App {
                 self.tab_drag_target = None;
                 self.tab_drag_cursor_pos = None;
                 iced::Task::none()
-            }
+            },
             Message::SelectTabByIndex(idx) => {
                 if idx < self.tabs.len() {
                     return self.update(Message::TabSelected(idx));
                 }
                 iced::Task::none()
-            }
+            },
             Message::SaveAs => iced::Task::perform(
                 async {
                     rfd::AsyncFileDialog::new()
@@ -2015,27 +1997,27 @@ impl App {
             Message::WakaTimeApiKeyChanged(key) => {
                 self.wakatime.api_key = key;
                 iced::Task::none()
-            }
+            },
             Message::WakaTimeApiKeyHoverStart => {
                 self.wakatime_api_key_hovered = true;
                 iced::Task::none()
-            }
+            },
             Message::WakaTimeApiKeyHoverEnd => {
                 self.wakatime_api_key_hovered = false;
                 iced::Task::none()
-            }
+            },
             Message::WakaTimeApiUrlChanged(url) => {
                 self.wakatime.api_url = url;
                 iced::Task::none()
-            }
+            },
             Message::SaveWakaTimeSettings => {
                 let _ = wakatime::save(&self.wakatime);
                 iced::Task::none()
-            }
+            },
             Message::DismissNotification => {
                 self.notification = None;
                 iced::Task::none()
-            }
+            },
             Message::LspTick => {
                 if self.lsp_enabled {
                     if let Some(pending) = self.pending_hover_request.as_mut() {
@@ -2091,7 +2073,7 @@ impl App {
                             } else {
                                 self.lsp_overlay.clear_hover();
                             }
-                        }
+                        },
                         iced_code_editor::LspEvent::Completion { items } => {
                             self.dev_log(format!(
                                 "LSP: Completion received ({} items)",
@@ -2154,23 +2136,23 @@ impl App {
                                     ));
                                 }
                             }
-                        }
+                        },
                         iced_code_editor::LspEvent::Definition { uri, range } => {
                             self.dev_log(format!("LSP: Definition at {} {:?}", uri, range));
                             eprintln!("Definition: {} at {:?}", uri, range);
-                        }
-                        iced_code_editor::LspEvent::Progress { .. } => {}
+                        },
+                        iced_code_editor::LspEvent::Progress { .. } => {},
                         iced_code_editor::LspEvent::Log {
                             server_key,
                             message,
                         } => {
                             self.dev_log(format!("LSP [{}]: {}", server_key, message));
                             eprintln!("LSP [{}]: {}", server_key, message);
-                        }
+                        },
                     }
                 }
                 iced::Task::none()
-            }
+            },
             Message::AutosaveTick => {
                 if !self.editor_preferences.autosave_enabled {
                     return iced::Task::none();
@@ -2180,23 +2162,22 @@ impl App {
                     return iced::Task::none();
                 };
 
-                let should_save = self
-                    .tabs
-                    .get(idx)
-                    .and_then(|tab| tab.autosave_requested_at)
-                    .is_some_and(|requested_at| {
-                        requested_at.elapsed()
-                            >= Duration::from_millis(
-                                self.editor_preferences.autosave_interval_ms.clamp(30, 1000),
-                            )
-                    });
+                let should_save =
+                    self.tabs.get(idx).and_then(|tab| tab.autosave_requested_at).is_some_and(
+                        |requested_at| {
+                            requested_at.elapsed()
+                                >= Duration::from_millis(
+                                    self.editor_preferences.autosave_interval_ms.clamp(30, 1000),
+                                )
+                        },
+                    );
 
                 if should_save {
                     return self.autosave_task_for_tab(idx);
                 }
 
                 iced::Task::none()
-            }
+            },
             Message::AutosaveFinished(path, saved_content, result) => {
                 let Some(tab) = self.tabs.iter_mut().find(|tab| tab.path == path) else {
                     return iced::Task::none();
@@ -2215,7 +2196,7 @@ impl App {
                                 tab.autosave_requested_at = Some(Instant::now());
                             }
                         }
-                    }
+                    },
 
                     Err(err) => {
                         tab.autosave_requested_at = Some(Instant::now());
@@ -2223,11 +2204,11 @@ impl App {
                             message: format!("Autosave failed: {err}"),
                             shown_at: Instant::now(),
                         });
-                    }
+                    },
                 }
 
                 iced::Task::none()
-            }
+            },
             #[cfg(feature = "video")]
             Message::VideoTogglePause => {
                 if let Some(idx) = self.active_tab {
@@ -2238,7 +2219,7 @@ impl App {
                     }
                 }
                 iced::Task::none()
-            }
+            },
             #[cfg(feature = "video")]
             Message::VideoEndOfStream => {
                 if let Some(idx) = self.active_tab {
@@ -2249,7 +2230,7 @@ impl App {
                     }
                 }
                 iced::Task::none()
-            }
+            },
             #[cfg(feature = "video")]
             Message::VideoNewFrame => iced::Task::none(),
             Message::AudioPlay => {
@@ -2282,7 +2263,7 @@ impl App {
                     }
                 }
                 iced::Task::none()
-            }
+            },
             Message::AudioPause => {
                 if let Some(idx) = self.active_tab {
                     if let Some(tab) = self.tabs.get_mut(idx) {
@@ -2301,7 +2282,7 @@ impl App {
                 }
 
                 iced::Task::none()
-            }
+            },
             Message::AudioStop => {
                 if let Some(idx) = self.active_tab {
                     if let Some(tab) = self.tabs.get_mut(idx) {
@@ -2322,7 +2303,7 @@ impl App {
                 }
 
                 iced::Task::none()
-            }
+            },
             Message::AudioTick => {
                 // playback position display
                 if let Some(idx) = self.active_tab {
@@ -2349,7 +2330,7 @@ impl App {
                 }
 
                 iced::Task::none()
-            }
+            },
             Message::AudioSeek(_) => iced::Task::none(), // rodio doesnt seek support natively
             Message::StartupPageDone => {
                 self.editor_preferences.first_launch = false;
@@ -2361,32 +2342,32 @@ impl App {
                 self.editor_preferences.theme_name = name;
                 let _ = crate::config::preferences::save_preferences(&self.editor_preferences);
                 iced::Task::none()
-            }
+            },
             Message::StartupThemeSelected(name) => {
                 self.startup_selected_theme = name.clone();
                 let new_theme = crate::theme::builtin_theme(&name);
                 crate::theme::set_theme(new_theme);
                 self.apply_editor_theme_to_tabs();
                 iced::Task::none()
-            }
+            },
             Message::StartupToggleVimMode => {
                 self.startup_vim_mode = !self.startup_vim_mode;
                 if self.startup_vim_mode {
                     self.startup_helix_mode = false;
                 }
                 iced::Task::none()
-            }
+            },
             Message::StartupToggleHelixMode => {
                 self.startup_helix_mode = !self.startup_helix_mode;
                 if self.startup_helix_mode {
                     self.startup_vim_mode = false;
                 }
                 iced::Task::none()
-            }
+            },
             Message::StartupToggleRunOnStartup => {
                 self.startup_run_on_startup = !self.startup_run_on_startup;
                 iced::Task::none()
-            }
+            },
             Message::CheckForUpdate => {
                 iced::Task::perform(crate::features::updater::check_for_update(), |result| {
                     match result {
@@ -2394,15 +2375,15 @@ impl App {
                         None => Message::DismissUpdateBanner,
                     }
                 })
-            }
+            },
             Message::UpdateAvailable(info) => {
                 self.update_banner = Some(info);
                 iced::Task::none()
-            }
+            },
             Message::DismissUpdateBanner => {
                 self.update_banner = None;
                 iced::Task::none()
-            }
+            },
         }
     }
 
@@ -2446,8 +2427,7 @@ impl App {
                 .extension()
                 .and_then(|ext| ext.to_str())
                 .and_then(Autocomplete::detect_language);
-            self.autocomplete
-                .trigger(content, cursor_idx, lang.as_deref());
+            self.autocomplete.trigger(content, cursor_idx, lang.as_deref());
             // Only keep suggestions when prefix is at least 2 characters
             if self.autocomplete.prefix.len() <= 1 {
                 self.autocomplete.cancel();
@@ -2474,7 +2454,7 @@ impl App {
                 } else {
                     self.cursor_col += 1;
                 }
-            }
+            },
             EditorMessage::Backspace => {
                 if self.cursor_col > 1 {
                     self.cursor_col -= 1;
@@ -2487,33 +2467,33 @@ impl App {
                         .unwrap_or(0);
                     self.cursor_col = prev_len + 1;
                 }
-            }
+            },
             EditorMessage::Enter => {
                 self.cursor_line = (self.cursor_line + 1).min(line_count);
                 self.cursor_col = 1;
-            }
+            },
             EditorMessage::Tab => {
                 // advance by the configured tab size
                 // the library inserted the actual chars
-                self.cursor_col += self.editor_preferences.tab_size.max(1); 
-            }
+                self.cursor_col += self.editor_preferences.tab_size.max(1);
+            },
             EditorMessage::ArrowKey(direction, _) => match direction {
                 iced_code_editor::ArrowDirection::Left => {
                     if self.cursor_col > 1 {
                         self.cursor_col -= 1;
                     }
-                }
+                },
                 iced_code_editor::ArrowDirection::Right => {
                     self.cursor_col += 1;
-                }
+                },
                 iced_code_editor::ArrowDirection::Up => {
                     if self.cursor_line > 1 {
                         self.cursor_line -= 1;
                     }
-                }
+                },
                 iced_code_editor::ArrowDirection::Down => {
                     self.cursor_line = (self.cursor_line + 1).min(line_count);
-                }
+                },
             },
             EditorMessage::Home(_) => self.cursor_col = 1,
             EditorMessage::End(_) => {
@@ -2523,11 +2503,11 @@ impl App {
                     .map(|line| line.chars().count())
                     .unwrap_or(0);
                 self.cursor_col = len + 1;
-            }
+            },
             EditorMessage::CtrlHome => {
                 self.cursor_line = 1;
                 self.cursor_col = 1;
-            }
+            },
             EditorMessage::CtrlEnd => {
                 self.cursor_line = line_count;
                 let len = after
@@ -2536,11 +2516,11 @@ impl App {
                     .map(|line| line.chars().count())
                     .unwrap_or(0);
                 self.cursor_col = len + 1;
-            }
+            },
             EditorMessage::MouseClick(_) | EditorMessage::MouseDrag(_) => {
                 // Handled separately below via read_cursor_from_editor
-            }
-            _ => {}
+            },
+            _ => {},
         }
 
         let line_count = after.lines().count().max(1);
@@ -2574,9 +2554,7 @@ impl App {
 
     #[allow(dead_code)]
     fn leading_whitespace(line: &str) -> String {
-        line.chars()
-            .take_while(|ch| *ch == ' ' || *ch == '\t')
-            .collect()
+        line.chars().take_while(|ch| *ch == ' ' || *ch == '\t').collect()
     }
 
     #[allow(dead_code)]

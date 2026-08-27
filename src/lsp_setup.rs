@@ -23,8 +23,10 @@
 //! | Bun-installed tools      | `~/.bun/bin`                                     |
 //! | pip-installed tools      | `~/.local/bin`, Python framework bins            |
 
-use std::collections::LinkedList;
-use std::path::{Path, PathBuf};
+use std::{
+    collections::LinkedList,
+    path::{Path, PathBuf},
+};
 
 // ---------------------------------------------------------------------------
 // Public entry point
@@ -53,7 +55,7 @@ pub fn ensure_lsp_paths() {
         None => {
             eprintln!("[lsp_setup] HOME not set – skipping PATH augmentation");
             return;
-        }
+        },
     };
 
     push_if_exists(&mut candidates, home.join(".cargo").join("bin"));
@@ -88,11 +90,7 @@ pub fn ensure_lsp_paths() {
     }
 
     // fnm stores versions under  ~/.local/share/fnm/node-versions/vX.Y.Z/installation/bin/
-    let fnm_dir = home
-        .join(".local")
-        .join("share")
-        .join("fnm")
-        .join("node-versions");
+    let fnm_dir = home.join(".local").join("share").join("fnm").join("node-versions");
     if fnm_dir.is_dir() {
         let mut version_bins = fnm_version_bins(&fnm_dir);
         version_bins.sort_by(|a, b| b.cmp(a));
@@ -149,7 +147,11 @@ pub fn ensure_lsp_paths() {
     eprintln!(
         "[lsp_setup] Augmented PATH with {} new director{}: {}",
         new_segments.len(),
-        if new_segments.len() == 1 { "y" } else { "ies" },
+        if new_segments.len() == 1 {
+            "y"
+        } else {
+            "ies"
+        },
         new_segments.join(", ")
     );
 }
@@ -194,10 +196,7 @@ pub fn lsp_server_status() -> Vec<(&'static str, Option<PathBuf>)> {
         ("gopls", "gopls"),
     ];
 
-    SERVERS
-        .iter()
-        .map(|(key, bin)| (*key, find_lsp_server(bin)))
-        .collect()
+    SERVERS.iter().map(|(key, bin)| (*key, find_lsp_server(bin))).collect()
 }
 
 fn home_dir() -> Option<PathBuf> {

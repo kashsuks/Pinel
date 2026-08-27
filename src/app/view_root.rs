@@ -39,70 +39,73 @@ impl App {
                 .height(Length::Fill)
                 .style(editor_container_style);
 
-            container(editor_container)
-                .padding(0)
-                .width(Length::Fill)
-                .into()
+            container(editor_container).padding(0).width(Length::Fill).into()
         };
 
-        use crate::app::ActivePanel;
-        use crate::features::icons::{icon_handle, IconAsset, IconFormat};
+        use crate::{
+            app::ActivePanel,
+            features::icons::{icon_handle, IconAsset, IconFormat},
+        };
 
         static ICON_FILES: &[u8] = include_bytes!("../assets/icons/activity-bar-files.svg");
         static ICON_GIT: &[u8] = include_bytes!("../assets/icons/activity-bar-git.svg");
 
-        let make_activity_icon = |bytes: &'static [u8], panel: ActivePanel| -> Element<'_, Message> {
-            let is_active = self.active_panel == panel && self.sidebar_visible;
-            let icon_color = if is_active {
-                iced::Color::from_rgba(1.0, 1.0, 1.0, 0.88)
-            } else {
-                iced::Color::from_rgba(1.0, 1.0, 1.0, 0.35)
-            };
+        let make_activity_icon =
+            |bytes: &'static [u8], panel: ActivePanel| -> Element<'_, Message> {
+                let is_active = self.active_panel == panel && self.sidebar_visible;
+                let icon_color = if is_active {
+                    iced::Color::from_rgba(1.0, 1.0, 1.0, 0.88)
+                } else {
+                    iced::Color::from_rgba(1.0, 1.0, 1.0, 0.35)
+                };
 
-            let asset = IconAsset { format: IconFormat::Svg, bytes };
-            let img = iced::widget::image::Image::new(icon_handle(asset, 40))
-                .width(Length::Fixed(20.0))
-                .height(Length::Fixed(20.0));
+                let asset = IconAsset {
+                    format: IconFormat::Svg,
+                    bytes,
+                };
+                let img = iced::widget::image::Image::new(icon_handle(asset, 40))
+                    .width(Length::Fixed(20.0))
+                    .height(Length::Fixed(20.0));
 
-            let bg = if is_active {
-                iced::Color::from_rgba(1.0, 1.0, 1.0, 0.08)
-            } else {
-                iced::Color::TRANSPARENT
-            };
+                let bg = if is_active {
+                    iced::Color::from_rgba(1.0, 1.0, 1.0, 0.08)
+                } else {
+                    iced::Color::TRANSPARENT
+                };
 
-            iced::widget::button(
-                container(img)
-                    .width(Length::Fixed(40.0))
-                    .height(Length::Fixed(40.0))
-                    .center_x(Length::Fixed(40.0))
-                    .center_y(Length::Fixed(40.0))
-                    .style(move |_t| container::Style {
-                        background: Some(Background::Color(bg)),
-                        border: iced::Border {
-                            radius: 6.0.into(),
+                iced::widget::button(
+                    container(img)
+                        .width(Length::Fixed(40.0))
+                        .height(Length::Fixed(40.0))
+                        .center_x(Length::Fixed(40.0))
+                        .center_y(Length::Fixed(40.0))
+                        .style(move |_t| container::Style {
+                            background: Some(Background::Color(bg)),
+                            border: iced::Border {
+                                radius: 6.0.into(),
+                                ..Default::default()
+                            },
                             ..Default::default()
+                        }),
+                )
+                .on_press(Message::SetActivePanel(panel))
+                .style(move |_t, status| iced::widget::button::Style {
+                    background: Some(Background::Color(match status {
+                        iced::widget::button::Status::Hovered => {
+                            iced::Color::from_rgba(1.0, 1.0, 1.0, 0.06)
                         },
+                        _ => iced::Color::TRANSPARENT,
+                    })),
+                    border: iced::Border {
+                        radius: 6.0.into(),
                         ..Default::default()
-                    }),
-            )
-            .on_press(Message::SetActivePanel(panel))
-            .style(move |_t, status| iced::widget::button::Style {
-                background: Some(Background::Color(match status {
-                    iced::widget::button::Status::Hovered => {
-                        iced::Color::from_rgba(1.0, 1.0, 1.0, 0.06)
-                    }
-                    _ => iced::Color::TRANSPARENT,
-                })),
-                border: iced::Border {
-                    radius: 6.0.into(),
+                    },
+                    text_color: icon_color,
                     ..Default::default()
-                },
-                text_color: icon_color,
-                ..Default::default()
-            })
-            .padding(0)
-            .into()
-        };
+                })
+                .padding(0)
+                .into()
+            };
 
         let activity_bar: Element<'_, Message> = container(
             iced::widget::column![
@@ -110,7 +113,12 @@ impl App {
                 make_activity_icon(ICON_GIT, ActivePanel::Git),
             ]
             .spacing(4)
-            .padding(iced::Padding { top: 8.0, right: 4.0, bottom: 4.0, left: 4.0 }),
+            .padding(iced::Padding {
+                top: 8.0,
+                right: 4.0,
+                bottom: 4.0,
+                left: 4.0,
+            }),
         )
         .width(Length::Fixed(48.0))
         .height(Length::Fill)
@@ -123,7 +131,9 @@ impl App {
         let base_content: Element<'_, Message> = if self.sidebar_visible {
             let panel: Element<'_, Message> = match self.active_panel {
                 ActivePanel::Files => view_sidebar(self.file_tree.as_ref(), self.sidebar_width),
-                ActivePanel::Git => crate::ui::view_git_panel(&self.git_changes, self.sidebar_width),
+                ActivePanel::Git => {
+                    crate::ui::view_git_panel(&self.git_changes, self.sidebar_width)
+                },
             };
 
             let activity_separator = container(text(""))
@@ -136,15 +146,20 @@ impl App {
                 .height(Length::Fill)
                 .style(sidebar_editor_separator_style);
 
-            let resize_zone = mouse_area(
-                container(text(""))
-                    .width(Length::Fixed(4.0))
-                    .height(Length::Fill),
-            )
-            .on_press(Message::SidebarResizeStart)
-            .interaction(iced::mouse::Interaction::ResizingHorizontally);
+            let resize_zone =
+                mouse_area(container(text("")).width(Length::Fixed(4.0)).height(Length::Fill))
+                    .on_press(Message::SidebarResizeStart)
+                    .interaction(iced::mouse::Interaction::ResizingHorizontally);
 
-            row![activity_bar, activity_separator, panel, separator, resize_zone, editor_area].into()
+            row![
+                activity_bar,
+                activity_separator,
+                panel,
+                separator,
+                resize_zone,
+                editor_area
+            ]
+            .into()
         } else {
             let activity_separator = container(text(""))
                 .width(Length::Fixed(1.0))
@@ -167,12 +182,12 @@ impl App {
             status_bar,
         ];
 
-        let wrapped = container(with_status)
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .style(|_theme| container::Style {
-                background: Some(Background::Color(theme().bg_editor)),
-                ..Default::default()
+        let wrapped =
+            container(with_status).width(Length::Fill).height(Length::Fill).style(|_theme| {
+                container::Style {
+                    background: Some(Background::Color(theme().bg_editor)),
+                    ..Default::default()
+                }
             });
 
         let base_view: Element<'_, Message> = if self.command_palette.open {
@@ -203,11 +218,12 @@ impl App {
         };
 
         // Ghost tab follows the cursor at window level so it isn't clipped by the tab bar.
-        let with_drag_ghost: Element<'_, Message> = if let Some(ghost) = self.view_floating_drag_ghost() {
-            stack![with_notification, ghost].into()
-        } else {
-            with_notification
-        };
+        let with_drag_ghost: Element<'_, Message> =
+            if let Some(ghost) = self.view_floating_drag_ghost() {
+                stack![with_notification, ghost].into()
+            } else {
+                with_notification
+            };
 
         if self.update_banner.is_some() {
             stack![with_drag_ghost, self.view_update_banner()].into()

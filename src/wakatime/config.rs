@@ -6,9 +6,7 @@
 //! - Config file (.config/pinel) location
 //! - Parsing and/or writing to and from lua to theme code
 
-use std::fs;
-use std::io::Write;
-use std::path::PathBuf;
+use std::{fs, io::Write, path::PathBuf};
 
 #[derive(Debug, Clone)]
 pub struct WakaTimeConfig {
@@ -92,7 +90,7 @@ fn from_lua(content: &str) -> Result<WakaTimeConfig, String> {
             match key {
                 "api_key" => cfg.api_key = value, // secret, keep private
                 "api_url" => cfg.api_url = value,
-                _ => {}
+                _ => {},
             }
         }
     }
