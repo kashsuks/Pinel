@@ -18,3 +18,13 @@ where_single_line = false
 
 match_block_trailling_comma = true
 match_arm_leading_pipes = "Never"
+
+# -- misc --
+use_field_init_shorthand = true
+use_try_shorthand = true
+merge_derives = true
+trailling_comma = "Vertical"
+trailling_semicolon = true
+struct_field_align_threshold = 0
+chain_width = 80
+single_line_if_else_max_width = 0
