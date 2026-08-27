@@ -1,0 +1,20 @@
+# Pinel formatting rules
+
+edition = "2021"
+
+max_width = 100
+tab_spaces = 4
+hard_tabs = false
+newline_style = "Unix"
+
+imports_granularity = "Crate"
+group_imports = "StdExternalCrate"
+reorder_imports = true
+reorder_modules = true
+
+fn_params_layout = "Tall"
+fn_single_line = false
+where_single_line = false
+
+match_block_trailling_comma = true
+match_arm_leading_pipes = "Never"
