@@ -1713,6 +1713,9 @@ impl App {
                 }
                 iced::Task::none()
             },
+            Message::ToggleLineComment => {
+                self.update(Message::CodeEditorEvent(EditorMessage::ToggleComment))
+            },
             Message::ToggleSettings => {
                 self.settings_open = !self.settings_open;
                 self.theme_dropdown_open = false;
