@@ -71,6 +71,11 @@ impl CommandPalette {
                 name: "Find and Replace".to_string(),
                 description: "Search and replace text in editor".to_string(),
             },
+            Command {
+                name: "Toggle Comment".to_string(),
+                description: "Comment or uncomment the current line/selelection (Ctrl+/)"
+                    .to_string(),
+            }
         ];
 
         if include_markdown_render {

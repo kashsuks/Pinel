@@ -16,6 +16,7 @@
 //! a command action
 
 use super::*;
+use iced_code_editor::Message as EditorMessage;
 
 impl App {
     pub(super) fn execute_palette_command(&mut self, command: &str) -> iced::Task<Message> {
@@ -39,6 +40,11 @@ impl App {
                     return iced::widget::operation::focus(self.find_input_id.clone());
                 }
             },
+            "Toggle Comment" => {
+                return iced::Task::perform(async {}, |_| {
+                    Message::CodeEditorEvent(EditorMessage::ToggleComment)
+                });
+            }
             "New File" => {
                 let editor = self.configured_code_editor("", "txt");
                 self.tabs.push(Tab {
