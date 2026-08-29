@@ -30,6 +30,7 @@ impl Default for EditorPreferences {
             tab_size: 4,
             use_spaces: true,
             auto_indent_enabled: true,
+            vim_mode_enabled: false,
             autosave_enabled: true,
             autosave_interval_ms: 300,
             theme_name: "Pinel Blueberry Dark".to_string(),
