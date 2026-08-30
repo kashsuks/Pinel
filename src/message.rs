@@ -22,6 +22,18 @@ pub enum Message {
     FolderToggled(PathBuf),
 
     FileTreeRefresh,
+    CursorPositionTracked(f32, f32),
+    FileTreeContextMenuOpen(PathBuf, bool),
+    FileTreeContextMenuClose,
+    FileTreeNewFile,
+    FileTreeNewFolder,
+    FileTreeRenameStart,
+    FileTreeRenameInputChanged(String),
+    FileTreeRenameSubmit,
+    FileTreeRenameCancel,
+    FileTreeReveal,
+    FileTreeCopyPath,
+    FileTreeDelete,
     ToggleSidebar,
     SetActivePanel(crate::app::ActivePanel),
 
