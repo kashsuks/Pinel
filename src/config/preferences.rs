@@ -122,7 +122,7 @@ fn parse_preferences(content: &str) -> EditorPreferences {
                 },
                 "vim_mode_enabled" => {
                     prefs.vim_mode_enabled = value == "true";
-                }
+                },
                 "autosave_enabled" => {
                     prefs.autosave_enabled = value == "true";
                 },

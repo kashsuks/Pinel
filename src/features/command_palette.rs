@@ -75,7 +75,7 @@ impl CommandPalette {
                 name: "Toggle Comment".to_string(),
                 description: "Comment or uncomment the current line/selelection (Ctrl+/)"
                     .to_string(),
-            }
+            },
         ];
 
         if include_markdown_render {

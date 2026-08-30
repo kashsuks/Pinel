@@ -1753,7 +1753,7 @@ impl App {
                     !self.editor_preferences.vim_mode_enabled;
                 self.apply_vim_mode_to_tabs();
                 iced::Task::none()
-            }
+            },
             Message::SettingsToggleAutosave => {
                 self.editor_preferences.autosave_enabled =
                     !self.editor_preferences.autosave_enabled;

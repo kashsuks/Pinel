@@ -44,7 +44,7 @@ impl App {
                 return iced::Task::perform(async {}, |_| {
                     Message::CodeEditorEvent(EditorMessage::ToggleComment)
                 });
-            }
+            },
             "New File" => {
                 let editor = self.configured_code_editor("", "txt");
                 self.tabs.push(Tab {
