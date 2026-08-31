@@ -28,7 +28,7 @@ fn menu_item_destructive(label: &'static str, message: Message) -> Element<'stat
 fn seperator<'a>() -> Element<'a, Message> {
     container(Space::new().width(Length::Fill).height(Length::Fixed(1.0)))
         .style(context_menu_seperator_style)
-        .padding(iced::Padding { top: 4.0, right: 0.0, bottom: 4.0, left: 0.0 })
+        .padding(iced::Padding { top: 2.0, right: 0.0, bottom: 2.0, left: 0.0 })
         .into()
 }
 

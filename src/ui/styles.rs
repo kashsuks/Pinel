@@ -104,8 +104,7 @@ pub fn context_menu_seperator_style(_theme: &Theme) -> container::Style {
 
     let gradient = iced::gradient::Linear::new(iced::Radians(std::f32::consts::FRAC_PI_2))
         .add_stop(0.0, transparent)
-        .add_stop(0.15, line_color)
-        .add_stop(0.85, line_color)
+        .add_stop(0.5, line_color)
         .add_stop(1.0, transparent);
 
     container::Style {
