@@ -174,7 +174,7 @@ fn render_entries<'a>(
     items: &mut Vec<Element<'a, Message>>,
     rename_target: Option<&'a (std::path::PathBuf, bool)>,
     rename_input: &'a str,
-    rename_iput_id: iced::widget::Id,
+    rename_input_id: iced::widget::Id,
 ) {
     let indent_width = INDENT_WIDTH * depth as f32;
 
@@ -227,15 +227,54 @@ fn render_entries<'a>(
 
                 if is_expanded {
                     render_entries(
-                        children, 
-                        tree, 
-                        depth + 1, 
-                        items, 
-                        rename_target, 
-                        rename_input, 
-                        rename_iput_id.clone(),
+                        children,
+                        tree,
+                        depth + 1,
+                        items,
+                        rename_target,
+                        rename_input,
+                        rename_input_id.clone(),
                     );
                 }
+            }
+            FileEntry::File { path, name } => {
+                let is_renaming = rename_target.map(|(p, _)| p.as_path()) == Some(path.as_path());
+
+                let row_el: Element<'a, Message> = if is_renaming {
+                    render_rename_row(
+                        indent_width,
+                        get_file_icon(name),
+                        rename_input,
+                        rename_input_id.clone(),
+                    )
+                } else {
+                    let icon: Element<'_, Message> = icon_widget(get_file_icon(name));
+
+                    let btn = button(
+                        row![
+                            container(text("")).width(Length::Fixed(indent_width)),
+                            icon,
+                            text(name).size(13),
+                        ]
+                        .spacing(6)
+                        .align_y(iced::Alignment::Center),
+                    )
+                    .style(tree_button_style)
+                    .on_press(Message::FileClicked(path.clone()))
+                    .padding(iced::Padding {
+                        top: 6.0,
+                        right: 10.0,
+                        bottom: 6.0,
+                        left: 10.0,
+                    })
+                    .width(Length::Fill);
+
+                    mouse_area(btn)
+                        .on_right_press(Message::FileTreeContextMenuOpen(path.clone(), false))
+                        .into()
+                };
+
+                items.push(row_el);
             }
         }
     }

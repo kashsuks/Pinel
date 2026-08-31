@@ -269,7 +269,7 @@ impl App {
     fn create_file_tree_entry(&mut self, is_folder: bool) -> iced::Task<Message> {
         let Some(target) = self.context_menu.take() else {
             return iced::Task::none();
-        }
+        };
 
         let parent_dir = if target.is_dir {
             target.path.clone()
@@ -1248,7 +1248,7 @@ impl App {
                     let _ = std::process::Command::new("explorer")
                         .arg(format!("/select,{}", target.path.display()))
                         .spawn();
-                    #[cfg(not(any(taget_os = "macos", target_os = "windows")))]
+                    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
                     {
                         let reveal_dir = if target.is_dir {
                             target.path.clone()

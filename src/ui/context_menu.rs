@@ -2,7 +2,6 @@ use iced::widget::{button, column, container, text, Space};
 use iced::{Element, Length};
 
 use crate::message::Message;
-use crate::theme::*;
 use crate::ui::styles::{
     context_menu_item_style, context_menu_item_style_destructive, context_menu_panel_style,
     context_menu_seperator_style,
