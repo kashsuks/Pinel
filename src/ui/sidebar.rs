@@ -1,5 +1,5 @@
 use iced::{
-    widget::{button, column, container, image, row, scrollable, text},
+    widget::{button, column, container, mouse_area, image, row, scrollable, text, text_input},
     Element, Length,
 };
 
@@ -10,7 +10,7 @@ use crate::{
     },
     message::Message,
     theme::*,
-    ui::styles::{sidebar_container_style, tree_button_style},
+    ui::styles::{rename_input_style, sidebar_container_style, tree_button_style},
 };
 
 /// Create an icon element from embedded bytes.
@@ -106,9 +106,15 @@ pub fn view_git_panel<'a>(changes: &'a [(String, String)], width: f32) -> Elemen
         .into()
 }
 
-pub fn view_sidebar<'a>(file_tree: Option<&'a FileTree>, width: f32) -> Element<'a, Message> {
+pub fn view_sidebar<'a>(
+    file_tree: Option<&'a FileTree>,
+    width: f32,
+    rename_target: Option<&'a (std::path::PathBuf, bool)>,
+    rename_input: &'a str,
+    rename_input_id: iced::widget::Id,
+) -> Element<'a, Message> {
     let sidebar_content: Element<'a, Message> = match file_tree {
-        Some(tree) => view_file_tree(tree),
+        Some(tree) => view_file_tree(tree, rename_target, rename_input, rename_input_id),
         None => view_empty_sidebar(),
     };
 
@@ -126,9 +132,22 @@ pub fn view_sidebar<'a>(file_tree: Option<&'a FileTree>, width: f32) -> Element<
     container(sidebar).padding(0).into()
 }
 
-fn view_file_tree(tree: &FileTree) -> Element<'_, Message> {
-    let mut items: Vec<Element<'_, Message>> = Vec::new();
-    render_entries(&tree.entries, tree, 0, &mut items);
+fn view_file_tree<'a>(
+    tree: &'a FileTree,
+    rename_target: Option<&'a (std::path::PathBuf, bool)>,
+    rename_input: &'a str,
+    rename_input_id: iced::widget::Id,
+) -> Element<'a, Message> {
+    let mut items: Vec<Element<'a, Message>> = Vec::new();
+    render_entries(
+        &tree.entries, 
+        tree, 
+        0, 
+        &mut items,
+        rename_target,
+        rename_input,
+        rename_input_id,
+    );
     column(items).spacing(4).into()
 }
 
@@ -153,68 +172,110 @@ fn render_entries<'a>(
     tree: &'a FileTree,
     depth: usize,
     items: &mut Vec<Element<'a, Message>>,
+    rename_target: Option<&'a (std::path::PathBuf, bool)>,
+    rename_input: &'a str,
+    rename_iput_id: iced::widget::Id,
 ) {
     let indent_width = INDENT_WIDTH * depth as f32;
 
     for entry in entries {
         match entry {
-            FileEntry::Directory {
-                path,
-                name,
-                children,
+            FileEntry::Directory { 
+                path, 
+                name, 
+                children 
             } => {
                 let is_expanded = tree.is_expanded(path);
-                let icon: Element<'_, Message> = icon_widget(get_folder_icon(name, is_expanded));
+                let is_renaming = rename_target.map(|(p, _)| p.as_path()) == Some(path.as_path());
 
-                let btn = button(
-                    row![
-                        container(text("")).width(Length::Fixed(indent_width)),
-                        icon,
-                        text(name).size(13),
-                    ]
-                    .spacing(6)
-                    .align_y(iced::Alignment::Center),
-                )
-                .style(tree_button_style)
-                .on_press(Message::FolderToggled(path.clone()))
-                .padding(iced::Padding {
-                    top: 6.0,
-                    right: 10.0,
-                    bottom: 6.0,
-                    left: 10.0,
-                })
-                .width(Length::Fill);
+                let row_el: Element<'a, Message> = if is_renaming {
+                    render_rename_row(
+                        indent_width,
+                        get_folder_icon(name, is_expanded),
+                        rename_input,
+                        rename_input_id.clone(),
+                    )
+                } else {
+                    let icon: Element<'_, Message> =
+                        icon_widget(get_folder_icon(name, is_expanded));
 
-                items.push(btn.into());
+                    let btn = button(
+                        row![
+                            container(text("")).width(Length::Fixed(indent_width)),
+                            icon,
+                            text(name).size(13),
+                        ]
+                        .spacing(6)
+                        .align_y(iced::Alignment::Center),
+                    )
+                    .style(tree_button_style)
+                    .on_press(Message::FolderToggled(path.clone()))
+                    .padding(iced::Padding {
+                        top: 6.0,
+                        right: 10.0,
+                        bottom: 6.0,
+                        left: 10.0,
+                    })
+                    .width(Length::Fill);
+
+                    mouse_area(btn)
+                        .on_right_press(Message::FileTreeContextMenuOpen(path.clone(), true))
+                        .into()
+                };
+
+                items.push(row_el);
 
                 if is_expanded {
-                    render_entries(children, tree, depth + 1, items);
+                    render_entries(
+                        children, 
+                        tree, 
+                        depth + 1, 
+                        items, 
+                        rename_target, 
+                        rename_input, 
+                        rename_iput_id.clone(),
+                    );
                 }
-            },
-            FileEntry::File { path, name } => {
-                let icon: Element<'_, Message> = icon_widget(get_file_icon(name));
-
-                let btn = button(
-                    row![
-                        container(text("")).width(Length::Fixed(indent_width)),
-                        icon,
-                        text(name).size(13),
-                    ]
-                    .spacing(6)
-                    .align_y(iced::Alignment::Center),
-                )
-                .style(tree_button_style)
-                .on_press(Message::FileClicked(path.clone()))
-                .padding(iced::Padding {
-                    top: 6.0,
-                    right: 10.0,
-                    bottom: 6.0,
-                    left: 10.0,
-                })
-                .width(Length::Fill);
-
-                items.push(btn.into());
-            },
+            }
         }
     }
+}
+
+fn render_rename_row<'a>(
+    indent_width: f32,
+    icon: IconAsset,
+    rename_input: &'a str,
+    rename_input_id: iced::widget::Id,
+) -> Element<'a, Message> {
+    let input = text_input("", rename_input)
+        .id(rename_input_id)
+        .on_input(Message::FileTreeRenameInputChanged)
+        .on_submit(Message::FileTreeRenameSubmit)
+        .size(13)
+        .padding(iced::Padding {
+            top: 2.0,
+            right: 4.0,
+            bottom: 2.0,
+            left: 4.0,
+        })
+        .style(rename_input_style)
+        .width(Length::Fill);
+
+    container(
+        row![
+            container(text("")).width(Length::Fixed(indent_width)),
+            icon_widget(icon),
+            input,
+        ]
+        .spacing(6)
+        .align_y(iced::Alignment::Center),
+    )
+    .padding(iced::Padding {
+        top: 6.0,
+        right: 10.0,
+        bottom: 6.0,
+        left: 10.0,
+    })
+    .width(Length::Fill)
+    .into()
 }
