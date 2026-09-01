@@ -130,7 +130,13 @@ impl App {
 
         let base_content: Element<'_, Message> = if self.sidebar_visible {
             let panel: Element<'_, Message> = match self.active_panel {
-                ActivePanel::Files => view_sidebar(self.file_tree.as_ref(), self.sidebar_width),
+                ActivePanel::Files => view_sidebar(
+                    self.file_tree.as_ref(),
+                    self.sidebar_width,
+                    self.rename_target.as_ref(),
+                    &self.rename_input,
+                    self.rename_input_id.clone(),
+                ),
                 ActivePanel::Git => {
                     crate::ui::view_git_panel(&self.git_changes, self.sidebar_width)
                 },
@@ -225,10 +231,16 @@ impl App {
                 with_notification
             };
 
-        if self.update_banner.is_some() {
-            stack![with_drag_ghost, self.view_update_banner()].into()
+        let with_context_menu: Element<'_, Message> = if self.context_menu.is_some() {
+            stack![with_drag_ghost, self.view_context_menu_overlay()].into()
         } else {
             with_drag_ghost
+        };
+
+        if self.update_banner.is_some() {
+            stack![with_context_menu, self.view_update_banner()].into()
+        } else {
+            with_context_menu
         }
     }
 }

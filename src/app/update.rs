@@ -266,6 +266,51 @@ impl App {
         iced::Task::none()
     }
 
+    fn create_file_tree_entry(&mut self, is_folder: bool) -> iced::Task<Message> {
+        let Some(target) = self.context_menu.take() else {
+            return iced::Task::none();
+        };
+
+        let parent_dir = if target.is_dir {
+            target.path.clone()
+        } else {
+            target
+                .path
+                .parent()
+                .map(Path::to_path_buf)
+                .unwrap_or(target.path.clone())
+        };
+
+        let base_name = if is_folder { "New Folder" } else { "Untitled" };
+        let mut candidate = parent_dir.join(base_name);
+        let mut suffix = 2;
+        while candidate.exists() {
+            candidate = parent_dir.join(format!("{base_name} {suffix}"));
+            suffix += 1;
+        }
+
+        let created = if is_folder {
+            std::fs::create_dir(&candidate)
+        } else {
+            std::fs::write(&candidate, "")
+        };
+
+        if created.is_ok() {
+            if let Some(ref mut tree) = self.file_tree {
+                tree.refresh();
+            }
+            self.rename_target = Some((candidate.clone(), is_folder));
+            self.rename_input = candidate
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or(base_name)
+                .to_string();
+            return iced::widget::operation::focus(self.rename_input_id.clone());
+        }
+
+        iced::Task::none()
+    }
+
     /// Applies a single application message and returns follow-up async work.
     ///
     /// # Arguments
@@ -1126,6 +1171,121 @@ impl App {
 
                 iced::Task::none()
             },
+            Message::CursorPositionTracked(x, y) => {
+                self.last_cursor_position = iced::Point::new(x, y); // ensure this is global and
+                                                                    // possible to reference
+                iced::Task::none()
+            },
+            Message::FileTreeContextMenuOpen(path, is_dir) => {
+                self.context_menu = Some(crate::features::file_tree::ContextMenuTarget {
+                    path,
+                    is_dir,
+                    position: self.last_cursor_position,
+                });
+                iced::Task::none()
+            }
+            Message::FileTreeContextMenuClose => {
+                self.context_menu = None;
+                iced::Task::none()
+            }
+            Message::FileTreeNewFile => self.create_file_tree_entry(false),
+            Message::FileTreeNewFolder => self.create_file_tree_entry(true),
+            Message::FileTreeRenameStart => {
+                if let Some(target) = self.context_menu.take() {
+                    self.rename_input = target
+                        .path
+                        .file_name()
+                        .and_then(|n| n.to_str())
+                        .unwrap_or_default()
+                        .to_string();
+                    self.rename_target = Some((target.path, target.is_dir));
+                    return iced::widget::operation::focus(self.rename_input_id.clone());
+                }
+                iced::Task::none()
+            },
+            Message::FileTreeRenameInputChanged(value) => {
+                self.rename_input = value;
+                iced::Task::none()
+            },
+            Message::FileTreeRenameCancel => {
+                self.rename_target = None;
+                self.rename_input.clear();
+                iced::Task::none()
+            },
+            Message::FileTreeRenameSubmit => {
+                if let Some((old_path, _is_dir)) = self.rename_target.take() {
+                    let new_name = self.rename_input.trim();
+                    if !new_name.is_empty() {
+                        if let Some(parent) = old_path.parent() {
+                            let new_path = parent.join(new_name);
+                            if new_path != old_path
+                                && std::fs::rename(&old_path, &new_path).is_ok()
+                            {
+                                for tab in &mut self.tabs {
+                                    if tab.path == old_path {
+                                        tab.path = new_path.clone();
+                                        tab.name = new_name.to_string();
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    self.rename_input.clear();
+                    if let Some(ref mut tree) = self.file_tree {
+                        tree.refresh();
+                    }
+                }
+                iced::Task::none()
+            },
+            Message::FileTreeReveal => {
+                if let Some(target) = self.context_menu.take() {
+                    #[cfg(target_os = "macos")]
+                    let _ = std::process::Command::new("open")
+                        .arg("-R")
+                        .arg(&target.path)
+                        .spawn();
+                    #[cfg(target_os = "windows")]
+                    let _ = std::process::Command::new("explorer")
+                        .arg(format!("/select,{}", target.path.display()))
+                        .spawn();
+                    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+                    {
+                        let reveal_dir = if target.is_dir {
+                            target.path.clone()
+                        } else {
+                            target
+                                .path
+                                .parent()
+                                .map(Path::to_path_buf)
+                                .unwrap_or(target.path.clone())
+                        };
+                        let _ = std::process::Command::new("xdg-open").arg(reveal_dir).spawn();
+                    }
+                }
+                iced::Task::none()
+            },
+            Message::FileTreeCopyPath => {
+                if let Some(target) = self.context_menu.take() {
+                    return iced::clipboard::write(target.path.display().to_string());
+                }
+                iced::Task::none()
+            },
+            Message::FileTreeDelete => {
+                if let Some(target) = self.context_menu.take() {
+                    let removed = if target.is_dir {
+                        std::fs::remove_dir_all(&target.path)
+                    } else {
+                        std::fs::remove_file(&target.path)
+                    };
+                    if removed.is_ok() {
+                        self.tabs.retain(|tab| !tab.path.starts_with(&target.path));
+                        if let Some(ref mut tree) = self.file_tree {
+                            tree.refresh();
+                        }
+                    }
+                }
+                iced::Task::none()
+            }
             Message::OpenFolderDialog => iced::Task::perform(
                 async {
                     rfd::AsyncFileDialog::new()

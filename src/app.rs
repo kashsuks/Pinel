@@ -195,6 +195,12 @@ pub struct App {
     active_panel: ActivePanel,
     git_changes: Vec<(String, String)>,
 
+    last_cursor_position: iced::Point,
+    context_menu: Option<crate::features::file_tree::ContextMenuTarget>,
+    rename_target: Option<(std::path::PathBuf, bool)>,
+    rename_input: String,
+    rename_input_id: iced::widget::Id,
+
     startup_page_open: bool,
     startup_vim_mode: bool,
     startup_helix_mode: bool,
@@ -341,6 +347,12 @@ impl Default for App {
 
             active_panel: ActivePanel::Files,
             git_changes: Vec::new(),
+
+            last_cursor_position: iced::Point::ORIGIN,
+            context_menu: None,
+            rename_target: None,
+            rename_input: String::new(),
+            rename_input_id: iced::widget::Id::unique(),
 
             startup_page_open: editor_preferences.first_launch,
             startup_vim_mode: false,

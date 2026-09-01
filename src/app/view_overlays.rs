@@ -3,6 +3,36 @@ use iced::widget::column;
 use super::*;
 
 impl App {
+    pub(super) fn view_context_menu_overlay(&self) -> Element<'_, Message> {
+        use iced::widget::{opaque, stack, Space};
+
+        let position = self
+            .context_menu
+            .as_ref()
+            .map(|target| target.position)
+            .unwrap_or(iced::Point::ORIGIN);
+
+        let backdrop = mouse_area(
+            container(Space::new())
+                .width(Length::Fill)
+                .height(Length::Fill),
+        )
+        .on_press(Message::FileTreeContextMenuClose)
+        .on_right_press(Message::FileTreeContextMenuClose);
+
+        let positioned_menu = container(opaque(crate::ui::view_context_menu()))
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .padding(iced::Padding {
+                top: position.y,
+                right: 0.0,
+                bottom: 0.0,
+                left: position.x,
+            });
+
+        stack![backdrop, positioned_menu].into()
+    }
+
     /// Returns a window-level ghost element for floating tab drag, or None when not dragging.
     pub(super) fn view_floating_drag_ghost(&self) -> Option<Element<'_, Message>> {
         if !self.editor_preferences.tab_drag_floating {

@@ -88,6 +88,13 @@ impl FileTree {
 
 const IGNORED_DIRS: &[&str] = &[".git", "node_modules", "target", ".DS_Store", "__pycache__"];
 
+#[derive(Debug, Clone)]
+pub struct ContextMenuTarget {
+    pub path: PathBuf,
+    pub is_dir: bool,
+    pub position: iced::Point,
+}
+
 fn scan_directory(path: &Path) -> Vec<FileEntry> {
     let mut entries = Vec::new(); // An empty vector of entires
 

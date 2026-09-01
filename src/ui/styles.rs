@@ -18,6 +18,101 @@ fn lighten(color: Color, amount: f32) -> Color {
     )
 }
 
+pub fn rename_input_style(
+    _theme: &Theme,
+    _status: iced::widget::text_input::Status,
+) -> iced::widget::text_input::Style {
+    iced::widget::text_input::Style {
+        background: Background::Color(theme().bg_hover),
+        border: Border {
+            color: theme().selection,
+            width: 1.0,
+            radius: 3.0.into(),
+        },
+        icon: theme().text_dim,
+        placeholder: theme().text_placeholder,
+        value: theme().text_primary,
+        selection: theme().selection,
+    }
+}
+
+pub fn context_menu_panel_style(_theme: &Theme) -> container::Style {
+    container::Style {
+        background: Some(Background::Color(Color::from_rgba(
+            (theme().bg_primary.r + 0.04).min(1.0), 
+            (theme().bg_primary.g + 0.04).min(1.0), 
+            (theme().bg_primary.b + 0.07).min(1.0), 
+            0.98,
+        ))),
+        border: Border {
+            color: Color::from_rgba(1.0, 1.0, 1.0, 0.10),
+            width: 1.0,
+            radius: 8.0.into(),
+        },
+        shadow: iced::Shadow {
+            color: Color::from_rgba(0.0, 0.0, 0.0, 0.6),
+            offset: Vector::new(0.0, 12.0),
+            blur_radius: 40.0,
+        },
+        ..Default::default()
+    }
+}
+
+pub fn context_menu_item_style(_theme: &Theme, status: ButtonStatus) -> ButtonStyle {
+    let background = match status {
+        ButtonStatus::Hovered | ButtonStatus::Pressed => Some(Background::Color(theme().bg_hover)),
+        _ => None,
+    };
+
+    ButtonStyle {
+        background,
+        text_color: theme().text_primary,
+        border: Border {
+            color: Color::TRANSPARENT,
+            width: 0.0,
+            radius: 4.0.into(),
+        },
+        shadow: Default::default(),
+        snap: false,
+    }
+}
+
+pub fn context_menu_item_style_destructive(_theme: &Theme, status: ButtonStatus) -> ButtonStyle {
+    let background = match status {
+        ButtonStatus::Hovered | ButtonStatus::Pressed => {
+            Some(Background::Color(Color::from_rgba(0.92, 0.37, 0.37, 0.14)))
+        }
+        _ => None,
+    };
+
+    ButtonStyle {
+        background,
+        text_color: Color::from_rgb(0.92, 0.45, 0.45),
+        border: Border {
+            color: Color::TRANSPARENT,
+            width: 0.0,
+            radius: 4.0.into(),
+        },
+        shadow: Default::default(),
+        snap: false,
+    }
+}
+
+pub fn context_menu_seperator_style(_theme: &Theme) -> container::Style {
+    let line_color = Color::from_rgba(1.0, 1.0, 1.0, 0.14);
+    let transparent = Color::from_rgba(1.0, 1.0, 1.0, 0.0);
+
+    let gradient = iced::gradient::Linear::new(iced::Radians(std::f32::consts::FRAC_PI_2))
+        .add_stop(0.0, transparent)
+        .add_stop(0.5, line_color)
+        .add_stop(1.0, transparent);
+
+    container::Style {
+        background: Some(Background::Gradient(iced::Gradient::Linear(gradient))),
+        ..Default::default()
+    }
+}
+
 pub fn tree_button_style(_theme: &Theme, status: ButtonStatus) -> ButtonStyle {
     let background = match status {
         ButtonStatus::Hovered => Some(Background::Color(theme().bg_hover)),

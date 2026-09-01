@@ -9,6 +9,7 @@ impl App {
             crate::subscriptions::keyboard::shortcuts(),
             crate::subscriptions::keyboard::modifier_state(),
             crate::subscriptions::mouse::sidebar_resize(),
+            crate::subscriptions::mouse::cursor_tracker(),
             crate::subscriptions::window::resizes(),
             crate::subscriptions::window::focus_refresh(),
             iced::time::every(Duration::from_millis(150)).map(|_| Message::LspTick),
