@@ -129,6 +129,25 @@ pub fn view_sidebar<'a>(
         })
         .style(sidebar_container_style);
 
+    // Wrap the whole panel (outside the scrollable) so right-clicks on
+    // empty space - below the last row, in row gaps, anywhere the
+    // scrollable's content doesn't cover - still open the context menu,
+    // targeting the tree's root folder. Row-level mouse_areas are nested
+    // inside and consume the event first when the click actually lands on
+    // a row, so this only fires for genuine empty-space clicks.
+    //
+    // Note: this can't be done by making the scrollable's *content* fill
+    // the panel - iced marks a vertical scrollable's content height as
+    // "compressed", which makes Length::Fill resolve to the content's
+    // intrinsic size instead of the available space, so it never actually
+    // reaches the empty area below the rows.
+    let sidebar: Element<'a, Message> = match file_tree {
+        Some(tree) => mouse_area(sidebar)
+            .on_right_press(Message::FileTreeContextMenuOpen(tree.root.clone(), true))
+            .into(),
+        None => sidebar.into(),
+    };
+
     container(sidebar).padding(0).into()
 }
 
