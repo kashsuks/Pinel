@@ -1,5 +1,6 @@
 //! Feature modules grouped under a single namespace.
 
+pub mod activity_state;
 pub mod command_input;
 pub mod command_palette;
 pub mod editor_buffer;
