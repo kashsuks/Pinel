@@ -1907,6 +1907,11 @@ impl App {
                 self.apply_vim_mode_to_tabs();
                 iced::Task::none()
             },
+            Message::SettingsToggleDiscordRpc => {
+                self.editor_preferences.discord_rpc_enabled =
+                    !self.editor_preferences.discord_rpc_enabled;
+                iced::Task::none()
+            }
             Message::SettingsToggleAutosave => {
                 self.editor_preferences.autosave_enabled =
                     !self.editor_preferences.autosave_enabled;
