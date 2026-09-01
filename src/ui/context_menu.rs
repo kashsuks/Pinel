@@ -11,7 +11,12 @@ fn menu_item(label: &'static str, message: Message) -> Element<'static, Message>
     button(text(label).size(13))
         .on_press(message)
         .style(context_menu_item_style)
-        .padding(iced::Padding { top: 7.0, right: 14.0, bottom: 7.0, left: 14.0 })
+        .padding(iced::Padding {
+            top: 7.0,
+            right: 14.0,
+            bottom: 7.0,
+            left: 14.0,
+        })
         .width(Length::Fill)
         .into()
 }
@@ -20,7 +25,12 @@ fn menu_item_destructive(label: &'static str, message: Message) -> Element<'stat
     button(text(label).size(13))
         .on_press(message)
         .style(context_menu_item_style_destructive)
-        .padding(iced::Padding { top: 7.0, right: 14.0, bottom: 7.0, left: 14.0 })
+        .padding(iced::Padding {
+            top: 7.0,
+            right: 14.0,
+            bottom: 7.0,
+            left: 14.0,
+        })
         .width(Length::Fill)
         .into()
 }
@@ -28,7 +38,12 @@ fn menu_item_destructive(label: &'static str, message: Message) -> Element<'stat
 fn seperator<'a>() -> Element<'a, Message> {
     container(Space::new().width(Length::Fill).height(Length::Fixed(1.0)))
         .style(context_menu_seperator_style)
-        .padding(iced::Padding { top: 2.0, right: 0.0, bottom: 2.0, left: 0.0 })
+        .padding(iced::Padding {
+            top: 2.0,
+            right: 0.0,
+            bottom: 2.0,
+            left: 0.0,
+        })
         .into()
 }
 
@@ -55,7 +70,12 @@ pub fn view_context_menu<'a>() -> Element<'a, Message> {
         menu_item_destructive("Delete", Message::FileTreeDelete),
     ]
     .spacing(1)
-    .padding(iced::Padding { top: 6.0, right: 6.0, bottom: 6.0, left: 6.0});
+    .padding(iced::Padding {
+        top: 6.0,
+        right: 6.0,
+        bottom: 6.0,
+        left: 6.0,
+    });
 
     container(items)
         .width(Length::Fixed(220.0))

@@ -11,7 +11,7 @@ pub fn cursor_tracker() -> Subscription<Message> {
     iced::event::listen_with(|event, _status, _id| match event {
         Event::Mouse(iced::mouse::Event::CursorMoved { position }) => {
             Some(Message::CursorPositionTracked(position.x, position.y))
-        }
+        },
         _ => None,
     })
 }

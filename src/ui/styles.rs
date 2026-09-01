@@ -39,9 +39,9 @@ pub fn rename_input_style(
 pub fn context_menu_panel_style(_theme: &Theme) -> container::Style {
     container::Style {
         background: Some(Background::Color(Color::from_rgba(
-            (theme().bg_primary.r + 0.04).min(1.0), 
-            (theme().bg_primary.g + 0.04).min(1.0), 
-            (theme().bg_primary.b + 0.07).min(1.0), 
+            (theme().bg_primary.r + 0.04).min(1.0),
+            (theme().bg_primary.g + 0.04).min(1.0),
+            (theme().bg_primary.b + 0.07).min(1.0),
             0.98,
         ))),
         border: Border {
@@ -81,7 +81,7 @@ pub fn context_menu_item_style_destructive(_theme: &Theme, status: ButtonStatus)
     let background = match status {
         ButtonStatus::Hovered | ButtonStatus::Pressed => {
             Some(Background::Color(Color::from_rgba(0.92, 0.37, 0.37, 0.14)))
-        }
+        },
         _ => None,
     };
 

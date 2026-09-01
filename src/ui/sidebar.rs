@@ -1,5 +1,5 @@
 use iced::{
-    widget::{button, column, container, mouse_area, image, row, scrollable, text, text_input},
+    widget::{button, column, container, image, mouse_area, row, scrollable, text, text_input},
     Element, Length,
 };
 
@@ -159,9 +159,9 @@ fn view_file_tree<'a>(
 ) -> Element<'a, Message> {
     let mut items: Vec<Element<'a, Message>> = Vec::new();
     render_entries(
-        &tree.entries, 
-        tree, 
-        0, 
+        &tree.entries,
+        tree,
+        0,
         &mut items,
         rename_target,
         rename_input,
@@ -199,10 +199,10 @@ fn render_entries<'a>(
 
     for entry in entries {
         match entry {
-            FileEntry::Directory { 
-                path, 
-                name, 
-                children 
+            FileEntry::Directory {
+                path,
+                name,
+                children,
             } => {
                 let is_expanded = tree.is_expanded(path);
                 let is_renaming = rename_target.map(|(p, _)| p.as_path()) == Some(path.as_path());
@@ -255,7 +255,7 @@ fn render_entries<'a>(
                         rename_input_id.clone(),
                     );
                 }
-            }
+            },
             FileEntry::File { path, name } => {
                 let is_renaming = rename_target.map(|(p, _)| p.as_path()) == Some(path.as_path());
 
@@ -294,7 +294,7 @@ fn render_entries<'a>(
                 };
 
                 items.push(row_el);
-            }
+            },
         }
     }
 }

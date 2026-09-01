@@ -274,14 +274,14 @@ impl App {
         let parent_dir = if target.is_dir {
             target.path.clone()
         } else {
-            target
-                .path
-                .parent()
-                .map(Path::to_path_buf)
-                .unwrap_or(target.path.clone())
+            target.path.parent().map(Path::to_path_buf).unwrap_or(target.path.clone())
         };
 
-        let base_name = if is_folder { "New Folder" } else { "Untitled" };
+        let base_name = if is_folder {
+            "New Folder"
+        } else {
+            "Untitled"
+        };
         let mut candidate = parent_dir.join(base_name);
         let mut suffix = 2;
         while candidate.exists() {
@@ -300,11 +300,8 @@ impl App {
                 tree.refresh();
             }
             self.rename_target = Some((candidate.clone(), is_folder));
-            self.rename_input = candidate
-                .file_name()
-                .and_then(|n| n.to_str())
-                .unwrap_or(base_name)
-                .to_string();
+            self.rename_input =
+                candidate.file_name().and_then(|n| n.to_str()).unwrap_or(base_name).to_string();
             return iced::widget::operation::focus(self.rename_input_id.clone());
         }
 
@@ -1183,11 +1180,11 @@ impl App {
                     position: self.last_cursor_position,
                 });
                 iced::Task::none()
-            }
+            },
             Message::FileTreeContextMenuClose => {
                 self.context_menu = None;
                 iced::Task::none()
-            }
+            },
             Message::FileTreeNewFile => self.create_file_tree_entry(false),
             Message::FileTreeNewFolder => self.create_file_tree_entry(true),
             Message::FileTreeRenameStart => {
@@ -1218,8 +1215,7 @@ impl App {
                     if !new_name.is_empty() {
                         if let Some(parent) = old_path.parent() {
                             let new_path = parent.join(new_name);
-                            if new_path != old_path
-                                && std::fs::rename(&old_path, &new_path).is_ok()
+                            if new_path != old_path && std::fs::rename(&old_path, &new_path).is_ok()
                             {
                                 for tab in &mut self.tabs {
                                     if tab.path == old_path {
@@ -1240,10 +1236,7 @@ impl App {
             Message::FileTreeReveal => {
                 if let Some(target) = self.context_menu.take() {
                     #[cfg(target_os = "macos")]
-                    let _ = std::process::Command::new("open")
-                        .arg("-R")
-                        .arg(&target.path)
-                        .spawn();
+                    let _ = std::process::Command::new("open").arg("-R").arg(&target.path).spawn();
                     #[cfg(target_os = "windows")]
                     let _ = std::process::Command::new("explorer")
                         .arg(format!("/select,{}", target.path.display()))
@@ -1285,7 +1278,7 @@ impl App {
                     }
                 }
                 iced::Task::none()
-            }
+            },
             Message::OpenFolderDialog => iced::Task::perform(
                 async {
                     rfd::AsyncFileDialog::new()

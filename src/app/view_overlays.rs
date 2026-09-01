@@ -12,13 +12,9 @@ impl App {
             .map(|target| target.position)
             .unwrap_or(iced::Point::ORIGIN);
 
-        let backdrop = mouse_area(
-            container(Space::new())
-                .width(Length::Fill)
-                .height(Length::Fill),
-        )
-        .on_press(Message::FileTreeContextMenuClose)
-        .on_right_press(Message::FileTreeContextMenuClose);
+        let backdrop = mouse_area(container(Space::new()).width(Length::Fill).height(Length::Fill))
+            .on_press(Message::FileTreeContextMenuClose)
+            .on_right_press(Message::FileTreeContextMenuClose);
 
         let positioned_menu = container(opaque(crate::ui::view_context_menu()))
             .width(Length::Fill)
