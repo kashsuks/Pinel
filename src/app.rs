@@ -203,8 +203,6 @@ pub struct App {
 
     activity_state: crate::features::activity_state::ActiveFileState,
 
-        activity_state: crate::features::activity_state::ActiveFileState,,
-
     startup_page_open: bool,
     startup_vim_mode: bool,
     startup_helix_mode: bool,

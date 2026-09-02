@@ -34,6 +34,10 @@ pub enum Message {
     FileTreeReveal,
     FileTreeCopyPath,
     FileTreeDelete,
+    /// Fired whenever the active file or open workspace changes, from any
+    /// code path. Carries no data — consumers read the new state from
+    /// `App::activity_state` when they receive this.
+    ActiveFileChanged,
     ToggleSidebar,
     SetActivePanel(crate::app::ActivePanel),
 

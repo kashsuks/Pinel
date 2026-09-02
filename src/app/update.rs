@@ -315,6 +315,36 @@ impl App {
     /// * `message` - The event to process.
     #[allow(clippy::arc_with_non_send_sync)]
     pub fn update(&mut self, message: Message) -> iced::Task<Message> {
+        let task = self.update_message(message);
+        self.sync_activity_state(task)
+    }
+
+    /// Diffs the current active tab / workspace against `self.activity_state`
+    /// after every message, regardless of which of the many code paths
+    /// changed `active_tab` or the open folder. This is the single funnel
+    /// point: consumers don't need their own hook at each call site — they
+    /// just react to `Message::ActiveFileChanged` when it fires.
+    fn sync_activity_state(&mut self, task: iced::Task<Message>) -> iced::Task<Message> {
+        let active_path = self
+            .active_tab
+            .and_then(|idx| self.tabs.get(idx))
+            .map(|tab| tab.path.clone());
+
+        let workspace_name = self
+            .file_tree
+            .as_ref()
+            .and_then(|tree| tree.root.file_name())
+            .and_then(|name| name.to_str())
+            .map(|name| name.to_string());
+
+        if self.activity_state.update(active_path, workspace_name) {
+            iced::Task::batch([task, iced::Task::done(Message::ActiveFileChanged)])
+        } else {
+            task
+        }
+    }
+
+    fn update_message(&mut self, message: Message) -> iced::Task<Message> {
         match message {
             Message::ModifierStateChanged(modifiers) => {
                 self.modifier_state = modifiers;
@@ -2552,6 +2582,10 @@ impl App {
                 self.update_banner = None;
                 iced::Task::none()
             },
+            // No-op for now: this message exists purely so future consumers
+            // (Discord RPC, etc.) have something to react to. Nothing
+            // subscribes to it yet.
+            Message::ActiveFileChanged => iced::Task::none(),
         }
     }
 

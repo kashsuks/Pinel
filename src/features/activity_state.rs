@@ -35,6 +35,11 @@ impl ActiveFileState {
         if self.path == path && self.workspace_name == workspace_name {
             return false;
         }
+
+        self.path = path;
+        self.workspace_name = workspace_name;
+        self.since = Instant::now();
+        true
     }
 }
 
