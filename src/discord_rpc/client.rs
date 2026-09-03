@@ -6,7 +6,7 @@
 
 use discord_rich_presence::{activity, DiscordIpc, DiscordIpcClient};
 
-const DISCORD_CLIENT_ID: &str = "dummy_value_set_later";
+use super::config;
 
 pub struct DiscordRpcClient {
     inner: DiscordIpcClient,
@@ -15,9 +15,20 @@ pub struct DiscordRpcClient {
 
 impl DiscordRpcClient {
     /// Constructs the new client without connecting to anything yet.
+    ///
+    /// The application client ID is baked in at compile time from the
+    /// `DISCORD_CLIENT_ID` build environment variable (see `build.rs`), so
+    /// every official build shares the same ID without it ever appearing in
+    /// a committed source file. Builds without that variable set (e.g.
+    /// building from source without the CI secret) fall back to a
+    /// user-supplied ID in `~/.config/pinel/discord.lua` (see [`config`]).
     pub fn new() -> Self {
+        let client_id = option_env!("DISCORD_CLIENT_ID")
+            .filter(|id| !id.is_empty())
+            .map(str::to_string)
+            .unwrap_or_else(|| config::load().client_id);
         Self {
-            inner: DiscordIpcClient::new(DISCORD_CLIENT_ID),
+            inner: DiscordIpcClient::new(&client_id),
             connected: false,
         }
     }

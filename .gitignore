@@ -22,6 +22,9 @@ target
 
 *.DS_Store
 
+# Local secrets (e.g. DISCORD_CLIENT_ID) for dev builds - never commit
+.env
+
 /dist
 src/node_modules
 src/_site
