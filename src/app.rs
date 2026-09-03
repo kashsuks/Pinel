@@ -203,6 +203,8 @@ pub struct App {
 
     activity_state: crate::features::activity_state::ActiveFileState,
 
+    discord_rpc_client: Option<crate::discord_rpc::DiscordRpcClient>,
+
     startup_page_open: bool,
     startup_vim_mode: bool,
     startup_helix_mode: bool,
@@ -356,6 +358,7 @@ impl Default for App {
             rename_input: String::new(),
             rename_input_id: iced::widget::Id::unique(),
             activity_state: crate::features::activity_state::ActiveFileState::empty(),
+            discord_rpc_client: None,
 
             startup_page_open: editor_preferences.first_launch,
             startup_vim_mode: false,

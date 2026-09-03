@@ -1940,6 +1940,18 @@ impl App {
             Message::SettingsToggleDiscordRpc => {
                 self.editor_preferences.discord_rpc_enabled =
                     !self.editor_preferences.discord_rpc_enabled;
+
+                if self.editor_preferences.discord_rpc_enabled {
+                    // Connecting is a local IPC handshake ( a unix socket /
+                    // named pipe that either exits or doesn't), so it
+                    // returns quickly even when Discord isn't running
+                    let mut client = crate::discord_rpc::DiscordRpcClient::new();
+                    client.connect();
+                    self.discord_rpc_client = Some(client);
+                } else if let Some(mut client) = self.discord_rpc_client.take() {
+                    client.clear_presence();
+                }
+
                 iced::Task::none()
             }
             Message::SettingsToggleAutosave => {
