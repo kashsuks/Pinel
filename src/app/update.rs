@@ -2388,6 +2388,47 @@ impl App {
 
                 iced::Task::none()
             },
+            Message::DiscordRpcTick => {
+                if !self.editor_preferences.discord_rpc_enabled {
+                    return iced::Task::none();
+                }
+                
+                let client = self
+                    .discord_rpc_client
+                    .get_or_insert_with(crate::discord_rpc::DiscordRpcClient::new);
+
+                if !client.is_connected() {
+                    // Covers both "Discord wasnt running last time we tried"
+                    // and the app just started with this already on case
+                    client.connect();
+                }
+
+                if !client.is_connected() {
+                    return iced::Task::none();
+                }
+
+                let current = (
+                    self.activity_state.path.clone(),
+                    self.activity_state.workspace_name.clone(),
+                );
+
+                if self.discord_rpc_last_sent.as_ref() == Some(&current) {
+                    return iced::Task::none();
+                }
+
+                let elapsed = self.activity_state.since.elapsed();
+                let started_at_unix_ms = (std::time::SystemTime::now() - elapsed)
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map(|d| d.as_millis() as i64)
+                    .unwrap_or(0);
+                
+                // TO-DO: set this with actual file names
+                if client.set_presence("Using Pinel", "", started_at_unix_ms) {
+                    self.discord_rpc_last_sent = Some(current);
+                }
+
+                iced::Task::none()
+            }
             Message::AutosaveFinished(path, saved_content, result) => {
                 let Some(tab) = self.tabs.iter_mut().find(|tab| tab.path == path) else {
                     return iced::Task::none();

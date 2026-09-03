@@ -140,6 +140,7 @@ pub enum Message {
     ModifierStateChanged(iced::keyboard::Modifiers),
     LspTick,
     AutosaveTick,
+    DiscordRpcTick,
     AutosaveFinished(PathBuf, String, Result<(), String>),
 
     #[cfg(feature = "unstable-comet")]

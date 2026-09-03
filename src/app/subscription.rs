@@ -27,6 +27,11 @@ impl App {
             );
         }
 
+        if self.editor_preferences.discord_rpc_enabled {
+            // 15s matches discords own recommended rich presence update rate
+            subs.push(iced::time::every(Duration::from_secs(15)).map(|_| Message::DiscordRpcTick));
+        }
+
         if let Some(term) = &self.terminal_pane {
             subs.push(term.subscription().map(Message::TerminalEvent));
         }
