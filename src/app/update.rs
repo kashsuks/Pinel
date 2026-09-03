@@ -344,6 +344,61 @@ impl App {
         }
     }
 
+    /// Pushes the current file/workspace to Discord if it differs from what
+    /// was last sent. The `start` timestamp is only recomputed when we
+    /// actually send - Discord animates the elapsed counter locally from
+    /// that single value, it doesn't need repeated updates to keep ticking.
+    fn sync_discord_presence(&mut self) {
+        let client = self
+            .discord_rpc_client
+            .get_or_insert_with(crate::discord_rpc::DiscordRpcClient::new);
+
+        if !client.is_connected() {
+            // Covers both "Discord wasnt running last time we tried"
+            // and the app just started with this already on case
+            client.connect();
+        }
+
+        if !client.is_connected() {
+            return;
+        }
+
+        let current = (
+            self.activity_state.path.clone(),
+            self.activity_state.workspace_name.clone(),
+        );
+
+        if self.discord_rpc_last_sent.as_ref() == Some(&current) {
+            return;
+        }
+
+        let elapsed = self.activity_state.since.elapsed();
+        let started_at_unix_ms = (std::time::SystemTime::now() - elapsed)
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis() as i64)
+            .unwrap_or(0);
+
+        let details = match &self.activity_state.path {
+            Some(path) => {
+                let file_name = path
+                    .file_name()
+                    .map(|name| name.to_string_lossy().to_string())
+                    .unwrap_or_else(|| path.to_string_lossy().to_string());
+                format!("Editing {file_name}")
+            },
+            None => "Idle".to_string(),
+        };
+        let state = self
+            .activity_state
+            .workspace_name
+            .as_deref()
+            .map(|name| format!("Workspace: {name}"));
+
+        if client.set_presence(&details, state.as_deref(), started_at_unix_ms) {
+            self.discord_rpc_last_sent = Some(current);
+        }
+    }
+
     fn update_message(&mut self, message: Message) -> iced::Task<Message> {
         match message {
             Message::ModifierStateChanged(modifiers) => {
@@ -1948,6 +2003,9 @@ impl App {
                     let mut client = crate::discord_rpc::DiscordRpcClient::new();
                     client.connect();
                     self.discord_rpc_client = Some(client);
+                    // Send the first update immediately rather than leaving
+                    // the presence blank for up to 15s until the next tick.
+                    self.sync_discord_presence();
                 } else if let Some(mut client) = self.discord_rpc_client.take() {
                     client.clear_presence();
                 }
@@ -2392,41 +2450,8 @@ impl App {
                 if !self.editor_preferences.discord_rpc_enabled {
                     return iced::Task::none();
                 }
-                
-                let client = self
-                    .discord_rpc_client
-                    .get_or_insert_with(crate::discord_rpc::DiscordRpcClient::new);
 
-                if !client.is_connected() {
-                    // Covers both "Discord wasnt running last time we tried"
-                    // and the app just started with this already on case
-                    client.connect();
-                }
-
-                if !client.is_connected() {
-                    return iced::Task::none();
-                }
-
-                let current = (
-                    self.activity_state.path.clone(),
-                    self.activity_state.workspace_name.clone(),
-                );
-
-                if self.discord_rpc_last_sent.as_ref() == Some(&current) {
-                    return iced::Task::none();
-                }
-
-                let elapsed = self.activity_state.since.elapsed();
-                let started_at_unix_ms = (std::time::SystemTime::now() - elapsed)
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .map(|d| d.as_millis() as i64)
-                    .unwrap_or(0);
-                
-                // TO-DO: set this with actual file names
-                if client.set_presence("Using Pinel", "", started_at_unix_ms) {
-                    self.discord_rpc_last_sent = Some(current);
-                }
-
+                self.sync_discord_presence();
                 iced::Task::none()
             }
             Message::AutosaveFinished(path, saved_content, result) => {

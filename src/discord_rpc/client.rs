@@ -46,15 +46,27 @@ impl DiscordRpcClient {
 
     /// Sets the current Rich Presence activity. No-ops (returns `false`)
     /// if not currently connected - callers should check [`Self::connect`]
-    pub fn set_presence(&mut self, details: &str, state: &str, started_at_unix_ms: i64) -> bool {
+    ///
+    /// `state` is omitted from the payload entirely when `None` - Discord's
+    /// Rich Presence protocol treats an empty string as an invalid field
+    /// rather than "no state", so passing `Some("")` would silently drop
+    /// the whole activity update.
+    pub fn set_presence(
+        &mut self,
+        details: &str,
+        state: Option<&str>,
+        started_at_unix_ms: i64,
+    ) -> bool {
         if !self.connected {
             return false;
         }
 
-        let activity = activity::Activity::new()
+        let mut activity = activity::Activity::new()
             .details(details)
-            .state(state)
             .timestamps(activity::Timestamps::new().start(started_at_unix_ms));
+        if let Some(state) = state {
+            activity = activity.state(state);
+        }
 
         if self.inner.set_activity(activity).is_err() {
             // The connection may have dropped (e.g. discord closed);
