@@ -1,4 +1,4 @@
 pub mod client;
 pub mod config;
 
-pub use client::DiscordRpcClient;
+pub use client::{DiscordRpcClient, LargeImage};

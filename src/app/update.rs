@@ -377,14 +377,13 @@ impl App {
             .map(|d| d.as_millis() as i64)
             .unwrap_or(0);
 
-        let details = match &self.activity_state.path {
-            Some(path) => {
-                let file_name = path
-                    .file_name()
-                    .map(|name| name.to_string_lossy().to_string())
-                    .unwrap_or_else(|| path.to_string_lossy().to_string());
-                format!("Editing {file_name}")
-            },
+        let file_name = self.activity_state.path.as_ref().map(|path| {
+            path.file_name()
+                .map(|name| name.to_string_lossy().to_string())
+                .unwrap_or_else(|| path.to_string_lossy().to_string())
+        });
+        let details = match &file_name {
+            Some(file_name) => format!("Editing {file_name}"),
             None => "Idle".to_string(),
         };
         let state = self
@@ -393,7 +392,17 @@ impl App {
             .as_deref()
             .map(|name| format!("Workspace: {name}"));
 
-        if client.set_presence(&details, state.as_deref(), started_at_unix_ms) {
+        let icon_key = file_name
+            .as_deref()
+            .map(crate::features::icons::file_icon_key)
+            .unwrap_or("pinel");
+        let icon_text = prettify_icon_key(icon_key);
+        let large_image = Some(crate::discord_rpc::LargeImage {
+            key: icon_key,
+            text: &icon_text,
+        });
+
+        if client.set_presence(&details, state.as_deref(), large_image, started_at_unix_ms) {
             self.discord_rpc_last_sent = Some(current);
         }
     }
@@ -2860,4 +2869,19 @@ impl App {
             || trimmed == "finally"
             || trimmed == "except"
     }
+}
+
+/// Turns an icon/asset key like "cpp-h" or "javascript" into a readable
+/// tooltip like "Cpp H" / "Javascript" for the Discord large image hover text.
+fn prettify_icon_key(key: &str) -> String {
+    key.split(['-', '_'])
+        .map(|word| {
+            let mut chars = word.chars();
+            match chars.next() {
+                Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
+                None => String::new(),
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
 }

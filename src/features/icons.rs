@@ -394,11 +394,15 @@ static FOLDER_NAME_MAP: Lazy<HashMap<&'static str, &'static str>> = Lazy::new(||
     ])
 });
 
-pub fn get_file_icon(filename: &str) -> IconAsset {
+/// Resolves a filename to the icon/asset key used both for the local file
+/// tree icon and (see [`crate::discord_rpc`]) the Discord Rich Presence
+/// large image key - the two need to agree on naming since Discord's art
+/// assets are uploaded under these same key names.
+pub fn file_icon_key(filename: &str) -> &'static str {
     let filename_lower = filename.to_lowercase();
 
     if let Some(&icon_name) = FILE_NAME_MAP.get(filename_lower.as_str()) {
-        return resolve_icon("", icon_name);
+        return icon_name;
     }
 
     // Try compound extension (e.g. "test.spec.ts" → "spec.ts")
@@ -406,19 +410,23 @@ pub fn get_file_icon(filename: &str) -> IconAsset {
     for i in 1..parts.len() {
         let compound_ext = parts[i..].join(".");
         if let Some(&icon_name) = FILE_EXT_MAP.get(compound_ext.as_str()) {
-            return resolve_icon("", icon_name);
+            return icon_name;
         }
     }
 
     // Try simple extension
     if let Some(ext) = Path::new(filename).extension().and_then(|e| e.to_str()) {
         if let Some(&icon_name) = FILE_EXT_MAP.get(ext.to_lowercase().as_str()) {
-            return resolve_icon("", icon_name);
+            return icon_name;
         }
     }
 
     // Default file icon
-    resolve_icon("", "file")
+    "file"
+}
+
+pub fn get_file_icon(filename: &str) -> IconAsset {
+    resolve_icon("", file_icon_key(filename))
 }
 
 pub fn get_folder_icon(folder_name: &str, is_open: bool) -> IconAsset {

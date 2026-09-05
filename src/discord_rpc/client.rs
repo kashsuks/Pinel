@@ -13,6 +13,15 @@ pub struct DiscordRpcClient {
     connected: bool,
 }
 
+/// The large image slot on the Rich Presence card, and the tooltip shown
+/// when hovering over it. `key` must match an asset key already uploaded
+/// under this application's Rich Presence -> Art Assets in the Discord
+/// Developer Portal - unrecognized keys just render as a blank square.
+pub struct LargeImage<'a> {
+    pub key: &'a str,
+    pub text: &'a str,
+}
+
 impl DiscordRpcClient {
     /// Constructs the new client without connecting to anything yet.
     ///
@@ -55,6 +64,7 @@ impl DiscordRpcClient {
         &mut self,
         details: &str,
         state: Option<&str>,
+        large_image: Option<LargeImage>,
         started_at_unix_ms: i64,
     ) -> bool {
         if !self.connected {
@@ -66,6 +76,13 @@ impl DiscordRpcClient {
             .timestamps(activity::Timestamps::new().start(started_at_unix_ms));
         if let Some(state) = state {
             activity = activity.state(state);
+        }
+        if let Some(LargeImage { key, text }) = large_image {
+            activity = activity.assets(
+                activity::Assets::new()
+                    .large_image(key)
+                    .large_text(text),
+            );
         }
 
         if self.inner.set_activity(activity).is_err() {
