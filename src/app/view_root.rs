@@ -49,6 +49,7 @@ impl App {
 
         static ICON_FILES: &[u8] = include_bytes!("../assets/icons/activity-bar-files.svg");
         static ICON_GIT: &[u8] = include_bytes!("../assets/icons/activity-bar-git.svg");
+        static ICON_SETTINGS: &[u8] = include_bytes!("../assets/icons/settings.svg");
 
         let make_activity_icon =
             |bytes: &'static [u8], panel: ActivePanel| -> Element<'_, Message> {
@@ -107,10 +108,65 @@ impl App {
                 .into()
             };
 
+        let make_bottom_icon =
+            |bytes: &'static [u8], message: Message, is_active: bool| -> Element<'_, Message> {
+                let icon_color = if is_active {
+                    iced::Color::from_rgba(1.0, 1.0, 1.0, 0.88)
+                } else {
+                    iced::Color::from_rgba(1.0, 1.0, 1.0, 0.35)
+                };
+
+                let asset = IconAsset { format: IconFormat::Svg, bytes };
+                let img = iced::widget::image::Image::new(icon_handle(asset, 40))
+                    .width(Length::Fixed(20.0))
+                    .height(Length::Fixed(20.0));
+
+                let bg = if is_active {
+                    iced::Color::from_rgba(1.0, 1.0, 1.0, 0.08)
+                } else {
+                    iced::Color::TRANSPARENT
+                };
+
+                iced::widget::button(
+                    container(img)
+                        .width(Length::Fixed(40.0))
+                        .height(Length::Fixed(40.0))
+                        .center_x(Length::Fixed(40.0))
+                        .center_y(Length::Fixed(40.0))
+                        .style(move |_t| container::Style {
+                            background: Some(Background::Color(bg)),
+                            border: iced::Border {
+                                radius: 6.0.into(),
+                                ..Default::default()
+                            },
+                            ..Default::default()
+                        }),
+                )
+                .on_press(message)
+                .style(move |_t, status| iced::widget::button::Style {
+                    background: Some(Background::Color(match status {
+                        iced::widget::button::Status::Hovered => {
+                            iced::Color::from_rgba(1.0, 1.0, 1.0, 0.06)
+                        }
+                        _ => iced::Color::TRANSPARENT,
+                    })),
+                    border: iced::Border {
+                        radius: 6.0.into(),
+                        ..Default::default()
+                    },
+                    text_color: icon_color,
+                    ..Default::default()
+                })
+                .padding(0)
+                .into()
+            };
+
         let activity_bar: Element<'_, Message> = container(
             iced::widget::column![
                 make_activity_icon(ICON_FILES, ActivePanel::Files),
                 make_activity_icon(ICON_GIT, ActivePanel::Git),
+                iced::widget::Space::new().height(Length::Fill),
+                make_bottom_icon(ICON_SETTINGS, Message::ToggleSettings, self.settings_open),
             ]
             .spacing(4)
             .padding(iced::Padding {
