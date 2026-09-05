@@ -1,5 +1,5 @@
 //! Bakes `DISCORD_CLIENT_ID` into the binary at compile time (via
-//! `env!("DISCORD_CLIENT_ID")` in `src/discord_rpc/client.rs`) so every
+//! `option_env!("DISCORD_CLIENT_ID")` in `src/discord_rpc/client.rs`) so every
 //! official build shares the same Discord application ID without the value
 //! ever appearing in a committed source file.
 //!
