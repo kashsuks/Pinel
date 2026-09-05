@@ -171,10 +171,18 @@ fn view_file_tree<'a>(
 }
 
 fn view_empty_sidebar<'a>() -> Element<'a, Message> {
+    let shortcut_hint = if cfg!(target_os = "macos") {
+        "⌘ + Shift + O"
+    } else {
+        "Ctrl + Shift + O to open"
+    };
+
     container(
         column![
             text("No folder open").size(13).color(theme().text_muted),
-            text("Cmd+O to open").size(11).color(theme().text_placeholder),
+            text(shortcut_hint)
+                .size(11)
+                .color(theme().text_placeholder),
         ]
         .spacing(4)
         .align_x(iced::Alignment::Center),
