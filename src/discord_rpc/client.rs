@@ -1,7 +1,7 @@
 //! A thin wrapper around the `discord-rich-presence` crate's IPC client.
 //!
-//! This module only knows how to talk to Discord over its local IPC socket
-//! it has no knowledge of Pinel's editor state, tabs, or the active0file
+//! This module only knows how to talk to Discord over its local IPC socket;
+//! it has no knowledge of Pinel's editor state, tabs, or the active file
 //! tracker (see [`crate::features::activity_state`] for that).
 
 use discord_rich_presence::{activity, DiscordIpc, DiscordIpcClient};
@@ -37,8 +37,8 @@ impl DiscordRpcClient {
         self.connected
     }
 
-    /// Attempts to connect to the local Discord ICP socket. Returns `false`
-    /// (not an error) if Discord isn't runing or isn't reachable.
+    /// Attempts to connect to the local Discord IPC socket. Returns `false`
+    /// (not an error) if Discord isn't running or isn't reachable.
     pub fn connect(&mut self) -> bool {
         self.connected = self.inner.connect().is_ok();
         self.connected

@@ -373,8 +373,9 @@ impl App {
         }
 
         let elapsed = self.activity_state.since.elapsed();
-        let started_at_unix_ms = (std::time::SystemTime::now() - elapsed)
-            .duration_since(std::time::UNIX_EPOCH)
+        let started_at_unix_ms = std::time::SystemTime::now()
+            .checked_sub(elapsed)
+            .and_then(|started_at| started_at.duration_since(std::time::UNIX_EPOCH).ok())
             .map(|d| d.as_millis() as i64)
             .unwrap_or(0);
 
