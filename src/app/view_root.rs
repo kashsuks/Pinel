@@ -116,7 +116,10 @@ impl App {
                     iced::Color::from_rgba(1.0, 1.0, 1.0, 0.35)
                 };
 
-                let asset = IconAsset { format: IconFormat::Svg, bytes };
+                let asset = IconAsset {
+                    format: IconFormat::Svg,
+                    bytes,
+                };
                 let img = iced::widget::image::Image::new(icon_handle(asset, 40))
                     .width(Length::Fixed(20.0))
                     .height(Length::Fixed(20.0));
@@ -147,7 +150,7 @@ impl App {
                     background: Some(Background::Color(match status {
                         iced::widget::button::Status::Hovered => {
                             iced::Color::from_rgba(1.0, 1.0, 1.0, 0.06)
-                        }
+                        },
                         _ => iced::Color::TRANSPARENT,
                     })),
                     border: iced::Border {

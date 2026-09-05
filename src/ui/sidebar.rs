@@ -180,9 +180,7 @@ fn view_empty_sidebar<'a>() -> Element<'a, Message> {
     container(
         column![
             text("No folder open").size(13).color(theme().text_muted),
-            text(shortcut_hint)
-                .size(11)
-                .color(theme().text_placeholder),
+            text(shortcut_hint).size(11).color(theme().text_placeholder),
         ]
         .spacing(4)
         .align_x(iced::Alignment::Center),

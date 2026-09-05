@@ -686,10 +686,10 @@ impl App {
             ),
             discord_rpc_row,
             container(Space::new().width(Length::Fill).height(Length::Fixed(1.0))).style(
-                    |_theme| container::Style {
-                        background: Some(Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.03))),
-                        ..Default::default()
-                    }
+                |_theme| container::Style {
+                    background: Some(Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.03))),
+                    ..Default::default()
+                }
             ),
             autosave_toggle_row,
             container(Space::new().width(Length::Fill).height(Length::Fixed(1.0))).style(

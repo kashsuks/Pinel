@@ -325,10 +325,8 @@ impl App {
     /// point: consumers don't need their own hook at each call site — they
     /// just react to `Message::ActiveFileChanged` when it fires.
     fn sync_activity_state(&mut self, task: iced::Task<Message>) -> iced::Task<Message> {
-        let active_path = self
-            .active_tab
-            .and_then(|idx| self.tabs.get(idx))
-            .map(|tab| tab.path.clone());
+        let active_path =
+            self.active_tab.and_then(|idx| self.tabs.get(idx)).map(|tab| tab.path.clone());
 
         let workspace_name = self
             .file_tree
