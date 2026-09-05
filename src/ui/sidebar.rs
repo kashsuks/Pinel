@@ -97,7 +97,7 @@ pub fn view_git_panel<'a>(changes: &'a [(String, String)], width: f32) -> Elemen
         .width(Length::Fixed(width))
         .height(Length::Fill)
         .padding(iced::Padding {
-            top: 2.0,
+            top: 14.0,
             right: 2.0,
             bottom: 2.0,
             left: 4.0,
