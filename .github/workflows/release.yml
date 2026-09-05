@@ -22,8 +22,11 @@ jobs:
       aur_source_pkgname: ${{ steps.check.outputs.aur_source_pkgname }}
       aur_binary_pkgname: ${{ steps.check.outputs.aur_binary_pkgname }}
       binary_name: ${{ steps.check.outputs.binary_name }}
+      release_body: ${{ steps.notes.outputs.release_body }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Resolve release metadata
         id: check
@@ -45,7 +48,7 @@ jobs:
             release_channel="stable"
             publish_version="${base_version}"
             release_tag="v${base_version}"
-            release_name="v${base_version} @stable"
+            release_name="v${base_version}"
             aur_version="${base_version}"
             aur_source_pkgname="pinel"
             aur_binary_pkgname="pinel-bin"
@@ -74,6 +77,40 @@ jobs:
             echo "binary_name=${binary_name}"
           } >> "$GITHUB_OUTPUT"
 
+      - name: Build release notes
+        id: notes
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          prev_tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          range="HEAD"
+          if [ -n "$prev_tag" ]; then
+            range="${prev_tag}..HEAD"
+          fi
+
+          pr_numbers=$(git log "$range" --merges --grep="Merge pull request" --format='%s' \
+            | grep -oE '#[0-9]+' | tr -d '#' | tac)
+
+          {
+            echo "# "
+            echo
+            for num in $pr_numbers; do
+              title=$(gh api "repos/${{ github.repository }}/pulls/${num}" --jq .title 2>/dev/null || echo "PR #${num}")
+              echo "## ${title} (#${num})"
+              echo
+            done
+            echo "## Fixes/Security"
+            echo
+            echo "## Future"
+          } > /tmp/release_body.md
+
+          {
+            echo "release_body<<RELEASE_BODY_EOF"
+            cat /tmp/release_body.md
+            echo "RELEASE_BODY_EOF"
+          } >> "$GITHUB_OUTPUT"
+
   create-release:
     needs: prepare-release
     if: needs.prepare-release.outputs.should_release == 'true'
@@ -87,10 +124,8 @@ jobs:
           tag_name: ${{ needs.prepare-release.outputs.release_tag }}
           name: ${{ needs.prepare-release.outputs.release_name }}
           prerelease: ${{ needs.prepare-release.outputs.release_channel == 'dev' }}
-          body: |
-            Release: ${{ needs.prepare-release.outputs.release_name }}
-            Tag: ${{ needs.prepare-release.outputs.release_tag }}
-            Commit: ${{ github.sha }}
+          draft: true
+          body: ${{ needs.prepare-release.outputs.release_body }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
