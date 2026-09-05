@@ -2010,9 +2010,10 @@ impl App {
                 } else if let Some(mut client) = self.discord_rpc_client.take() {
                     client.clear_presence();
                 }
+                self.discord_rpc_last_sent = None;
 
                 iced::Task::none()
-            }
+            },
             Message::SettingsToggleAutosave => {
                 self.editor_preferences.autosave_enabled =
                     !self.editor_preferences.autosave_enabled;
@@ -2454,7 +2455,7 @@ impl App {
 
                 self.sync_discord_presence();
                 iced::Task::none()
-            }
+            },
             Message::AutosaveFinished(path, saved_content, result) => {
                 let Some(tab) = self.tabs.iter_mut().find(|tab| tab.path == path) else {
                     return iced::Task::none();
@@ -2661,10 +2662,12 @@ impl App {
                 self.update_banner = None;
                 iced::Task::none()
             },
-            // No-op for now: this message exists purely so future consumers
-            // (Discord RPC, etc.) have something to react to. Nothing
-            // subscribes to it yet.
-            Message::ActiveFileChanged => iced::Task::none(),
+            Message::ActiveFileChanged => {
+                if self.editor_preferences.discord_rpc_enabled {
+                    self.sync_discord_presence();
+                }
+                iced::Task::none()
+            },
         }
     }
 
