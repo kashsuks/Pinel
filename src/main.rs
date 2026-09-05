@@ -10,6 +10,7 @@ mod app;
 mod autocomplete;
 mod cli;
 mod config;
+mod discord_rpc;
 mod features;
 mod lsp_setup;
 mod message;

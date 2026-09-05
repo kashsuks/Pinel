@@ -315,6 +315,92 @@ impl App {
     /// * `message` - The event to process.
     #[allow(clippy::arc_with_non_send_sync)]
     pub fn update(&mut self, message: Message) -> iced::Task<Message> {
+        let task = self.update_message(message);
+        self.sync_activity_state(task)
+    }
+
+    /// Diffs the current active tab / workspace against `self.activity_state`
+    /// after every message, regardless of which of the many code paths
+    /// changed `active_tab` or the open folder. This is the single funnel
+    /// point: consumers don't need their own hook at each call site — they
+    /// just react to `Message::ActiveFileChanged` when it fires.
+    fn sync_activity_state(&mut self, task: iced::Task<Message>) -> iced::Task<Message> {
+        let active_path = self
+            .active_tab
+            .and_then(|idx| self.tabs.get(idx))
+            .map(|tab| tab.path.clone());
+
+        let workspace_name = self
+            .file_tree
+            .as_ref()
+            .and_then(|tree| tree.root.file_name())
+            .and_then(|name| name.to_str())
+            .map(|name| name.to_string());
+
+        if self.activity_state.update(active_path, workspace_name) {
+            iced::Task::batch([task, iced::Task::done(Message::ActiveFileChanged)])
+        } else {
+            task
+        }
+    }
+
+    /// Pushes the current file/workspace to Discord if it differs from what
+    /// was last sent. The `start` timestamp is only recomputed when we
+    /// actually send - Discord animates the elapsed counter locally from
+    /// that single value, it doesn't need repeated updates to keep ticking.
+    fn sync_discord_presence(&mut self) {
+        let client = self
+            .discord_rpc_client
+            .get_or_insert_with(crate::discord_rpc::DiscordRpcClient::new);
+
+        if !client.is_connected() {
+            // Covers both "Discord wasnt running last time we tried"
+            // and the app just started with this already on case
+            client.connect();
+        }
+
+        if !client.is_connected() {
+            return;
+        }
+
+        let current = (
+            self.activity_state.path.clone(),
+            self.activity_state.workspace_name.clone(),
+        );
+
+        if self.discord_rpc_last_sent.as_ref() == Some(&current) {
+            return;
+        }
+
+        let elapsed = self.activity_state.since.elapsed();
+        let started_at_unix_ms = std::time::SystemTime::now()
+            .checked_sub(elapsed)
+            .and_then(|started_at| started_at.duration_since(std::time::UNIX_EPOCH).ok())
+            .map(|d| d.as_millis() as i64)
+            .unwrap_or(0);
+
+        let details = match &self.activity_state.path {
+            Some(path) => {
+                let file_name = path
+                    .file_name()
+                    .map(|name| name.to_string_lossy().to_string())
+                    .unwrap_or_else(|| path.to_string_lossy().to_string());
+                format!("Editing {file_name}")
+            },
+            None => "Idle".to_string(),
+        };
+        let state = self
+            .activity_state
+            .workspace_name
+            .as_deref()
+            .map(|name| format!("Workspace: {name}"));
+
+        if client.set_presence(&details, state.as_deref(), started_at_unix_ms) {
+            self.discord_rpc_last_sent = Some(current);
+        }
+    }
+
+    fn update_message(&mut self, message: Message) -> iced::Task<Message> {
         match message {
             Message::ModifierStateChanged(modifiers) => {
                 self.modifier_state = modifiers;
@@ -1907,6 +1993,27 @@ impl App {
                 self.apply_vim_mode_to_tabs();
                 iced::Task::none()
             },
+            Message::SettingsToggleDiscordRpc => {
+                self.editor_preferences.discord_rpc_enabled =
+                    !self.editor_preferences.discord_rpc_enabled;
+
+                if self.editor_preferences.discord_rpc_enabled {
+                    // Connecting is a local IPC handshake ( a unix socket /
+                    // named pipe that either exits or doesn't), so it
+                    // returns quickly even when Discord isn't running
+                    let mut client = crate::discord_rpc::DiscordRpcClient::new();
+                    client.connect();
+                    self.discord_rpc_client = Some(client);
+                    // Send the first update immediately rather than leaving
+                    // the presence blank for up to 15s until the next tick.
+                    self.sync_discord_presence();
+                } else if let Some(mut client) = self.discord_rpc_client.take() {
+                    client.clear_presence();
+                }
+                self.discord_rpc_last_sent = None;
+
+                iced::Task::none()
+            },
             Message::SettingsToggleAutosave => {
                 self.editor_preferences.autosave_enabled =
                     !self.editor_preferences.autosave_enabled;
@@ -2341,6 +2448,14 @@ impl App {
 
                 iced::Task::none()
             },
+            Message::DiscordRpcTick => {
+                if !self.editor_preferences.discord_rpc_enabled {
+                    return iced::Task::none();
+                }
+
+                self.sync_discord_presence();
+                iced::Task::none()
+            },
             Message::AutosaveFinished(path, saved_content, result) => {
                 let Some(tab) = self.tabs.iter_mut().find(|tab| tab.path == path) else {
                     return iced::Task::none();
@@ -2545,6 +2660,12 @@ impl App {
             },
             Message::DismissUpdateBanner => {
                 self.update_banner = None;
+                iced::Task::none()
+            },
+            Message::ActiveFileChanged => {
+                if self.editor_preferences.discord_rpc_enabled {
+                    self.sync_discord_presence();
+                }
                 iced::Task::none()
             },
         }

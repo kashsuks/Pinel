@@ -34,6 +34,10 @@ pub enum Message {
     FileTreeReveal,
     FileTreeCopyPath,
     FileTreeDelete,
+    /// Fired whenever the active file or open workspace changes, from any
+    /// code path. Carries no data — consumers read the new state from
+    /// `App::activity_state` when they receive this.
+    ActiveFileChanged,
     ToggleSidebar,
     SetActivePanel(crate::app::ActivePanel),
 
@@ -100,6 +104,7 @@ pub enum Message {
     SettingsToggleUseSpaces,
     SettingsToggleAutoIndent,
     SettingsToggleVimMode,
+    SettingsToggleDiscordRpc,
     ToggleLineComment,
     SettingsToggleAutosave,
     SettingsAutosaveIntervalChanged(String),
@@ -135,6 +140,7 @@ pub enum Message {
     ModifierStateChanged(iced::keyboard::Modifiers),
     LspTick,
     AutosaveTick,
+    DiscordRpcTick,
     AutosaveFinished(PathBuf, String, Result<(), String>),
 
     #[cfg(feature = "unstable-comet")]
