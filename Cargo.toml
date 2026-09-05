@@ -1,6 +1,6 @@
 [package]
 name = "pinel"
-version = "0.7.0"
+version = "0.8.0"
 edition = "2021"
 authors = ["Kashyap Sukshavas"]
 description = "A lightweight editor built with rust"
