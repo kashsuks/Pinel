@@ -109,6 +109,12 @@ Below are the commands related to it:
 
 ---
 
+# Contributing
+
+See [CONTRIBUTING.md](./CONTRIBUTING.md) for running tests and setting up git hooks.
+
+---
+
 # License
 
 Copyright (c) 2025-Present [Kashyap](https://github.com/kashsuks) and [Contributors](https://github.com/kashsuks/Pinel/graphs/contributors). `Pinel` is a free and open-source software licensed under the [GNU General Public License Version 3](https://www.gnu.org/licenses/gpl-3.0.en.html). Official logo was created by [Kashyap Sukshavasi](https://github.com/kashsuks).
