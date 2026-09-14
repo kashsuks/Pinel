@@ -19,7 +19,7 @@ if cargo test --all; then
     echo "$CURRENT_HASH" > "$MARKER_FILE"
     echo -e "${GREEN}✓${RESET} test passed - recorded commit ${CURRENT_HASH:0:8} as tested"
     exit 0
-else:
+else
     echo -e "${RED}x${RESET} tests failed - not recording this commit as tested"
     exit 1
 fi
