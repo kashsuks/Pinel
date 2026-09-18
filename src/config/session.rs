@@ -47,7 +47,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn default_session_state_is_empty {
+    fn default_session_state_is_empty() {
         let state = SessionState::default();
         assert!(state.folder.is_none());
         assert!(state.open_tabs.is_empty());
