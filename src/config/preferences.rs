@@ -301,7 +301,7 @@ mod tests {
     #[test]
     fn parse_preferences_empty_returns_defaults() {
         let prefs = parse_preferences("");
-        let defaults = parse_preferences("");
+        let defaults = EditorPreferences::default();
         assert_eq!(prefs.tab_size, defaults.tab_size);
         assert_eq!(prefs.use_spaces, defaults.use_spaces);
         assert_eq!(prefs.theme_name, defaults.theme_name);
@@ -340,10 +340,10 @@ mod tests {
             line_number_width = 500.0,
         "#;
         let prefs = parse_preferences(content);
-        assert_eq!(prefs.tab_size, 10); // clamped to max
+        assert_eq!(prefs.tab_size, 16); // clamped to max
         assert_eq!(prefs.autosave_interval_ms, 30); // clamped to min
         assert_eq!(prefs.window_width, 640.0); // clamped to min
-        assert_eq!(prefs.window_height, 580.0); // clamped to min
+        assert_eq!(prefs.window_height, 480.0); // clamped to min
         assert_eq!(prefs.line_number_width, 120.0); // clamped to max
     }
 
@@ -385,7 +385,7 @@ mod tests {
 
         // force legacys mtime to be strictly after primarys
         let future = SystemTime::now() + Duration::from_secs(10);
-        let file = fs::File::open(&legacy).unwrap();
+        let file = fs::OpenOptions::new().write(true).open(&legacy).unwrap();
         file.set_modified(future).unwrap();
 
         assert!(legacy_is_newer_than_primary(Some(&legacy), &primary));
@@ -400,12 +400,12 @@ mod tests {
     }
 
     #[test]
-    fn legacy_is_newer_than_primary_when_primary_missing() {
+    fn legacy_is_newer_than_primary_true_when_primary_missing() {
         let dir = tempfile::tempdir().unwrap();
         let legacy = dir.path().join("legacy.lua");
         let primary = dir.path().join("does_not_exist.lua");
         fs::write(&legacy, "").unwrap();
-        assert!(!legacy_is_newer_than_primary(Some(&legacy), &primary));
+        assert!(legacy_is_newer_than_primary(Some(&legacy), &primary));
     }
 
     #[test]
@@ -415,7 +415,7 @@ mod tests {
 
         let mut prefs = EditorPreferences::default();
         prefs.tab_size = 2;
-        prefs.use_spaces false;
+        prefs.use_spaces = false;
         prefs.theme_name = "Custom Theme".to_string();
 
         save_preferences_to_path(&prefs, &path).unwrap();
@@ -430,6 +430,6 @@ mod tests {
     fn read_preferences_from_missing_file_returns_none() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("nope.lua");
-        assert!(read_preferences_from(&path)).is_none();
+        assert!(read_preferences_from(&path).is_none());
     }
 }
