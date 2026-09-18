@@ -292,3 +292,144 @@ return {{
     file.write_all(content.as_bytes())?;
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::{Duration, SystemTime};
+
+    #[test]
+    fn parse_preferences_empty_returns_defaults() {
+        let prefs = parse_preferences("");
+        let defaults = EditorPreferences::default();
+        assert_eq!(prefs.tab_size, defaults.tab_size);
+        assert_eq!(prefs.use_spaces, defaults.use_spaces);
+        assert_eq!(prefs.theme_name, defaults.theme_name);
+    }
+
+    #[test]
+    fn parse_preferences_reads_known_keys() {
+        let content = r#"
+            return {
+                tab_size = 2,
+                use_spaces = false,
+                auto_indent_enabled = false,
+                vim_mode_enabled = true,
+                theme_name = "Solarized",
+                window_width = 1000.0,
+                window_height = 700.0,
+            }
+        "#;
+        let prefs = parse_preferences(content);
+        assert_eq!(prefs.tab_size, 2);
+        assert!(!prefs.use_spaces);
+        assert!(!prefs.auto_indent_enabled);
+        assert!(prefs.vim_mode_enabled);
+        assert_eq!(prefs.theme_name, "Solarized");
+        assert_eq!(prefs.window_width, 1000.0);
+        assert_eq!(prefs.window_height, 700.0);
+    }
+
+    #[test]
+    fn parse_preferences_clamps_out_of_range_values() {
+        let content = r#"
+            tab_size = 99,
+            autosave_interval_ms = 5,
+            window_width = 1.0,
+            window_height = 1.0,
+            line_number_width = 500.0,
+        "#;
+        let prefs = parse_preferences(content);
+        assert_eq!(prefs.tab_size, 16); // clamped to max
+        assert_eq!(prefs.autosave_interval_ms, 30); // clamped to min
+        assert_eq!(prefs.window_width, 640.0); // clamped to min
+        assert_eq!(prefs.window_height, 480.0); // clamped to min
+        assert_eq!(prefs.line_number_width, 120.0); // clamped to max
+    }
+
+    #[test]
+    fn parse_preferences_ignores_comments_and_unknown_keys() {
+        let content = r#"
+            -- this is a comment
+            return {
+            unknown_key = "whatever",
+            tab_size = 8,
+            }
+        "#;
+        let prefs = parse_preferences(content);
+        assert_eq!(prefs.tab_size, 8);
+    }
+
+    #[test]
+    fn indent_unit_returns_spaces_when_uses_spaces_true() {
+        let mut prefs = EditorPreferences::default();
+        prefs.use_spaces = true;
+        prefs.tab_size = 3;
+        assert_eq!(prefs.indent_unit(), "   ");
+    }
+
+    #[test]
+    fn indent_unit_returns_tab_when_use_spaces_false() {
+        let mut prefs = EditorPreferences::default();
+        prefs.use_spaces = false;
+        assert_eq!(prefs.indent_unit(), "\t");
+    }
+
+    #[test]
+    fn legacy_is_newer_than_primary_true_when_legacy_has_later_mtime() {
+        let dir = tempfile::tempdir().unwrap();
+        let legacy = dir.path().join("legacy.lua");
+        let primary = dir.path().join("primary.lua");
+        fs::write(&primary, "").unwrap();
+        fs::write(&legacy, "").unwrap();
+
+        // force legacys mtime to be strictly after primarys
+        let future = SystemTime::now() + Duration::from_secs(10);
+        let file = fs::OpenOptions::new().write(true).open(&legacy).unwrap();
+        file.set_modified(future).unwrap();
+
+        assert!(legacy_is_newer_than_primary(Some(&legacy), &primary));
+    }
+
+    #[test]
+    fn legacy_is_newer_than_primary_false_when_legacy_missing() {
+        let dir = tempfile::tempdir().unwrap();
+        let primary = dir.path().join("primary.lua");
+        fs::write(&primary, "").unwrap();
+        assert!(!legacy_is_newer_than_primary(None, &primary));
+    }
+
+    #[test]
+    fn legacy_is_newer_than_primary_true_when_primary_missing() {
+        let dir = tempfile::tempdir().unwrap();
+        let legacy = dir.path().join("legacy.lua");
+        let primary = dir.path().join("does_not_exist.lua");
+        fs::write(&legacy, "").unwrap();
+        assert!(legacy_is_newer_than_primary(Some(&legacy), &primary));
+    }
+
+    #[test]
+    fn save_then_read_preferences_roundtrips() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("preferences.lua");
+
+        let mut prefs = EditorPreferences::default();
+        prefs.tab_size = 2;
+        prefs.use_spaces = false;
+        prefs.theme_name = "Custom Theme".to_string();
+
+        save_preferences_to_path(&prefs, &path).unwrap();
+        let loaded = read_preferences_from(&path).expect("file should parse");
+
+        assert_eq!(loaded.tab_size, prefs.tab_size);
+        assert_eq!(loaded.use_spaces, prefs.use_spaces);
+        assert_eq!(loaded.theme_name, prefs.theme_name);
+    }
+
+    #[test]
+    fn read_preferences_from_missing_file_returns_none() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("nope.lua");
+        assert!(read_preferences_from(&path).is_none());
+    }
+}

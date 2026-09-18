@@ -210,3 +210,61 @@ pub fn save_theme(theme: &ThemeColors) -> Result<(), std::io::Error> {
     file.write_all(theme.to_lua().as_bytes())?;
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn default_theme_colors_are_valid_hex() {
+        let theme = ThemeColors::default();
+        assert!(theme.rosewater.starts_with('#'));
+        assert_eq!(theme.rosewater.len(), 7);
+        assert!(theme.base.starts_with('#'));
+    }
+
+    #[test]
+    fn to_lua_then_from_lua_roundtrips_all_fields() {
+        let theme = ThemeColors::default();
+        let lua = theme.to_lua();
+        let parsed = ThemeColors::from_lua(&lua).unwrap();
+
+        assert_eq!(parsed.rosewater, theme.rosewater);
+        assert_eq!(parsed.blue, theme.blue);
+        assert_eq!(parsed.crust, theme.crust);
+    }
+
+    #[test]
+    fn from_lua_overrides_only_specified_keys() {
+        let content = r##"
+            return {
+                base = "#000000",
+            }
+        "##;
+        let theme = ThemeColors::from_lua(content).unwrap();
+        assert_eq!(theme.base, "#000000");
+        // untouched fields fall back to defaults
+        assert_eq!(theme.rosewater, ThemeColors::default().rosewater);
+    }
+
+    #[test]
+    fn from_lua_ignores_comments_and_unknown_keys() {
+        let content = r##"
+        -- a comment
+        return {
+        totally_unknown_key = "x",
+        teal = "#123456",
+        }
+        "##;
+        let theme = ThemeColors::from_lua(content).unwrap();
+        assert_eq!(theme.teal, "#123456");
+    }
+
+    #[test]
+    fn from_lua_empty_string_returns_default() {
+        let theme = ThemeColors::from_lua("").unwrap();
+        let defaults = ThemeColors::default();
+        assert_eq!(theme.rosewater, defaults.rosewater);
+        assert_eq!(theme.base, defaults.base);
+    }
+}

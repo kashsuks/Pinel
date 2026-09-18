@@ -41,3 +41,41 @@ pub fn save_session(state: &SessionState) -> std::io::Result<()> {
 
     fs::write(session_path(), json)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn default_session_state_is_empty() {
+        let state = SessionState::default();
+        assert!(state.folder.is_none());
+        assert!(state.open_tabs.is_empty());
+        assert!(state.active_tab_index.is_none());
+        assert!(state.cursor_position.is_empty());
+    }
+
+    #[test]
+    fn session_state_serialize_and_deserialize_roundtrip() {
+        let mut state = SessionState {
+            folder: Some(PathBuf::from("/tmp/project")),
+            open_tabs: vec![PathBuf::from("/tmp/project/a.rs"), PathBuf::from("/tmp/project/b.rs")],
+            active_tab_index: Some(PathBuf::from("/tmp/project/a.rs")),
+            cursor_position: HashMap::new(),
+        };
+        state
+            .cursor_position
+            .insert(PathBuf::from("/tmp/project/a.rs"), (12, 4));
+
+        let json = serde_json::to_string(&state).unwrap();
+        let restored: SessionState = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(restored, state);
+    }
+
+    #[test]
+    fn deserializing_malformed_json_fails_gracefully() {
+        let result: Result<SessionState, _> = serde_json::from_str("{ not valid json}");
+        assert!(result.is_err());
+    }
+}
