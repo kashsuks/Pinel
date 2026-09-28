@@ -59,13 +59,14 @@ mod tests {
     fn session_state_serialize_and_deserialize_roundtrip() {
         let mut state = SessionState {
             folder: Some(PathBuf::from("/tmp/project")),
-            open_tabs: vec![PathBuf::from("/tmp/project/a.rs"), PathBuf::from("/tmp/project/b.rs")],
+            open_tabs: vec![
+                PathBuf::from("/tmp/project/a.rs"),
+                PathBuf::from("/tmp/project/b.rs"),
+            ],
             active_tab_index: Some(PathBuf::from("/tmp/project/a.rs")),
             cursor_position: HashMap::new(),
         };
-        state
-            .cursor_position
-            .insert(PathBuf::from("/tmp/project/a.rs"), (12, 4));
+        state.cursor_position.insert(PathBuf::from("/tmp/project/a.rs"), (12, 4));
 
         let json = serde_json::to_string(&state).unwrap();
         let restored: SessionState = serde_json::from_str(&json).unwrap();
