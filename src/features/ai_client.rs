@@ -60,11 +60,20 @@ pub async fn send_message(
 async fn response_error(response: reqwest::Response) -> String {
     let status = response.status();
     let body = response.text().await.unwrap_or_default();
-    if body.trim().is_empty() {
-        format!("request failed: {status}")
-    } else {
-        format!("request failed: {status} - {}", body.trim())
+
+    match extract_error_message(&body) {
+        Some(message) => format!("request failed: {status} - {message}"),
+        None if body.trim().is_empty() => format!("request failed: {status}"),
+        None => format!("request failed: {status} - {}", body.trim()),
     }
+}
+
+/// Pulls a human-readable message out of a provider's JSON error body.
+/// OpenAI, OpenRouter, and Anthropic all nest it as `error.message`; falls
+/// back to the raw body (handled by the caller) for anything else.
+fn extract_error_message(body: &str) -> Option<String> {
+    let value: serde_json::Value = serde_json::from_str(body).ok()?;
+    value.get("error")?.get("message")?.as_str().map(str::to_string)
 }
 
 // ---- OpenAI-compatible (OpenAI, OpenRouter, Hack Club AI, Kimi) ----
@@ -260,5 +269,38 @@ fn role_str(role: ChatRole) -> &'static str {
     match role {
         ChatRole::User => "user",
         ChatRole::Assistant => "assistant",
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn extracts_message_from_openrouter_style_error() {
+        let body = r#"{"error":{"message":"Provider returned error","code":429,"metadata":{"raw":"qwen/qwen3.8-27b:free is temporarily rate-limited upstream.","provider_name":"ModelRun"}},"user_id":"user_abc"}"#;
+        assert_eq!(
+            extract_error_message(body),
+            Some("Provider returned error".to_string())
+        );
+    }
+
+    #[test]
+    fn extracts_message_from_anthropic_style_error() {
+        let body = r#"{"type":"error","error":{"type":"invalid_request_error","message":"model: field required"}}"#;
+        assert_eq!(
+            extract_error_message(body),
+            Some("model: field required".to_string())
+        );
+    }
+
+    #[test]
+    fn falls_back_to_none_for_non_json_body() {
+        assert_eq!(extract_error_message("Internal Server Error"), None);
+    }
+
+    #[test]
+    fn falls_back_to_none_when_error_field_missing() {
+        assert_eq!(extract_error_message(r#"{"message":"oops"}"#), None);
     }
 }
