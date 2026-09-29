@@ -2193,13 +2193,19 @@ impl App {
                     self.theme_dropdown_open = !self.theme_dropdown_open;
                 } else {
                     if section == "providers" {
-                        let selected = self.providers_selected.clone();
-                        self.providers_key_input =
-                            self.provider_api_key(&selected).unwrap_or_default().to_string();
+                        self.refresh_providers_key_input();
                     }
                     self.settings_section = section;
                     self.theme_dropdown_open = false;
                 }
+                iced::Task::none()
+            },
+            Message::OpenProviderSettings => {
+                self.settings_open = true;
+                self.settings_section = "providers".to_string();
+                self.theme_dropdown_open = false;
+                self.refresh_providers_key_input();
+                self.vim_refresh_cursor_style();
                 iced::Task::none()
             },
             Message::SettingsTabSizeChanged(val) => {

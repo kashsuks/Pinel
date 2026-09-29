@@ -671,6 +671,14 @@ impl App {
         let _ = crate::config::provider_store::save(&self.provider_credentials);
     }
 
+    /// Reloads the Providers settings form's key field from whatever is
+    /// saved for the currently selected provider, so switching into the
+    /// panel always reflects the on-disk state.
+    pub(super) fn refresh_providers_key_input(&mut self) {
+        let selected = self.providers_selected.clone();
+        self.providers_key_input = self.provider_api_key(&selected).unwrap_or_default().to_string();
+    }
+
     /// Kicks off (or reuses a cached) model list fetch for the given
     /// provider name, as shown in the chat model picker. No-ops if the
     /// provider has no saved key, or a fetch for it is already in flight

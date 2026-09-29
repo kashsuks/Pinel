@@ -51,6 +51,7 @@ pub fn view_chat_panel<'a>(
     provider_model_state: &'a HashMap<String, ModelFetchState>,
     input_value: &'a str,
     sending: bool,
+    has_any_provider: bool,
     rename_target: Option<&'a str>,
     rename_input: &'a str,
     rename_input_id: iced::widget::Id,
@@ -70,6 +71,7 @@ pub fn view_chat_panel<'a>(
         None => view_chat_history(
             sessions,
             active_session,
+            has_any_provider,
             rename_target,
             rename_input,
             rename_input_id,
@@ -81,6 +83,7 @@ pub fn view_chat_panel<'a>(
 fn view_chat_history<'a>(
     sessions: &'a [ChatSession],
     active_session: Option<&'a str>,
+    has_any_provider: bool,
     rename_target: Option<&'a str>,
     rename_input: &'a str,
     rename_input_id: iced::widget::Id,
@@ -91,6 +94,31 @@ fn view_chat_history<'a>(
         .on_press(Message::ChatNewSession)
         .padding(ROW_PADDING)
         .width(Length::Fill);
+
+    let provider_setup_prompt: Option<Element<'a, Message>> = if has_any_provider {
+        None
+    } else {
+        Some(
+            container(
+                column![
+                    text("Seems like you have no providers set up.")
+                        .size(13)
+                        .color(theme().text_primary),
+                    text("Would you like to set it up?").size(12).color(theme().text_muted),
+                    button(text("Set Up a Provider").size(12))
+                        .style(tree_button_style)
+                        .on_press(Message::OpenProviderSettings)
+                        .padding(ROW_PADDING),
+                ]
+                .spacing(6)
+                .align_x(iced::Alignment::Center),
+            )
+            .width(Length::Fill)
+            .padding(ROW_PADDING)
+            .style(context_menu_panel_style)
+            .into(),
+        )
+    };
 
     let history: Element<'a, Message> = if sessions.is_empty() {
         container(
@@ -121,7 +149,14 @@ fn view_chat_history<'a>(
         scrollable(column(items).spacing(2)).height(Length::Fill).into()
     };
 
-    let content = column![new_chat_button, history].spacing(8).height(Length::Fill);
+    let mut content_items: Vec<Element<'a, Message>> = Vec::new();
+    if let Some(prompt) = provider_setup_prompt {
+        content_items.push(prompt);
+    }
+    content_items.push(new_chat_button.into());
+    content_items.push(history);
+
+    let content = column(content_items).spacing(8).height(Length::Fill);
 
     container(content)
         .width(Length::Fixed(width))

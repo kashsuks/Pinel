@@ -206,6 +206,9 @@ pub enum Message {
     ProvidersRemove(String),
     /// Re-fetches the model list for a provider to confirm its key works.
     ProvidersTestConnection(String),
+    /// Jumps straight to Settings → Providers, e.g. from the chat tab's
+    /// "no providers set up" prompt.
+    OpenProviderSettings,
 
     CheckForUpdate,
     UpdateAvailable(crate::features::updater::UpdateInfo),

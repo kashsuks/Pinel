@@ -210,6 +210,7 @@ impl App {
                     &self.provider_model_state,
                     &self.chat_input,
                     self.chat_sending,
+                    !self.provider_credentials.is_empty(),
                     self.chat_rename_target.as_deref(),
                     &self.chat_rename_input,
                     self.chat_rename_input_id.clone(),
