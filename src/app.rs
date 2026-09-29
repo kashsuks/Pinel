@@ -198,6 +198,8 @@ pub struct App {
 
     chat_sessions: Vec<crate::features::chat::ChatSession>,
     active_chat_session: Option<String>,
+    chat_provider_dropdown_open: bool,
+    chat_model_dropdown_open: bool,
 
     last_cursor_position: iced::Point,
     context_menu: Option<crate::features::file_tree::ContextMenuTarget>,
@@ -366,6 +368,8 @@ impl Default for App {
 
             chat_sessions: crate::config::chat_store::load_sessions(None),
             active_chat_session: None,
+            chat_provider_dropdown_open: false,
+            chat_model_dropdown_open: false,
 
             last_cursor_position: iced::Point::ORIGIN,
             context_menu: None,
@@ -608,6 +612,15 @@ impl App {
     pub(super) fn persist_chat_sessions(&self) {
         let workspace = self.file_tree.as_ref().map(|tree| tree.root.as_path());
         let _ = crate::config::chat_store::save_sessions(workspace, &self.chat_sessions);
+    }
+
+    /// Returns a mutable reference to the currently active chat session,
+    /// if one is selected and still exists.
+    pub(super) fn active_chat_session_mut(
+        &mut self,
+    ) -> Option<&mut crate::features::chat::ChatSession> {
+        let id = self.active_chat_session.as_ref()?;
+        self.chat_sessions.iter_mut().find(|s| &s.id == id)
     }
 
     /// Records a tabs path and cursor position (if its an editor tab)

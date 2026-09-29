@@ -2,6 +2,7 @@
 
 pub mod activity_state;
 pub mod chat;
+pub mod chat_providers;
 pub mod command_input;
 pub mod command_palette;
 pub mod editor_buffer;

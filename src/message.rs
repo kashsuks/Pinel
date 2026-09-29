@@ -168,6 +168,14 @@ pub enum Message {
     ChatNewSession,
     /// Makes the chat session with this id the active one.
     ChatSelectSession(String),
+    /// Leaves the active chat session and returns to the history list.
+    ChatBackToHistory,
+    ChatToggleProviderDropdown,
+    ChatToggleModelDropdown,
+    /// Sets the active session's provider. Clears its model, since the
+    /// previous model may not belong to the newly chosen provider.
+    ChatProviderSelected(String),
+    ChatModelSelected(String),
 
     CheckForUpdate,
     UpdateAvailable(crate::features::updater::UpdateInfo),

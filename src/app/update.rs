@@ -1616,6 +1616,41 @@ impl App {
             },
             Message::ChatSelectSession(id) => {
                 self.active_chat_session = Some(id);
+                self.chat_provider_dropdown_open = false;
+                self.chat_model_dropdown_open = false;
+                iced::Task::none()
+            },
+            Message::ChatBackToHistory => {
+                self.active_chat_session = None;
+                self.chat_provider_dropdown_open = false;
+                self.chat_model_dropdown_open = false;
+                iced::Task::none()
+            },
+            Message::ChatToggleProviderDropdown => {
+                self.chat_provider_dropdown_open = !self.chat_provider_dropdown_open;
+                self.chat_model_dropdown_open = false;
+                iced::Task::none()
+            },
+            Message::ChatToggleModelDropdown => {
+                self.chat_model_dropdown_open = !self.chat_model_dropdown_open;
+                self.chat_provider_dropdown_open = false;
+                iced::Task::none()
+            },
+            Message::ChatProviderSelected(provider) => {
+                if let Some(session) = self.active_chat_session_mut() {
+                    session.provider = provider;
+                    session.model.clear();
+                }
+                self.chat_provider_dropdown_open = false;
+                self.persist_chat_sessions();
+                iced::Task::none()
+            },
+            Message::ChatModelSelected(model) => {
+                if let Some(session) = self.active_chat_session_mut() {
+                    session.model = model;
+                }
+                self.chat_model_dropdown_open = false;
+                self.persist_chat_sessions();
                 iced::Task::none()
             },
             Message::ToggleSidebar => {
