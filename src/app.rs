@@ -198,8 +198,12 @@ pub struct App {
 
     chat_sessions: Vec<crate::features::chat::ChatSession>,
     active_chat_session: Option<String>,
-    chat_provider_dropdown_open: bool,
-    chat_model_dropdown_open: bool,
+    chat_model_picker_open: bool,
+    /// Which provider's models are shown in the open picker's right-hand
+    /// list. Separate from the active session's provider so browsing
+    /// doesn't commit anything until a model is actually picked.
+    chat_picker_provider: Option<String>,
+    chat_model_search: String,
     chat_input: String,
     chat_rename_target: Option<String>,
     chat_rename_input: String,
@@ -372,8 +376,9 @@ impl Default for App {
 
             chat_sessions: crate::config::chat_store::load_sessions(None),
             active_chat_session: None,
-            chat_provider_dropdown_open: false,
-            chat_model_dropdown_open: false,
+            chat_model_picker_open: false,
+            chat_picker_provider: None,
+            chat_model_search: String::new(),
             chat_input: String::new(),
             chat_rename_target: None,
             chat_rename_input: String::new(),
@@ -629,6 +634,13 @@ impl App {
     ) -> Option<&mut crate::features::chat::ChatSession> {
         let id = self.active_chat_session.as_ref()?;
         self.chat_sessions.iter_mut().find(|s| &s.id == id)
+    }
+
+    /// Returns the currently active chat session, if one is selected and
+    /// still exists.
+    pub(super) fn active_chat_session(&self) -> Option<&crate::features::chat::ChatSession> {
+        let id = self.active_chat_session.as_ref()?;
+        self.chat_sessions.iter().find(|s| &s.id == id)
     }
 
     /// Records a tabs path and cursor position (if its an editor tab)

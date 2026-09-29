@@ -204,8 +204,9 @@ impl App {
                 ActivePanel::Chat => crate::ui::view_chat_panel(
                     &self.chat_sessions,
                     self.active_chat_session.as_deref(),
-                    self.chat_provider_dropdown_open,
-                    self.chat_model_dropdown_open,
+                    self.chat_model_picker_open,
+                    self.chat_picker_provider.as_deref(),
+                    &self.chat_model_search,
                     &self.chat_input,
                     self.chat_rename_target.as_deref(),
                     &self.chat_rename_input,

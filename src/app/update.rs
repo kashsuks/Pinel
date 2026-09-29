@@ -1616,40 +1616,39 @@ impl App {
             },
             Message::ChatSelectSession(id) => {
                 self.active_chat_session = Some(id);
-                self.chat_provider_dropdown_open = false;
-                self.chat_model_dropdown_open = false;
+                self.chat_model_picker_open = false;
                 iced::Task::none()
             },
             Message::ChatBackToHistory => {
                 self.active_chat_session = None;
-                self.chat_provider_dropdown_open = false;
-                self.chat_model_dropdown_open = false;
+                self.chat_model_picker_open = false;
                 iced::Task::none()
             },
-            Message::ChatToggleProviderDropdown => {
-                self.chat_provider_dropdown_open = !self.chat_provider_dropdown_open;
-                self.chat_model_dropdown_open = false;
+            Message::ChatToggleModelPicker => {
+                self.chat_model_picker_open = !self.chat_model_picker_open;
+                self.chat_model_search.clear();
+                self.chat_picker_provider = if self.chat_model_picker_open {
+                    self.active_chat_session().map(|s| s.provider.clone()).filter(|p| !p.is_empty())
+                } else {
+                    None
+                };
                 iced::Task::none()
             },
-            Message::ChatToggleModelDropdown => {
-                self.chat_model_dropdown_open = !self.chat_model_dropdown_open;
-                self.chat_provider_dropdown_open = false;
+            Message::ChatPickerProviderSelected(provider) => {
+                self.chat_picker_provider = Some(provider);
                 iced::Task::none()
             },
-            Message::ChatProviderSelected(provider) => {
+            Message::ChatModelSearchChanged(text) => {
+                self.chat_model_search = text;
+                iced::Task::none()
+            },
+            Message::ChatModelPicked(provider, model) => {
                 if let Some(session) = self.active_chat_session_mut() {
                     session.provider = provider;
-                    session.model.clear();
-                }
-                self.chat_provider_dropdown_open = false;
-                self.persist_chat_sessions();
-                iced::Task::none()
-            },
-            Message::ChatModelSelected(model) => {
-                if let Some(session) = self.active_chat_session_mut() {
                     session.model = model;
                 }
-                self.chat_model_dropdown_open = false;
+                self.chat_model_picker_open = false;
+                self.chat_model_search.clear();
                 self.persist_chat_sessions();
                 iced::Task::none()
             },

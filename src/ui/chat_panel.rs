@@ -11,8 +11,8 @@ use crate::{
     message::Message,
     theme::*,
     ui::styles::{
-        chat_message_bubble_style, rename_input_style, sidebar_container_style, tab_button_style,
-        tree_button_style,
+        chat_message_bubble_style, context_menu_panel_style, rename_input_style,
+        sidebar_container_style, tab_button_style, tree_button_style,
     },
 };
 
@@ -33,18 +33,18 @@ const ROW_PADDING: iced::Padding = iced::Padding {
 /// Renders the AI chat sidebar panel.
 ///
 /// Shows the chat history list (with a "New Chat" button) when no session
-/// is active, or that session's conversation view - currently just the
-/// provider/model picker - once one is selected. Actually sending messages
-/// to a provider lands in a follow-up commit.
+/// is active, or that session's conversation view once one is selected.
+/// Actually sending messages to a provider lands in a follow-up commit.
 // Each argument is a distinct, independently-changing piece of view state
-// (session list, active id, two dropdown toggles, input text, and rename
+// (session list, active id, model picker state, input text, and rename
 // state) rather than something that naturally groups into a struct yet.
 #[allow(clippy::too_many_arguments)]
 pub fn view_chat_panel<'a>(
     sessions: &'a [ChatSession],
     active_session: Option<&'a str>,
-    provider_dropdown_open: bool,
-    model_dropdown_open: bool,
+    model_picker_open: bool,
+    picker_provider: Option<&'a str>,
+    model_search: &'a str,
     input_value: &'a str,
     rename_target: Option<&'a str>,
     rename_input: &'a str,
@@ -54,8 +54,9 @@ pub fn view_chat_panel<'a>(
     match active_session.and_then(|id| sessions.iter().find(|s| s.id == id)) {
         Some(session) => view_chat_conversation(
             session,
-            provider_dropdown_open,
-            model_dropdown_open,
+            model_picker_open,
+            picker_provider,
+            model_search,
             input_value,
             width,
         ),
@@ -179,8 +180,9 @@ fn render_rename_row<'a>(
 
 fn view_chat_conversation<'a>(
     session: &'a ChatSession,
-    provider_dropdown_open: bool,
-    model_dropdown_open: bool,
+    model_picker_open: bool,
+    picker_provider: Option<&'a str>,
+    model_search: &'a str,
     input_value: &'a str,
     width: f32,
 ) -> Element<'a, Message> {
@@ -200,6 +202,8 @@ fn view_chat_conversation<'a>(
     .align_y(iced::Alignment::Center);
 
     let thread = message_thread(session);
+
+    let model_trigger = model_trigger_button(session, model_picker_open);
 
     let input_row = row![
         text_input("Message", input_value)
@@ -227,15 +231,21 @@ fn view_chat_conversation<'a>(
     .spacing(6)
     .align_y(iced::Alignment::Center);
 
-    let content = column![
-        header,
-        provider_field(session, provider_dropdown_open),
-        model_field(session, model_dropdown_open),
-        thread,
-        input_row,
-    ]
-    .spacing(10)
-    .height(Length::Fill);
+    // The trigger sits directly above the input box; the picker (when
+    // open) pops up directly above the trigger, anchored to the bottom of
+    // the panel rather than the top.
+    let mut items: Vec<Element<'a, Message>> = vec![header.into(), thread];
+    if model_picker_open {
+        let browse_provider = picker_provider
+            .filter(|p| !p.is_empty())
+            .or(Some(session.provider.as_str()).filter(|p| !p.is_empty()))
+            .unwrap_or(PROVIDERS[0].name);
+        items.push(model_picker(browse_provider, model_search));
+    }
+    items.push(model_trigger);
+    items.push(input_row.into());
+
+    let content = column(items).spacing(10).height(Length::Fill);
 
     container(content)
         .width(Length::Fixed(width))
@@ -296,17 +306,18 @@ fn message_bubble(message: &ChatMessage) -> Element<'_, Message> {
     .into()
 }
 
-/// A trigger button that expands into a list of options when open. Shared
-/// shape for both the provider and model pickers.
-fn dropdown<'a>(
-    trigger_label: String,
-    is_open: bool,
-    toggle: Message,
-    options: Vec<(String, bool, Message)>,
-) -> Element<'a, Message> {
-    let trigger = button(
+/// The single "provider/model" field shown right above the message input.
+/// Clicking it opens [`model_picker`] above itself.
+fn model_trigger_button(session: &ChatSession, is_open: bool) -> Element<'_, Message> {
+    let label = if session.provider.is_empty() || session.model.is_empty() {
+        "Select model".to_string()
+    } else {
+        format!("{}/{}", session.provider, session.model)
+    };
+
+    button(
         row![
-            text(trigger_label).size(12).color(theme().text_primary),
+            text(label).size(12).color(theme().text_primary),
             Space::new().width(Length::Fill),
             text(if is_open {
                 "^"
@@ -319,66 +330,90 @@ fn dropdown<'a>(
         .align_y(iced::Alignment::Center),
     )
     .style(tree_button_style)
-    .on_press(toggle)
+    .on_press(Message::ChatToggleModelPicker)
     .padding(ROW_PADDING)
-    .width(Length::Fill);
-
-    let mut items: Vec<Element<'a, Message>> = vec![trigger.into()];
-    if is_open {
-        for (label, is_active, message) in options {
-            items.push(
-                button(text(label).size(12))
-                    .style(tab_button_style(is_active))
-                    .on_press(message)
-                    .padding(ROW_PADDING)
-                    .width(Length::Fill)
-                    .into(),
-            );
-        }
-    }
-
-    column(items).spacing(2).into()
+    .width(Length::Fill)
+    .into()
 }
 
-fn provider_field<'a>(session: &'a ChatSession, is_open: bool) -> Element<'a, Message> {
-    let label = if session.provider.is_empty() {
-        "Select provider".to_string()
-    } else {
-        session.provider.clone()
-    };
-
-    let options = PROVIDERS
+/// The expanded picker: a narrow column of provider badges on the left,
+/// and a searchable list of that provider's models on the right - picking
+/// a model commits both the provider and model to the session at once.
+fn model_picker<'a>(browse_provider: &'a str, search: &'a str) -> Element<'a, Message> {
+    let provider_column: Vec<Element<'a, Message>> = PROVIDERS
         .iter()
         .map(|provider| {
-            (
-                provider.name.to_string(),
-                session.provider == provider.name,
-                Message::ChatProviderSelected(provider.name.to_string()),
-            )
+            let is_active = provider.name == browse_provider;
+            button(text(provider.badge).size(11))
+                .style(tab_button_style(is_active))
+                .on_press(Message::ChatPickerProviderSelected(
+                    provider.name.to_string(),
+                ))
+                .padding(iced::Padding {
+                    top: 8.0,
+                    right: 4.0,
+                    bottom: 8.0,
+                    left: 4.0,
+                })
+                .width(Length::Fixed(32.0))
+                .into()
         })
         .collect();
 
-    dropdown(label, is_open, Message::ChatToggleProviderDropdown, options)
-}
+    let query = search.to_lowercase();
+    let matching_models: Vec<&str> = chat_providers::models_for(browse_provider)
+        .iter()
+        .copied()
+        .filter(|model| query.is_empty() || model.to_lowercase().contains(&query))
+        .collect();
 
-fn model_field<'a>(session: &'a ChatSession, is_open: bool) -> Element<'a, Message> {
-    let label = if session.model.is_empty() {
-        "Select model".to_string()
+    let model_list: Element<'a, Message> = if matching_models.is_empty() {
+        container(text("No models found").size(11).color(theme().text_placeholder))
+            .padding(ROW_PADDING)
+            .into()
     } else {
-        session.model.clone()
+        let provider_owned = browse_provider.to_string();
+        let rows: Vec<Element<'a, Message>> = matching_models
+            .into_iter()
+            .map(|model| {
+                button(text(model).size(12))
+                    .style(tree_button_style)
+                    .on_press(Message::ChatModelPicked(
+                        provider_owned.clone(),
+                        model.to_string(),
+                    ))
+                    .padding(ROW_PADDING)
+                    .width(Length::Fill)
+                    .into()
+            })
+            .collect();
+        scrollable(column(rows).spacing(2)).height(Length::Fixed(140.0)).into()
     };
 
-    let models = chat_providers::models_for(&session.provider);
-    let options = models
-        .iter()
-        .map(|model| {
-            (
-                model.to_string(),
-                session.model == *model,
-                Message::ChatModelSelected(model.to_string()),
-            )
+    let search_box = text_input("Search models...", search)
+        .on_input(Message::ChatModelSearchChanged)
+        .size(12)
+        .padding(iced::Padding {
+            top: 4.0,
+            right: 6.0,
+            bottom: 4.0,
+            left: 6.0,
         })
-        .collect();
+        .style(rename_input_style)
+        .width(Length::Fill);
 
-    dropdown(label, is_open, Message::ChatToggleModelDropdown, options)
+    let right_column = column![search_box, model_list].spacing(6).width(Length::Fill);
+
+    let picker_body = row![column(provider_column).spacing(2), right_column].spacing(8);
+
+    container(picker_body)
+        .padding(iced::Padding {
+            top: 8.0,
+            right: 8.0,
+            bottom: 8.0,
+            left: 8.0,
+        })
+        .width(Length::Fill)
+        .style(context_menu_panel_style)
+        .into()
 }

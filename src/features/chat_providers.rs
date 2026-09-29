@@ -8,24 +8,31 @@
 /// A provider and the models it offers, for display in the picker.
 pub struct ProviderInfo {
     pub name: &'static str,
+    /// Short label for the narrow provider column in the model picker,
+    /// since there are no provider logo assets yet.
+    pub badge: &'static str,
     pub models: &'static [&'static str],
 }
 
 pub const PROVIDERS: &[ProviderInfo] = &[
     ProviderInfo {
         name: "OpenAI",
+        badge: "OA",
         models: &["gpt-4o", "gpt-4o-mini", "o1-mini"],
     },
     ProviderInfo {
         name: "Anthropic",
+        badge: "AN",
         models: &["Claude Opus", "Claude Sonnet", "Claude Haiku"],
     },
     ProviderInfo {
         name: "Hack Club AI",
+        badge: "HC",
         models: &["Hack Club AI Default"],
     },
     ProviderInfo {
         name: "OpenRouter",
+        badge: "OR",
         models: &["OpenRouter Auto"],
     },
 ];
