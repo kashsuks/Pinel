@@ -37,7 +37,7 @@ PR's MUST use squash commit formatting as follows
 [Scope] <overview of changes for this PR>
 ```
 
-Note that the first letter of the scope and commit message must be capitalized
+Note that the first letter of the scope and commit message must be capitalized for squash commits. Normal commits will have the scope and first letter of a short commit message me uncapitalized
 
 For example:
 
