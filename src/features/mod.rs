@@ -1,6 +1,7 @@
 //! Feature modules grouped under a single namespace.
 
 pub mod activity_state;
+pub mod ai_client;
 pub mod chat;
 pub mod chat_providers;
 pub mod command_input;

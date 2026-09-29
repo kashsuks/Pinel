@@ -207,6 +207,7 @@ impl App {
                     self.chat_model_picker_open,
                     self.chat_picker_provider.as_deref(),
                     &self.chat_model_search,
+                    &self.provider_model_state,
                     &self.chat_input,
                     self.chat_rename_target.as_deref(),
                     &self.chat_rename_input,

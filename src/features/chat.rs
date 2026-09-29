@@ -1,9 +1,8 @@
 //! Data model for the AI chat tab.
 //!
-//! This only models the conversation shape and local bookkeeping - it does
-//! not talk to any AI provider. Sending a message currently just appends it
-//! to the session; wiring an actual provider response is a follow-up piece
-//! of work.
+//! This models the conversation shape and local bookkeeping. Talking to a
+//! provider happens in `features::ai_client`; this module just holds the
+//! resulting messages.
 
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -13,6 +12,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ChatRole {
     User,
+    Assistant,
 }
 
 /// A single message within a [`ChatSession`].
@@ -28,6 +28,14 @@ impl ChatMessage {
     pub fn user(content: impl Into<String>) -> Self {
         Self {
             role: ChatRole::User,
+            content: content.into(),
+            timestamp: now_unix(),
+        }
+    }
+
+    pub fn assistant(content: impl Into<String>) -> Self {
+        Self {
+            role: ChatRole::Assistant,
             content: content.into(),
             timestamp: now_unix(),
         }

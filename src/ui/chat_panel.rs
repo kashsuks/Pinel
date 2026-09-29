@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use iced::{
     widget::{button, column, container, row, scrollable, text, text_input, Space},
     Color, Element, Length,
@@ -5,6 +7,7 @@ use iced::{
 
 use crate::{
     features::{
+        ai_client::ModelFetchState,
         chat::{ChatMessage, ChatRole, ChatSession},
         chat_providers::{self, PROVIDERS},
     },
@@ -45,6 +48,7 @@ pub fn view_chat_panel<'a>(
     model_picker_open: bool,
     picker_provider: Option<&'a str>,
     model_search: &'a str,
+    provider_model_state: &'a HashMap<String, ModelFetchState>,
     input_value: &'a str,
     rename_target: Option<&'a str>,
     rename_input: &'a str,
@@ -57,6 +61,7 @@ pub fn view_chat_panel<'a>(
             model_picker_open,
             picker_provider,
             model_search,
+            provider_model_state,
             input_value,
             width,
         ),
@@ -178,11 +183,13 @@ fn render_rename_row<'a>(
     .into()
 }
 
+#[allow(clippy::too_many_arguments)]
 fn view_chat_conversation<'a>(
     session: &'a ChatSession,
     model_picker_open: bool,
     picker_provider: Option<&'a str>,
     model_search: &'a str,
+    provider_model_state: &'a HashMap<String, ModelFetchState>,
     input_value: &'a str,
     width: f32,
 ) -> Element<'a, Message> {
@@ -240,7 +247,11 @@ fn view_chat_conversation<'a>(
             .filter(|p| !p.is_empty())
             .or(Some(session.provider.as_str()).filter(|p| !p.is_empty()))
             .unwrap_or(PROVIDERS[0].name);
-        items.push(model_picker(browse_provider, model_search));
+        items.push(model_picker(
+            browse_provider,
+            model_search,
+            provider_model_state,
+        ));
     }
     items.push(model_trigger);
     items.push(input_row.into());
@@ -286,6 +297,7 @@ fn message_thread<'a>(session: &'a ChatSession) -> Element<'a, Message> {
 fn message_bubble(message: &ChatMessage) -> Element<'_, Message> {
     let role_label = match message.role {
         ChatRole::User => "You",
+        ChatRole::Assistant => "Assistant",
     };
 
     container(
@@ -339,7 +351,11 @@ fn model_trigger_button(session: &ChatSession, is_open: bool) -> Element<'_, Mes
 /// The expanded picker: a narrow column of provider badges on the left,
 /// and a searchable list of that provider's models on the right - picking
 /// a model commits both the provider and model to the session at once.
-fn model_picker<'a>(browse_provider: &'a str, search: &'a str) -> Element<'a, Message> {
+fn model_picker<'a>(
+    browse_provider: &'a str,
+    search: &'a str,
+    provider_model_state: &'a HashMap<String, ModelFetchState>,
+) -> Element<'a, Message> {
     let provider_column: Vec<Element<'a, Message>> = PROVIDERS
         .iter()
         .map(|provider| {
@@ -361,33 +377,59 @@ fn model_picker<'a>(browse_provider: &'a str, search: &'a str) -> Element<'a, Me
         .collect();
 
     let query = search.to_lowercase();
-    let matching_models: Vec<&str> = chat_providers::models_for(browse_provider)
-        .iter()
-        .copied()
-        .filter(|model| query.is_empty() || model.to_lowercase().contains(&query))
-        .collect();
+    let state =
+        chat_providers::by_name(browse_provider).and_then(|p| provider_model_state.get(p.id));
 
-    let model_list: Element<'a, Message> = if matching_models.is_empty() {
-        container(text("No models found").size(11).color(theme().text_placeholder))
-            .padding(ROW_PADDING)
-            .into()
-    } else {
-        let provider_owned = browse_provider.to_string();
-        let rows: Vec<Element<'a, Message>> = matching_models
-            .into_iter()
-            .map(|model| {
-                button(text(model).size(12))
-                    .style(tree_button_style)
-                    .on_press(Message::ChatModelPicked(
-                        provider_owned.clone(),
-                        model.to_string(),
-                    ))
+    let model_list: Element<'a, Message> = match state {
+        None => container(
+            text("No API key attached. Add one in Settings → Providers.")
+                .size(11)
+                .color(theme().text_placeholder),
+        )
+        .padding(ROW_PADDING)
+        .into(),
+        Some(ModelFetchState::Loading) => {
+            container(text("Loading models...").size(11).color(theme().text_placeholder))
+                .padding(ROW_PADDING)
+                .into()
+        },
+        Some(ModelFetchState::Error(message)) => container(
+            text(format!("Failed to load models: {message}"))
+                .size(11)
+                .color(theme().text_placeholder),
+        )
+        .padding(ROW_PADDING)
+        .into(),
+        Some(ModelFetchState::Loaded(models)) => {
+            let matching_models: Vec<&str> = models
+                .iter()
+                .map(String::as_str)
+                .filter(|model| query.is_empty() || model.to_lowercase().contains(&query))
+                .collect();
+
+            if matching_models.is_empty() {
+                container(text("No models found").size(11).color(theme().text_placeholder))
                     .padding(ROW_PADDING)
-                    .width(Length::Fill)
                     .into()
-            })
-            .collect();
-        scrollable(column(rows).spacing(2)).height(Length::Fixed(140.0)).into()
+            } else {
+                let provider_owned = browse_provider.to_string();
+                let rows: Vec<Element<'a, Message>> = matching_models
+                    .into_iter()
+                    .map(|model| {
+                        button(text(model).size(12))
+                            .style(tree_button_style)
+                            .on_press(Message::ChatModelPicked(
+                                provider_owned.clone(),
+                                model.to_string(),
+                            ))
+                            .padding(ROW_PADDING)
+                            .width(Length::Fill)
+                            .into()
+                    })
+                    .collect();
+                scrollable(column(rows).spacing(2)).height(Length::Fixed(140.0)).into()
+            }
+        },
     };
 
     let search_box = text_input("Search models...", search)
