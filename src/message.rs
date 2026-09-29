@@ -164,6 +164,31 @@ pub enum Message {
     RefreshGitStatus,
     GitStatusLoaded(Vec<(String, String)>),
 
+    /// Starts a new, empty chat session and makes it the active one.
+    ChatNewSession,
+    /// Makes the chat session with this id the active one.
+    ChatSelectSession(String),
+    /// Leaves the active chat session and returns to the history list.
+    ChatBackToHistory,
+    /// Opens or closes the provider/model picker.
+    ChatToggleModelPicker,
+    /// Switches which provider's models are shown in the open picker's
+    /// right-hand list. Does not commit anything to the session yet.
+    ChatPickerProviderSelected(String),
+    ChatModelSearchChanged(String),
+    /// Commits a (provider, model) pair to the active session and closes
+    /// the picker.
+    ChatModelPicked(String, String),
+    ChatInputChanged(String),
+    /// Appends the current input as a user message to the active session.
+    /// Does not talk to any provider - no reply is generated yet.
+    ChatSend,
+    ChatDeleteSession(String),
+    ChatRenameStart(String),
+    ChatRenameInputChanged(String),
+    ChatRenameSubmit,
+    ChatRenameCancel,
+
     CheckForUpdate,
     UpdateAvailable(crate::features::updater::UpdateInfo),
     DismissUpdateBanner,

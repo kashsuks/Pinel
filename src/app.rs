@@ -139,6 +139,7 @@ const HOVER_TRIGGER_DELAY: Duration = Duration::from_secs(2);
 pub enum ActivePanel {
     Files,
     Git,
+    Chat,
 }
 
 pub struct App {
@@ -194,6 +195,19 @@ pub struct App {
 
     active_panel: ActivePanel,
     git_changes: Vec<(String, String)>,
+
+    chat_sessions: Vec<crate::features::chat::ChatSession>,
+    active_chat_session: Option<String>,
+    chat_model_picker_open: bool,
+    /// Which provider's models are shown in the open picker's right-hand
+    /// list. Separate from the active session's provider so browsing
+    /// doesn't commit anything until a model is actually picked.
+    chat_picker_provider: Option<String>,
+    chat_model_search: String,
+    chat_input: String,
+    chat_rename_target: Option<String>,
+    chat_rename_input: String,
+    chat_rename_input_id: iced::widget::Id,
 
     last_cursor_position: iced::Point,
     context_menu: Option<crate::features::file_tree::ContextMenuTarget>,
@@ -359,6 +373,16 @@ impl Default for App {
 
             active_panel: ActivePanel::Files,
             git_changes: Vec::new(),
+
+            chat_sessions: crate::config::chat_store::load_sessions(None),
+            active_chat_session: None,
+            chat_model_picker_open: false,
+            chat_picker_provider: None,
+            chat_model_search: String::new(),
+            chat_input: String::new(),
+            chat_rename_target: None,
+            chat_rename_input: String::new(),
+            chat_rename_input_id: iced::widget::Id::unique(),
 
             last_cursor_position: iced::Point::ORIGIN,
             context_menu: None,
@@ -594,6 +618,29 @@ impl App {
         if crate::config::session::save_session(&current).is_ok() {
             self.last_persisted_session = Some(current);
         }
+    }
+
+    /// Saves all chat sessions, scoped to the currently open workspace
+    /// (or the shared no-workspace bucket when no folder is open).
+    pub(super) fn persist_chat_sessions(&self) {
+        let workspace = self.file_tree.as_ref().map(|tree| tree.root.as_path());
+        let _ = crate::config::chat_store::save_sessions(workspace, &self.chat_sessions);
+    }
+
+    /// Returns a mutable reference to the currently active chat session,
+    /// if one is selected and still exists.
+    pub(super) fn active_chat_session_mut(
+        &mut self,
+    ) -> Option<&mut crate::features::chat::ChatSession> {
+        let id = self.active_chat_session.as_ref()?;
+        self.chat_sessions.iter_mut().find(|s| &s.id == id)
+    }
+
+    /// Returns the currently active chat session, if one is selected and
+    /// still exists.
+    pub(super) fn active_chat_session(&self) -> Option<&crate::features::chat::ChatSession> {
+        let id = self.active_chat_session.as_ref()?;
+        self.chat_sessions.iter().find(|s| &s.id == id)
     }
 
     /// Records a tabs path and cursor position (if its an editor tab)

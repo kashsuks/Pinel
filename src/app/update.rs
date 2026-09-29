@@ -1433,6 +1433,8 @@ impl App {
                 self.fuzzy_finder.set_folder(path.clone());
                 self.lsp.set_workspace_root(path.clone());
                 self.lsp_enabled = true;
+                self.chat_sessions = crate::config::chat_store::load_sessions(Some(&path));
+                self.active_chat_session = self.chat_sessions.first().map(|s| s.id.clone());
                 iced::Task::none()
             },
             Message::SaveFile => {
@@ -1603,6 +1605,108 @@ impl App {
             },
             Message::GitStatusLoaded(changes) => {
                 self.git_changes = changes;
+                iced::Task::none()
+            },
+            Message::ChatNewSession => {
+                let session = crate::features::chat::ChatSession::new(String::new(), String::new());
+                self.active_chat_session = Some(session.id.clone());
+                self.chat_sessions.insert(0, session);
+                self.persist_chat_sessions();
+                iced::Task::none()
+            },
+            Message::ChatSelectSession(id) => {
+                self.active_chat_session = Some(id);
+                self.chat_model_picker_open = false;
+                iced::Task::none()
+            },
+            Message::ChatBackToHistory => {
+                self.active_chat_session = None;
+                self.chat_model_picker_open = false;
+                iced::Task::none()
+            },
+            Message::ChatToggleModelPicker => {
+                self.chat_model_picker_open = !self.chat_model_picker_open;
+                self.chat_model_search.clear();
+                self.chat_picker_provider = if self.chat_model_picker_open {
+                    self.active_chat_session().map(|s| s.provider.clone()).filter(|p| !p.is_empty())
+                } else {
+                    None
+                };
+                iced::Task::none()
+            },
+            Message::ChatPickerProviderSelected(provider) => {
+                self.chat_picker_provider = Some(provider);
+                iced::Task::none()
+            },
+            Message::ChatModelSearchChanged(text) => {
+                self.chat_model_search = text;
+                iced::Task::none()
+            },
+            Message::ChatModelPicked(provider, model) => {
+                if let Some(session) = self.active_chat_session_mut() {
+                    session.provider = provider;
+                    session.model = model;
+                }
+                self.chat_model_picker_open = false;
+                self.chat_model_search.clear();
+                self.persist_chat_sessions();
+                iced::Task::none()
+            },
+            Message::ChatInputChanged(text) => {
+                self.chat_input = text;
+                iced::Task::none()
+            },
+            Message::ChatSend => {
+                let content = self.chat_input.trim().to_string();
+                if !content.is_empty() {
+                    if let Some(session) = self.active_chat_session_mut() {
+                        session.push(crate::features::chat::ChatMessage::user(content));
+                    }
+                    self.chat_input.clear();
+                    self.persist_chat_sessions();
+                }
+                iced::Task::none()
+            },
+            Message::ChatDeleteSession(id) => {
+                self.chat_sessions.retain(|s| s.id != id);
+                if self.active_chat_session.as_deref() == Some(id.as_str()) {
+                    self.active_chat_session = None;
+                }
+                if self.chat_rename_target.as_deref() == Some(id.as_str()) {
+                    self.chat_rename_target = None;
+                    self.chat_rename_input.clear();
+                }
+                self.persist_chat_sessions();
+                iced::Task::none()
+            },
+            Message::ChatRenameStart(id) => {
+                if let Some(session) = self.chat_sessions.iter().find(|s| s.id == id) {
+                    self.chat_rename_input = session.title.clone();
+                    self.chat_rename_target = Some(id);
+                    return iced::widget::operation::focus(self.chat_rename_input_id.clone());
+                }
+                iced::Task::none()
+            },
+            Message::ChatRenameInputChanged(value) => {
+                self.chat_rename_input = value;
+                iced::Task::none()
+            },
+            Message::ChatRenameCancel => {
+                self.chat_rename_target = None;
+                self.chat_rename_input.clear();
+                iced::Task::none()
+            },
+            Message::ChatRenameSubmit => {
+                if let Some(id) = self.chat_rename_target.take() {
+                    let new_title = self.chat_rename_input.trim().to_string();
+                    if !new_title.is_empty() {
+                        if let Some(session) = self.chat_sessions.iter_mut().find(|s| s.id == id) {
+                            session.title = new_title;
+                        }
+                        self.persist_chat_sessions();
+                    }
+                }
+                self.chat_rename_input.clear();
                 iced::Task::none()
             },
             Message::ToggleSidebar => {
