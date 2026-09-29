@@ -209,6 +209,7 @@ impl App {
                     &self.chat_model_search,
                     &self.provider_model_state,
                     &self.chat_input,
+                    self.chat_sending,
                     self.chat_rename_target.as_deref(),
                     &self.chat_rename_input,
                     self.chat_rename_input_id.clone(),

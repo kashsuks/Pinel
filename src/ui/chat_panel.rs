@@ -50,6 +50,7 @@ pub fn view_chat_panel<'a>(
     model_search: &'a str,
     provider_model_state: &'a HashMap<String, ModelFetchState>,
     input_value: &'a str,
+    sending: bool,
     rename_target: Option<&'a str>,
     rename_input: &'a str,
     rename_input_id: iced::widget::Id,
@@ -63,6 +64,7 @@ pub fn view_chat_panel<'a>(
             model_search,
             provider_model_state,
             input_value,
+            sending,
             width,
         ),
         None => view_chat_history(
@@ -191,6 +193,7 @@ fn view_chat_conversation<'a>(
     model_search: &'a str,
     provider_model_state: &'a HashMap<String, ModelFetchState>,
     input_value: &'a str,
+    sending: bool,
     width: f32,
 ) -> Element<'a, Message> {
     let header = row![
@@ -208,7 +211,7 @@ fn view_chat_conversation<'a>(
     .spacing(8)
     .align_y(iced::Alignment::Center);
 
-    let thread = message_thread(session);
+    let thread = message_thread(session, sending);
 
     let model_trigger = model_trigger_button(session, model_picker_open);
 
@@ -225,15 +228,22 @@ fn view_chat_conversation<'a>(
             })
             .style(rename_input_style)
             .width(Length::Fill),
-        button(text("Send").size(12))
-            .style(tree_button_style)
-            .on_press(Message::ChatSend)
-            .padding(iced::Padding {
-                top: 6.0,
-                right: 10.0,
-                bottom: 6.0,
-                left: 10.0,
-            }),
+        button(
+            text(if sending {
+                "Sending..."
+            } else {
+                "Send"
+            })
+            .size(12)
+        )
+        .style(tree_button_style)
+        .on_press_maybe((!sending).then_some(Message::ChatSend))
+        .padding(iced::Padding {
+            top: 6.0,
+            right: 10.0,
+            bottom: 6.0,
+            left: 10.0,
+        }),
     ]
     .spacing(6)
     .align_y(iced::Alignment::Center);
@@ -275,8 +285,8 @@ fn view_chat_conversation<'a>(
 ///
 /// Only user messages exist for now - sending a message just appends it
 /// locally, since no provider is wired up yet.
-fn message_thread<'a>(session: &'a ChatSession) -> Element<'a, Message> {
-    if session.messages.is_empty() {
+fn message_thread<'a>(session: &'a ChatSession, sending: bool) -> Element<'a, Message> {
+    if session.messages.is_empty() && !sending {
         return container(
             text("Send a message to start the conversation")
                 .size(12)
@@ -289,7 +299,20 @@ fn message_thread<'a>(session: &'a ChatSession) -> Element<'a, Message> {
         .into();
     }
 
-    let bubbles: Vec<Element<'a, Message>> = session.messages.iter().map(message_bubble).collect();
+    let mut bubbles: Vec<Element<'a, Message>> =
+        session.messages.iter().map(message_bubble).collect();
+    if sending {
+        bubbles.push(
+            container(text("Assistant is typing...").size(12).color(theme().text_placeholder))
+                .padding(iced::Padding {
+                    top: 6.0,
+                    right: 8.0,
+                    bottom: 6.0,
+                    left: 8.0,
+                })
+                .into(),
+        );
+    }
 
     scrollable(column(bubbles).spacing(6)).height(Length::Fill).into()
 }
