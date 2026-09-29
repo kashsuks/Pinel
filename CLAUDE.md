@@ -25,7 +25,7 @@ A space follows the colon. Type values:
 | test | Adding tests |
 | chore | Build process or tooling changes |
 
-Additionally, ensure that the first letter of type, scope, and subject are capitalized.
+Additionally, ensure that the first letter of the scope is capitalized. The first letter of the type and the subject must NOT be capitalized (e.g. `feat[Chat]: add message input box`).
 
 ## Squash Commits and Pull Requests
 
@@ -37,7 +37,7 @@ PR's MUST use squash commit formatting as follows
 [Scope] <overview of changes for this PR>
 ```
 
-Note that the first letter of the scope and commit message must be capitalized for squash commits. Normal commits will have the scope and first letter of a short commit message me uncapitalized
+Note that for squash commits, the first letter of both the scope and the commit message must be capitalized. Normal (non-squash) commits still capitalize the scope, but the first letter of the short commit message must NOT be capitalized.
 
 For example:
 
