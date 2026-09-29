@@ -209,6 +209,18 @@ pub fn sidebar_container_style(_theme: &Theme) -> container::Style {
     }
 }
 
+pub fn chat_message_bubble_style(_theme: &Theme) -> container::Style {
+    container::Style {
+        background: Some(Background::Color(theme().bg_hover)),
+        border: Border {
+            color: Color::TRANSPARENT,
+            width: 0.0,
+            radius: 6.0.into(),
+        },
+        ..Default::default()
+    }
+}
+
 pub fn status_bar_style(_theme: &Theme) -> container::Style {
     let bg = theme().bg_status_bar;
     let bg_subtle = Color::from_rgba(bg.r, bg.g, bg.b, bg.a * 0.5);

@@ -25,9 +25,6 @@ pub struct ChatMessage {
 }
 
 impl ChatMessage {
-    /// Not called from the app yet - wiring up Send lands in a follow-up
-    /// commit. Already exercised by this module's tests.
-    #[allow(dead_code)]
     pub fn user(content: impl Into<String>) -> Self {
         Self {
             role: ChatRole::User,
@@ -65,10 +62,6 @@ impl ChatSession {
     }
 
     /// Appends a message to the session and refreshes `updated_at`.
-    ///
-    /// Not called from the app yet - wiring up Send lands in a follow-up
-    /// commit. Already exercised by this module's tests.
-    #[allow(dead_code)]
     pub fn push(&mut self, message: ChatMessage) {
         self.updated_at = message.timestamp;
         self.messages.push(message);

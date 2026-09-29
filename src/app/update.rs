@@ -1653,6 +1653,21 @@ impl App {
                 self.persist_chat_sessions();
                 iced::Task::none()
             },
+            Message::ChatInputChanged(text) => {
+                self.chat_input = text;
+                iced::Task::none()
+            },
+            Message::ChatSend => {
+                let content = self.chat_input.trim().to_string();
+                if !content.is_empty() {
+                    if let Some(session) = self.active_chat_session_mut() {
+                        session.push(crate::features::chat::ChatMessage::user(content));
+                    }
+                    self.chat_input.clear();
+                    self.persist_chat_sessions();
+                }
+                iced::Task::none()
+            },
             Message::ToggleSidebar => {
                 self.sidebar_visible = !self.sidebar_visible;
                 iced::Task::none()

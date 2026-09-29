@@ -200,6 +200,7 @@ pub struct App {
     active_chat_session: Option<String>,
     chat_provider_dropdown_open: bool,
     chat_model_dropdown_open: bool,
+    chat_input: String,
 
     last_cursor_position: iced::Point,
     context_menu: Option<crate::features::file_tree::ContextMenuTarget>,
@@ -370,6 +371,7 @@ impl Default for App {
             active_chat_session: None,
             chat_provider_dropdown_open: false,
             chat_model_dropdown_open: false,
+            chat_input: String::new(),
 
             last_cursor_position: iced::Point::ORIGIN,
             context_menu: None,

@@ -176,6 +176,10 @@ pub enum Message {
     /// previous model may not belong to the newly chosen provider.
     ChatProviderSelected(String),
     ChatModelSelected(String),
+    ChatInputChanged(String),
+    /// Appends the current input as a user message to the active session.
+    /// Does not talk to any provider - no reply is generated yet.
+    ChatSend,
 
     CheckForUpdate,
     UpdateAvailable(crate::features::updater::UpdateInfo),

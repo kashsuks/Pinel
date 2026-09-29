@@ -206,6 +206,7 @@ impl App {
                     self.active_chat_session.as_deref(),
                     self.chat_provider_dropdown_open,
                     self.chat_model_dropdown_open,
+                    &self.chat_input,
                     self.sidebar_width,
                 ),
             };

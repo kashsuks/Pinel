@@ -1,16 +1,19 @@
 use iced::{
-    widget::{button, column, container, row, scrollable, text, Space},
+    widget::{button, column, container, row, scrollable, text, text_input, Space},
     Element, Length,
 };
 
 use crate::{
     features::{
-        chat::ChatSession,
+        chat::{ChatMessage, ChatRole, ChatSession},
         chat_providers::{self, PROVIDERS},
     },
     message::Message,
     theme::*,
-    ui::styles::{sidebar_container_style, tab_button_style, tree_button_style},
+    ui::styles::{
+        chat_message_bubble_style, rename_input_style, sidebar_container_style, tab_button_style,
+        tree_button_style,
+    },
 };
 
 const ROW_PADDING: iced::Padding = iced::Padding {
@@ -31,12 +34,17 @@ pub fn view_chat_panel<'a>(
     active_session: Option<&'a str>,
     provider_dropdown_open: bool,
     model_dropdown_open: bool,
+    input_value: &'a str,
     width: f32,
 ) -> Element<'a, Message> {
     match active_session.and_then(|id| sessions.iter().find(|s| s.id == id)) {
-        Some(session) => {
-            view_chat_conversation(session, provider_dropdown_open, model_dropdown_open, width)
-        },
+        Some(session) => view_chat_conversation(
+            session,
+            provider_dropdown_open,
+            model_dropdown_open,
+            input_value,
+            width,
+        ),
         None => view_chat_history(sessions, active_session, width),
     }
 }
@@ -102,6 +110,7 @@ fn view_chat_conversation<'a>(
     session: &'a ChatSession,
     provider_dropdown_open: bool,
     model_dropdown_open: bool,
+    input_value: &'a str,
     width: f32,
 ) -> Element<'a, Message> {
     let header = row![
@@ -119,18 +128,40 @@ fn view_chat_conversation<'a>(
     .spacing(8)
     .align_y(iced::Alignment::Center);
 
-    let placeholder =
-        container(text("Message thread coming soon").size(12).color(theme().text_placeholder))
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .center_x(Length::Fill)
-            .center_y(Length::Fill);
+    let thread = message_thread(session);
+
+    let input_row = row![
+        text_input("Message", input_value)
+            .on_input(Message::ChatInputChanged)
+            .on_submit(Message::ChatSend)
+            .size(13)
+            .padding(iced::Padding {
+                top: 6.0,
+                right: 8.0,
+                bottom: 6.0,
+                left: 8.0,
+            })
+            .style(rename_input_style)
+            .width(Length::Fill),
+        button(text("Send").size(12))
+            .style(tree_button_style)
+            .on_press(Message::ChatSend)
+            .padding(iced::Padding {
+                top: 6.0,
+                right: 10.0,
+                bottom: 6.0,
+                left: 10.0,
+            }),
+    ]
+    .spacing(6)
+    .align_y(iced::Alignment::Center);
 
     let content = column![
         header,
         provider_field(session, provider_dropdown_open),
         model_field(session, model_dropdown_open),
-        placeholder,
+        thread,
+        input_row,
     ]
     .spacing(10)
     .height(Length::Fill);
@@ -146,6 +177,52 @@ fn view_chat_conversation<'a>(
         })
         .style(sidebar_container_style)
         .into()
+}
+
+/// Renders the session's messages as a scrollable list of bubbles.
+///
+/// Only user messages exist for now - sending a message just appends it
+/// locally, since no provider is wired up yet.
+fn message_thread<'a>(session: &'a ChatSession) -> Element<'a, Message> {
+    if session.messages.is_empty() {
+        return container(
+            text("Send a message to start the conversation")
+                .size(12)
+                .color(theme().text_placeholder),
+        )
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .center_x(Length::Fill)
+        .center_y(Length::Fill)
+        .into();
+    }
+
+    let bubbles: Vec<Element<'a, Message>> = session.messages.iter().map(message_bubble).collect();
+
+    scrollable(column(bubbles).spacing(6)).height(Length::Fill).into()
+}
+
+fn message_bubble(message: &ChatMessage) -> Element<'_, Message> {
+    let role_label = match message.role {
+        ChatRole::User => "You",
+    };
+
+    container(
+        column![
+            text(role_label).size(10).color(theme().text_dim),
+            text(message.content.as_str()).size(13).color(theme().text_primary),
+        ]
+        .spacing(2),
+    )
+    .width(Length::Fill)
+    .padding(iced::Padding {
+        top: 6.0,
+        right: 8.0,
+        bottom: 6.0,
+        left: 8.0,
+    })
+    .style(chat_message_bubble_style)
+    .into()
 }
 
 /// A trigger button that expands into a list of options when open. Shared
