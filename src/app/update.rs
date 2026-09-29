@@ -2192,6 +2192,11 @@ impl App {
                 if section == "__toggle_theme_dropdown__" {
                     self.theme_dropdown_open = !self.theme_dropdown_open;
                 } else {
+                    if section == "providers" {
+                        let selected = self.providers_selected.clone();
+                        self.providers_key_input =
+                            self.provider_api_key(&selected).unwrap_or_default().to_string();
+                    }
                     self.settings_section = section;
                     self.theme_dropdown_open = false;
                 }

@@ -50,6 +50,7 @@ mod view_editor;
 mod view_finders;
 mod view_integrations;
 mod view_overlays;
+mod view_providers;
 mod view_root;
 mod view_settings;
 
