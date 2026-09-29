@@ -8,9 +8,6 @@
 //! so opening a different project shows that project's chat history. When
 //! no folder is open, history falls back to a shared `no-workspace.json`
 //! bucket.
-//!
-//! Not yet called from the app - the sidebar panel commit wires this up.
-#![allow(dead_code)]
 
 use super::theme_manager::get_config_dir;
 use crate::features::chat::ChatSession;

@@ -164,6 +164,11 @@ pub enum Message {
     RefreshGitStatus,
     GitStatusLoaded(Vec<(String, String)>),
 
+    /// Starts a new, empty chat session and makes it the active one.
+    ChatNewSession,
+    /// Makes the chat session with this id the active one.
+    ChatSelectSession(String),
+
     CheckForUpdate,
     UpdateAvailable(crate::features::updater::UpdateInfo),
     DismissUpdateBanner,

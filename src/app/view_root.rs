@@ -201,7 +201,11 @@ impl App {
                 ActivePanel::Git => {
                     crate::ui::view_git_panel(&self.git_changes, self.sidebar_width)
                 },
-                ActivePanel::Chat => crate::ui::view_chat_panel(self.sidebar_width),
+                ActivePanel::Chat => crate::ui::view_chat_panel(
+                    &self.chat_sessions,
+                    self.active_chat_session.as_deref(),
+                    self.sidebar_width,
+                ),
             };
 
             let activity_separator = container(text(""))

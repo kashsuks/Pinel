@@ -196,6 +196,9 @@ pub struct App {
     active_panel: ActivePanel,
     git_changes: Vec<(String, String)>,
 
+    chat_sessions: Vec<crate::features::chat::ChatSession>,
+    active_chat_session: Option<String>,
+
     last_cursor_position: iced::Point,
     context_menu: Option<crate::features::file_tree::ContextMenuTarget>,
     rename_target: Option<(std::path::PathBuf, bool)>,
@@ -360,6 +363,9 @@ impl Default for App {
 
             active_panel: ActivePanel::Files,
             git_changes: Vec::new(),
+
+            chat_sessions: crate::config::chat_store::load_sessions(None),
+            active_chat_session: None,
 
             last_cursor_position: iced::Point::ORIGIN,
             context_menu: None,
@@ -595,6 +601,13 @@ impl App {
         if crate::config::session::save_session(&current).is_ok() {
             self.last_persisted_session = Some(current);
         }
+    }
+
+    /// Saves all chat sessions, scoped to the currently open workspace
+    /// (or the shared no-workspace bucket when no folder is open).
+    pub(super) fn persist_chat_sessions(&self) {
+        let workspace = self.file_tree.as_ref().map(|tree| tree.root.as_path());
+        let _ = crate::config::chat_store::save_sessions(workspace, &self.chat_sessions);
     }
 
     /// Records a tabs path and cursor position (if its an editor tab)

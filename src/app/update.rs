@@ -1433,6 +1433,8 @@ impl App {
                 self.fuzzy_finder.set_folder(path.clone());
                 self.lsp.set_workspace_root(path.clone());
                 self.lsp_enabled = true;
+                self.chat_sessions = crate::config::chat_store::load_sessions(Some(&path));
+                self.active_chat_session = self.chat_sessions.first().map(|s| s.id.clone());
                 iced::Task::none()
             },
             Message::SaveFile => {
@@ -1603,6 +1605,17 @@ impl App {
             },
             Message::GitStatusLoaded(changes) => {
                 self.git_changes = changes;
+                iced::Task::none()
+            },
+            Message::ChatNewSession => {
+                let session = crate::features::chat::ChatSession::new(String::new(), String::new());
+                self.active_chat_session = Some(session.id.clone());
+                self.chat_sessions.insert(0, session);
+                self.persist_chat_sessions();
+                iced::Task::none()
+            },
+            Message::ChatSelectSession(id) => {
+                self.active_chat_session = Some(id);
                 iced::Task::none()
             },
             Message::ToggleSidebar => {
