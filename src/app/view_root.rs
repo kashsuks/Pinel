@@ -49,6 +49,7 @@ impl App {
 
         static ICON_FILES: &[u8] = include_bytes!("../assets/icons/activity-bar-files.svg");
         static ICON_GIT: &[u8] = include_bytes!("../assets/icons/activity-bar-git.svg");
+        static ICON_CHAT: &[u8] = include_bytes!("../assets/icons/activity-bar-chat.svg");
         static ICON_SETTINGS: &[u8] = include_bytes!("../assets/icons/settings.svg");
 
         let make_activity_icon =
@@ -168,6 +169,7 @@ impl App {
             iced::widget::column![
                 make_activity_icon(ICON_FILES, ActivePanel::Files),
                 make_activity_icon(ICON_GIT, ActivePanel::Git),
+                make_activity_icon(ICON_CHAT, ActivePanel::Chat),
                 iced::widget::Space::new().height(Length::Fill),
                 make_bottom_icon(ICON_SETTINGS, Message::ToggleSettings, self.settings_open),
             ]
@@ -199,6 +201,7 @@ impl App {
                 ActivePanel::Git => {
                     crate::ui::view_git_panel(&self.git_changes, self.sidebar_width)
                 },
+                ActivePanel::Chat => crate::ui::view_chat_panel(self.sidebar_width),
             };
 
             let activity_separator = container(text(""))

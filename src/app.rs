@@ -139,6 +139,7 @@ const HOVER_TRIGGER_DELAY: Duration = Duration::from_secs(2);
 pub enum ActivePanel {
     Files,
     Git,
+    Chat,
 }
 
 pub struct App {
