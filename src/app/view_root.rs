@@ -207,6 +207,9 @@ impl App {
                     self.chat_provider_dropdown_open,
                     self.chat_model_dropdown_open,
                     &self.chat_input,
+                    self.chat_rename_target.as_deref(),
+                    &self.chat_rename_input,
+                    self.chat_rename_input_id.clone(),
                     self.sidebar_width,
                 ),
             };

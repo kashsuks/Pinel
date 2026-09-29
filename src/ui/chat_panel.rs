@@ -1,6 +1,6 @@
 use iced::{
     widget::{button, column, container, row, scrollable, text, text_input, Space},
-    Element, Length,
+    Color, Element, Length,
 };
 
 use crate::{
@@ -16,6 +16,13 @@ use crate::{
     },
 };
 
+const ROW_ACTION_PADDING: iced::Padding = iced::Padding {
+    top: 4.0,
+    right: 6.0,
+    bottom: 4.0,
+    left: 6.0,
+};
+
 const ROW_PADDING: iced::Padding = iced::Padding {
     top: 6.0,
     right: 10.0,
@@ -29,12 +36,19 @@ const ROW_PADDING: iced::Padding = iced::Padding {
 /// is active, or that session's conversation view - currently just the
 /// provider/model picker - once one is selected. Actually sending messages
 /// to a provider lands in a follow-up commit.
+// Each argument is a distinct, independently-changing piece of view state
+// (session list, active id, two dropdown toggles, input text, and rename
+// state) rather than something that naturally groups into a struct yet.
+#[allow(clippy::too_many_arguments)]
 pub fn view_chat_panel<'a>(
     sessions: &'a [ChatSession],
     active_session: Option<&'a str>,
     provider_dropdown_open: bool,
     model_dropdown_open: bool,
     input_value: &'a str,
+    rename_target: Option<&'a str>,
+    rename_input: &'a str,
+    rename_input_id: iced::widget::Id,
     width: f32,
 ) -> Element<'a, Message> {
     match active_session.and_then(|id| sessions.iter().find(|s| s.id == id)) {
@@ -45,13 +59,23 @@ pub fn view_chat_panel<'a>(
             input_value,
             width,
         ),
-        None => view_chat_history(sessions, active_session, width),
+        None => view_chat_history(
+            sessions,
+            active_session,
+            rename_target,
+            rename_input,
+            rename_input_id,
+            width,
+        ),
     }
 }
 
 fn view_chat_history<'a>(
     sessions: &'a [ChatSession],
     active_session: Option<&'a str>,
+    rename_target: Option<&'a str>,
+    rename_input: &'a str,
+    rename_input_id: iced::widget::Id,
     width: f32,
 ) -> Element<'a, Message> {
     let new_chat_button = button(text("+ New Chat").size(13))
@@ -78,13 +102,11 @@ fn view_chat_history<'a>(
         let items: Vec<Element<'a, Message>> = sessions
             .iter()
             .map(|session| {
-                let is_active = active_session == Some(session.id.as_str());
-                button(text(session.title.as_str()).size(13))
-                    .style(tab_button_style(is_active))
-                    .on_press(Message::ChatSelectSession(session.id.clone()))
-                    .padding(ROW_PADDING)
-                    .width(Length::Fill)
-                    .into()
+                if rename_target == Some(session.id.as_str()) {
+                    render_rename_row(rename_input, rename_input_id.clone())
+                } else {
+                    render_history_row(session, active_session == Some(session.id.as_str()))
+                }
             })
             .collect();
 
@@ -104,6 +126,55 @@ fn view_chat_history<'a>(
         })
         .style(sidebar_container_style)
         .into()
+}
+
+fn render_history_row(session: &ChatSession, is_active: bool) -> Element<'_, Message> {
+    row![
+        button(text(session.title.as_str()).size(13))
+            .style(tab_button_style(is_active))
+            .on_press(Message::ChatSelectSession(session.id.clone()))
+            .padding(ROW_PADDING)
+            .width(Length::Fill),
+        button(text("Rename").size(10).color(theme().text_dim))
+            .style(tree_button_style)
+            .on_press(Message::ChatRenameStart(session.id.clone()))
+            .padding(ROW_ACTION_PADDING),
+        button(text("Delete").size(10).color(Color::from_rgb(0.86, 0.35, 0.35)))
+            .style(tree_button_style)
+            .on_press(Message::ChatDeleteSession(session.id.clone()))
+            .padding(ROW_ACTION_PADDING),
+    ]
+    .spacing(2)
+    .align_y(iced::Alignment::Center)
+    .into()
+}
+
+fn render_rename_row<'a>(
+    rename_input: &'a str,
+    rename_input_id: iced::widget::Id,
+) -> Element<'a, Message> {
+    row![
+        text_input("Chat name", rename_input)
+            .id(rename_input_id)
+            .on_input(Message::ChatRenameInputChanged)
+            .on_submit(Message::ChatRenameSubmit)
+            .size(13)
+            .padding(iced::Padding {
+                top: 4.0,
+                right: 6.0,
+                bottom: 4.0,
+                left: 6.0,
+            })
+            .style(rename_input_style)
+            .width(Length::Fill),
+        button(text("Cancel").size(10).color(theme().text_dim))
+            .style(tree_button_style)
+            .on_press(Message::ChatRenameCancel)
+            .padding(ROW_ACTION_PADDING),
+    ]
+    .spacing(4)
+    .align_y(iced::Alignment::Center)
+    .into()
 }
 
 fn view_chat_conversation<'a>(

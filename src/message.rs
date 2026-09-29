@@ -180,6 +180,11 @@ pub enum Message {
     /// Appends the current input as a user message to the active session.
     /// Does not talk to any provider - no reply is generated yet.
     ChatSend,
+    ChatDeleteSession(String),
+    ChatRenameStart(String),
+    ChatRenameInputChanged(String),
+    ChatRenameSubmit,
+    ChatRenameCancel,
 
     CheckForUpdate,
     UpdateAvailable(crate::features::updater::UpdateInfo),

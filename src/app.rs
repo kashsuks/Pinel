@@ -201,6 +201,9 @@ pub struct App {
     chat_provider_dropdown_open: bool,
     chat_model_dropdown_open: bool,
     chat_input: String,
+    chat_rename_target: Option<String>,
+    chat_rename_input: String,
+    chat_rename_input_id: iced::widget::Id,
 
     last_cursor_position: iced::Point,
     context_menu: Option<crate::features::file_tree::ContextMenuTarget>,
@@ -372,6 +375,9 @@ impl Default for App {
             chat_provider_dropdown_open: false,
             chat_model_dropdown_open: false,
             chat_input: String::new(),
+            chat_rename_target: None,
+            chat_rename_input: String::new(),
+            chat_rename_input_id: iced::widget::Id::unique(),
 
             last_cursor_position: iced::Point::ORIGIN,
             context_menu: None,

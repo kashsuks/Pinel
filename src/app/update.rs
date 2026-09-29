@@ -1668,6 +1668,48 @@ impl App {
                 }
                 iced::Task::none()
             },
+            Message::ChatDeleteSession(id) => {
+                self.chat_sessions.retain(|s| s.id != id);
+                if self.active_chat_session.as_deref() == Some(id.as_str()) {
+                    self.active_chat_session = None;
+                }
+                if self.chat_rename_target.as_deref() == Some(id.as_str()) {
+                    self.chat_rename_target = None;
+                    self.chat_rename_input.clear();
+                }
+                self.persist_chat_sessions();
+                iced::Task::none()
+            },
+            Message::ChatRenameStart(id) => {
+                if let Some(session) = self.chat_sessions.iter().find(|s| s.id == id) {
+                    self.chat_rename_input = session.title.clone();
+                    self.chat_rename_target = Some(id);
+                    return iced::widget::operation::focus(self.chat_rename_input_id.clone());
+                }
+                iced::Task::none()
+            },
+            Message::ChatRenameInputChanged(value) => {
+                self.chat_rename_input = value;
+                iced::Task::none()
+            },
+            Message::ChatRenameCancel => {
+                self.chat_rename_target = None;
+                self.chat_rename_input.clear();
+                iced::Task::none()
+            },
+            Message::ChatRenameSubmit => {
+                if let Some(id) = self.chat_rename_target.take() {
+                    let new_title = self.chat_rename_input.trim().to_string();
+                    if !new_title.is_empty() {
+                        if let Some(session) = self.chat_sessions.iter_mut().find(|s| s.id == id) {
+                            session.title = new_title;
+                        }
+                        self.persist_chat_sessions();
+                    }
+                }
+                self.chat_rename_input.clear();
+                iced::Task::none()
+            },
             Message::ToggleSidebar => {
                 self.sidebar_visible = !self.sidebar_visible;
                 iced::Task::none()
