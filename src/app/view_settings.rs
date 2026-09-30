@@ -39,6 +39,7 @@ impl App {
         let mut sections = vec![
             ("general", "General"),
             ("preferences", "Preferences"),
+            ("providers", "Providers"),
             ("wakatime", "WakaTime"),
         ];
         #[cfg(feature = "unstable-comet")]
@@ -47,6 +48,7 @@ impl App {
         let sections = vec![
             ("general", "General"),
             ("preferences", "Preferences"),
+            ("providers", "Providers"),
             ("wakatime", "WakaTime"),
         ];
 
@@ -137,6 +139,7 @@ impl App {
         let content_view: Element<'_, Message> = match self.settings_section.as_str() {
             "general" => self.view_settings_general(),
             "preferences" => self.view_settings_preferences(),
+            "providers" => self.view_settings_providers(),
             "wakatime" => self.view_settings_wakatime(),
             #[cfg(feature = "unstable-comet")]
             "developer" => self.view_settings_developer(),

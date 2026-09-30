@@ -180,14 +180,35 @@ pub enum Message {
     /// the picker.
     ChatModelPicked(String, String),
     ChatInputChanged(String),
-    /// Appends the current input as a user message to the active session.
-    /// Does not talk to any provider - no reply is generated yet.
+    /// Appends the current input as a user message to the active session
+    /// and sends the conversation so far to the session's provider/model.
     ChatSend,
+    /// A provider replied (or failed to) to a `ChatSend` for the given
+    /// session id.
+    ChatResponseReceived(String, Result<String, String>),
     ChatDeleteSession(String),
     ChatRenameStart(String),
     ChatRenameInputChanged(String),
     ChatRenameSubmit,
     ChatRenameCancel,
+
+    /// A model list fetch for a provider (by stable id) finished, either
+    /// from the chat picker or the Providers settings panel.
+    ProviderModelsFetched(String, Result<Vec<String>, String>),
+    /// Switches which provider's credential form is shown in the Providers
+    /// settings panel.
+    ProvidersSelect(String),
+    ProvidersApiKeyChanged(String),
+    ProvidersToggleKeyVisibility,
+    /// Saves the current form's provider id/key as a credential.
+    ProvidersSave,
+    /// Clears a saved credential for the given provider id.
+    ProvidersRemove(String),
+    /// Re-fetches the model list for a provider to confirm its key works.
+    ProvidersTestConnection(String),
+    /// Jumps straight to Settings → Providers, e.g. from the chat tab's
+    /// "no providers set up" prompt.
+    OpenProviderSettings,
 
     CheckForUpdate,
     UpdateAvailable(crate::features::updater::UpdateInfo),
