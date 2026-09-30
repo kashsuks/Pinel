@@ -303,4 +303,62 @@ mod tests {
     fn falls_back_to_none_when_error_field_missing() {
         assert_eq!(extract_error_message(r#"{"message":"oops"}"#), None);
     }
+
+    #[test]
+    fn parses_openai_models_response() {
+        let json = r#"{"data":[{"id":"gpt-4o"},{"id":"gpt-4o-mini"}]}"#;
+        let parsed: OpenAiModelsResponse = serde_json::from_str(json).unwrap();
+        let ids: Vec<&str> = parsed.data.iter().map(|m| m.id.as_str()).collect();
+        assert_eq!(ids, vec!["gpt-4o", "gpt-4o-mini"]);
+    }
+
+    #[test]
+    fn parses_empty_openai_models_response() {
+        let parsed: OpenAiModelsResponse = serde_json::from_str(r#"{"data":[]}"#).unwrap();
+        assert!(parsed.data.is_empty());
+    }
+
+    #[test]
+    fn parses_openai_chat_response_content() {
+        let json = r#"{"choices":[{"message":{"role":"assistant","content":"hello there"}}]}"#;
+        let parsed: OpenAiChatResponse = serde_json::from_str(json).unwrap();
+        assert_eq!(parsed.choices[0].message.content, "hello there");
+    }
+
+    #[test]
+    fn parses_anthropic_models_response() {
+        let json = r#"{"data":[{"id":"claude-opus-4"},{"id":"claude-haiku-4"}]}"#;
+        let parsed: AnthropicModelsResponse = serde_json::from_str(json).unwrap();
+        let ids: Vec<&str> = parsed.data.iter().map(|m| m.id.as_str()).collect();
+        assert_eq!(ids, vec!["claude-opus-4", "claude-haiku-4"]);
+    }
+
+    #[test]
+    fn parses_anthropic_chat_response_joins_multiple_text_blocks() {
+        let json =
+            r#"{"content":[{"type":"text","text":"Hello, "},{"type":"text","text":"world!"}]}"#;
+        let parsed: AnthropicChatResponse = serde_json::from_str(json).unwrap();
+        let text: String = parsed.content.into_iter().map(|b| b.text).collect();
+        assert_eq!(text, "Hello, world!");
+    }
+
+    #[test]
+    fn anthropic_content_block_defaults_missing_text_to_empty() {
+        let parsed: AnthropicContentBlock = serde_json::from_str(r#"{"type":"tool_use"}"#).unwrap();
+        assert_eq!(parsed.text, "");
+    }
+
+    #[test]
+    fn role_str_maps_user_and_assistant() {
+        assert_eq!(role_str(ChatRole::User), "user");
+        assert_eq!(role_str(ChatRole::Assistant), "assistant");
+    }
+
+    #[test]
+    fn to_openai_message_preserves_role_and_content() {
+        let message = ChatMessage::assistant("hi there");
+        let mapped = to_openai_message(&message);
+        assert_eq!(mapped.role, "assistant");
+        assert_eq!(mapped.content, "hi there");
+    }
 }

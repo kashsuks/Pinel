@@ -103,4 +103,35 @@ mod tests {
         ids.dedup();
         assert_eq!(ids.len(), PROVIDERS.len());
     }
+
+    #[test]
+    fn unknown_provider_name_returns_none() {
+        assert!(by_name("Not A Real Provider").is_none());
+    }
+
+    #[test]
+    fn every_provider_base_url_uses_https() {
+        for provider in PROVIDERS {
+            assert!(
+                provider.base_url.starts_with("https://"),
+                "{}'s base_url isn't https: {}",
+                provider.name,
+                provider.base_url
+            );
+        }
+    }
+
+    #[test]
+    fn every_provider_base_url_has_no_trailing_slash() {
+        // ai_client builds request URLs as `{base_url}/models`, so a
+        // trailing slash here would silently produce a double slash.
+        for provider in PROVIDERS {
+            assert!(
+                !provider.base_url.ends_with('/'),
+                "{}'s base_url ends with a slash: {}",
+                provider.name,
+                provider.base_url
+            );
+        }
+    }
 }

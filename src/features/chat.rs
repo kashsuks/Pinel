@@ -121,4 +121,27 @@ mod tests {
         let b = ChatSession::new("OpenAI", "gpt-4o");
         assert_ne!(a.id, b.id);
     }
+
+    #[test]
+    fn assistant_constructor_sets_assistant_role() {
+        let message = ChatMessage::assistant("hi there");
+        assert_eq!(message.role, ChatRole::Assistant);
+        assert_eq!(message.content, "hi there");
+    }
+
+    #[test]
+    fn user_and_assistant_roles_are_distinct() {
+        assert_ne!(ChatRole::User, ChatRole::Assistant);
+    }
+
+    #[test]
+    fn session_can_hold_a_mixed_conversation_in_order() {
+        let mut session = ChatSession::new("Anthropic", "Claude Sonnet");
+        session.push(ChatMessage::user("hello"));
+        session.push(ChatMessage::assistant("hi, how can I help?"));
+
+        assert_eq!(session.messages.len(), 2);
+        assert_eq!(session.messages[0].role, ChatRole::User);
+        assert_eq!(session.messages[1].role, ChatRole::Assistant);
+    }
 }
