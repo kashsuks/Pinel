@@ -50,6 +50,7 @@ mod view_editor;
 mod view_finders;
 mod view_integrations;
 mod view_overlays;
+mod view_providers;
 mod view_root;
 mod view_settings;
 
@@ -205,9 +206,16 @@ pub struct App {
     chat_picker_provider: Option<String>,
     chat_model_search: String,
     chat_input: String,
+    chat_sending: bool,
     chat_rename_target: Option<String>,
     chat_rename_input: String,
     chat_rename_input_id: iced::widget::Id,
+
+    provider_credentials: Vec<crate::config::provider_store::ProviderCredential>,
+    provider_model_state: HashMap<String, crate::features::ai_client::ModelFetchState>,
+    providers_selected: String,
+    providers_key_input: String,
+    providers_key_visible: bool,
 
     last_cursor_position: iced::Point,
     context_menu: Option<crate::features::file_tree::ContextMenuTarget>,
@@ -380,9 +388,16 @@ impl Default for App {
             chat_picker_provider: None,
             chat_model_search: String::new(),
             chat_input: String::new(),
+            chat_sending: false,
             chat_rename_target: None,
             chat_rename_input: String::new(),
             chat_rename_input_id: iced::widget::Id::unique(),
+
+            provider_credentials: crate::config::provider_store::load(),
+            provider_model_state: HashMap::new(),
+            providers_selected: crate::features::chat_providers::PROVIDERS[0].id.to_string(),
+            providers_key_input: String::new(),
+            providers_key_visible: false,
 
             last_cursor_position: iced::Point::ORIGIN,
             context_menu: None,
@@ -641,6 +656,68 @@ impl App {
     pub(super) fn active_chat_session(&self) -> Option<&crate::features::chat::ChatSession> {
         let id = self.active_chat_session.as_ref()?;
         self.chat_sessions.iter().find(|s| &s.id == id)
+    }
+
+    /// Returns the saved API key for a provider (by stable id), if any.
+    pub(super) fn provider_api_key(&self, provider_id: &str) -> Option<&str> {
+        self.provider_credentials
+            .iter()
+            .find(|c| c.provider_id == provider_id)
+            .map(|c| c.api_key.as_str())
+    }
+
+    /// Persists the current set of provider credentials to disk.
+    pub(super) fn persist_provider_credentials(&self) {
+        let _ = crate::config::provider_store::save(&self.provider_credentials);
+    }
+
+    /// Reloads the Providers settings form's key field from whatever is
+    /// saved for the currently selected provider, so switching into the
+    /// panel always reflects the on-disk state.
+    pub(super) fn refresh_providers_key_input(&mut self) {
+        let selected = self.providers_selected.clone();
+        self.providers_key_input = self.provider_api_key(&selected).unwrap_or_default().to_string();
+    }
+
+    /// Kicks off (or reuses a cached) model list fetch for the given
+    /// provider name, as shown in the chat model picker. No-ops if the
+    /// provider has no saved key, or a fetch for it is already in flight
+    /// or done.
+    pub(super) fn ensure_models_fetched(&mut self, provider_name: &str) -> iced::Task<Message> {
+        let Some(provider) = crate::features::chat_providers::by_name(provider_name) else {
+            return iced::Task::none();
+        };
+
+        if self.provider_model_state.contains_key(provider.id) {
+            return iced::Task::none();
+        }
+
+        let Some(api_key) = self.provider_api_key(provider.id) else {
+            self.provider_model_state.insert(
+                provider.id.to_string(),
+                crate::features::ai_client::ModelFetchState::Error(
+                    "no API key attached".to_string(),
+                ),
+            );
+            return iced::Task::none();
+        };
+
+        let api_key = api_key.to_string();
+        let provider_id = provider.id.to_string();
+        self.provider_model_state.insert(
+            provider_id.clone(),
+            crate::features::ai_client::ModelFetchState::Loading,
+        );
+
+        iced::Task::perform(
+            async move {
+                let provider = crate::features::chat_providers::by_id(&provider_id)
+                    .expect("provider id was resolved just before spawning this task");
+                let result = crate::features::ai_client::list_models(provider, &api_key).await;
+                (provider_id, result)
+            },
+            |(provider_id, result)| Message::ProviderModelsFetched(provider_id, result),
+        )
     }
 
     /// Records a tabs path and cursor position (if its an editor tab)

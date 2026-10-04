@@ -1,9 +1,8 @@
 //! Data model for the AI chat tab.
 //!
-//! This only models the conversation shape and local bookkeeping - it does
-//! not talk to any AI provider. Sending a message currently just appends it
-//! to the session; wiring an actual provider response is a follow-up piece
-//! of work.
+//! This models the conversation shape and local bookkeeping. Talking to a
+//! provider happens in `features::ai_client`; this module just holds the
+//! resulting messages.
 
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -13,6 +12,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ChatRole {
     User,
+    Assistant,
 }
 
 /// A single message within a [`ChatSession`].
@@ -28,6 +28,14 @@ impl ChatMessage {
     pub fn user(content: impl Into<String>) -> Self {
         Self {
             role: ChatRole::User,
+            content: content.into(),
+            timestamp: now_unix(),
+        }
+    }
+
+    pub fn assistant(content: impl Into<String>) -> Self {
+        Self {
+            role: ChatRole::Assistant,
             content: content.into(),
             timestamp: now_unix(),
         }
@@ -112,5 +120,28 @@ mod tests {
         let a = ChatSession::new("OpenAI", "gpt-4o");
         let b = ChatSession::new("OpenAI", "gpt-4o");
         assert_ne!(a.id, b.id);
+    }
+
+    #[test]
+    fn assistant_constructor_sets_assistant_role() {
+        let message = ChatMessage::assistant("hi there");
+        assert_eq!(message.role, ChatRole::Assistant);
+        assert_eq!(message.content, "hi there");
+    }
+
+    #[test]
+    fn user_and_assistant_roles_are_distinct() {
+        assert_ne!(ChatRole::User, ChatRole::Assistant);
+    }
+
+    #[test]
+    fn session_can_hold_a_mixed_conversation_in_order() {
+        let mut session = ChatSession::new("Anthropic", "Claude Sonnet");
+        session.push(ChatMessage::user("hello"));
+        session.push(ChatMessage::assistant("hi, how can I help?"));
+
+        assert_eq!(session.messages.len(), 2);
+        assert_eq!(session.messages[0].role, ChatRole::User);
+        assert_eq!(session.messages[1].role, ChatRole::Assistant);
     }
 }
