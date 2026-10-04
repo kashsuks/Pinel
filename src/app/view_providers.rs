@@ -8,9 +8,11 @@ use super::*;
 impl App {
     pub(super) fn view_settings_providers(&self) -> Element<'_, Message> {
         let heading = text("Providers").size(18).color(theme().text_primary);
-        let desc = text("Attach an API key for each provider you want to use from the chat tab.")
-            .size(12)
-            .color(theme().text_dim);
+        let desc = text(
+            "Attach an API key for hosted providers, or point a local one (Ollama, LM Studio, ...) at your own server.",
+        )
+        .size(12)
+        .color(theme().text_dim);
 
         let separator = container(Space::new().width(Length::Fill).height(Length::Fixed(1.0)))
             .style(|_theme| container::Style {
@@ -42,6 +44,15 @@ impl App {
             .collect();
 
         let selected = crate::features::chat_providers::by_id(&self.providers_selected);
+        let is_local = selected.map(|p| !p.requires_api_key).unwrap_or(false);
+
+        let key_label = text(if is_local {
+            "API Key (usually not needed for local servers)"
+        } else {
+            "API Key"
+        })
+        .size(11)
+        .color(theme().text_dim);
 
         let key_field = text_input("sk-...", &self.providers_key_input)
             .on_input(Message::ProvidersApiKeyChanged)
@@ -75,9 +86,34 @@ impl App {
 
         let key_row = row![key_field, visibility_btn].spacing(8).align_y(iced::Alignment::Center);
 
-        let base_url_hint = text(selected.map(|p| p.base_url).unwrap_or_default())
-            .size(11)
-            .color(theme().text_dim);
+        // Local providers (Ollama, LM Studio, Custom) run on a host/port
+        // the user controls, so their URL is editable; hosted providers
+        // have a fixed, well-known endpoint shown as a read-only hint.
+        let server_url_section: Element<'_, Message> = if is_local {
+            let url_field = text_input("http://localhost:11434/v1", &self.providers_base_url_input)
+                .on_input(Message::ProvidersBaseUrlChanged)
+                .size(13)
+                .padding(iced::Padding {
+                    top: 8.0,
+                    right: 12.0,
+                    bottom: 8.0,
+                    left: 12.0,
+                })
+                .style(search_input_style)
+                .width(Length::Fill);
+
+            column![
+                text("Server URL").size(11).color(theme().text_dim),
+                url_field,
+            ]
+            .spacing(4)
+            .into()
+        } else {
+            text(selected.map(|p| p.base_url).unwrap_or_default())
+                .size(11)
+                .color(theme().text_dim)
+                .into()
+        };
 
         let save_btn = button(text("Save").size(12).color(theme().text_primary))
             .on_press(Message::ProvidersSave)
@@ -151,12 +187,13 @@ impl App {
             desc,
             separator,
             row(provider_tabs).spacing(4),
-            base_url_hint,
+            server_url_section,
+            key_label,
             key_row,
             actions_row,
             status,
         ]
-        .spacing(12)
+        .spacing(8)
         .width(Length::Fill)
         .into()
     }
