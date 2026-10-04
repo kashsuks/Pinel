@@ -200,7 +200,10 @@ pub enum Message {
     ProvidersSelect(String),
     ProvidersApiKeyChanged(String),
     ProvidersToggleKeyVisibility,
-    /// Saves the current form's provider id/key as a credential.
+    /// Edits the server URL field, shown only for locally-hosted providers
+    /// (Ollama, LM Studio, Custom) whose host/port is user-specific.
+    ProvidersBaseUrlChanged(String),
+    /// Saves the current form's provider id/key/base-url as a credential.
     ProvidersSave,
     /// Clears a saved credential for the given provider id.
     ProvidersRemove(String),

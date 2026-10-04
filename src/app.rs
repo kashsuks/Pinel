@@ -216,6 +216,7 @@ pub struct App {
     providers_selected: String,
     providers_key_input: String,
     providers_key_visible: bool,
+    providers_base_url_input: String,
 
     last_cursor_position: iced::Point,
     context_menu: Option<crate::features::file_tree::ContextMenuTarget>,
@@ -398,6 +399,9 @@ impl Default for App {
             providers_selected: crate::features::chat_providers::PROVIDERS[0].id.to_string(),
             providers_key_input: String::new(),
             providers_key_visible: false,
+            providers_base_url_input: crate::features::chat_providers::PROVIDERS[0]
+                .base_url
+                .to_string(),
 
             last_cursor_position: iced::Point::ORIGIN,
             context_menu: None,
@@ -671,18 +675,36 @@ impl App {
         let _ = crate::config::provider_store::save(&self.provider_credentials);
     }
 
-    /// Reloads the Providers settings form's key field from whatever is
-    /// saved for the currently selected provider, so switching into the
-    /// panel always reflects the on-disk state.
+    /// Resolves the base URL to actually send requests to for a provider:
+    /// a saved override if one exists, otherwise the catalog default.
+    /// Local providers (Ollama, LM Studio, Custom) are the main users of
+    /// the override, since their host/port depends on the user's setup.
+    pub(super) fn provider_base_url(&self, provider_id: &str) -> String {
+        self.provider_credentials
+            .iter()
+            .find(|c| c.provider_id == provider_id)
+            .and_then(|c| c.base_url.clone())
+            .unwrap_or_else(|| {
+                crate::features::chat_providers::by_id(provider_id)
+                    .map(|p| p.base_url.to_string())
+                    .unwrap_or_default()
+            })
+    }
+
+    /// Reloads the Providers settings form's key and server URL fields
+    /// from whatever is saved for the currently selected provider, so
+    /// switching into the panel always reflects the on-disk state.
     pub(super) fn refresh_providers_key_input(&mut self) {
         let selected = self.providers_selected.clone();
         self.providers_key_input = self.provider_api_key(&selected).unwrap_or_default().to_string();
+        self.providers_base_url_input = self.provider_base_url(&selected);
     }
 
     /// Kicks off (or reuses a cached) model list fetch for the given
     /// provider name, as shown in the chat model picker. No-ops if the
-    /// provider has no saved key, or a fetch for it is already in flight
-    /// or done.
+    /// provider requires a key it doesn't have, or a fetch for it is
+    /// already in flight or done. Local providers (no key required) are
+    /// fetched even with no saved credential at all.
     pub(super) fn ensure_models_fetched(&mut self, provider_name: &str) -> iced::Task<Message> {
         let Some(provider) = crate::features::chat_providers::by_name(provider_name) else {
             return iced::Task::none();
@@ -692,7 +714,8 @@ impl App {
             return iced::Task::none();
         }
 
-        let Some(api_key) = self.provider_api_key(provider.id) else {
+        let api_key = self.provider_api_key(provider.id).unwrap_or_default().to_string();
+        if provider.requires_api_key && api_key.is_empty() {
             self.provider_model_state.insert(
                 provider.id.to_string(),
                 crate::features::ai_client::ModelFetchState::Error(
@@ -700,9 +723,10 @@ impl App {
                 ),
             );
             return iced::Task::none();
-        };
+        }
 
-        let api_key = api_key.to_string();
+        let base_url = self.provider_base_url(provider.id);
+        let api = provider.api;
         let provider_id = provider.id.to_string();
         self.provider_model_state.insert(
             provider_id.clone(),
@@ -711,9 +735,8 @@ impl App {
 
         iced::Task::perform(
             async move {
-                let provider = crate::features::chat_providers::by_id(&provider_id)
-                    .expect("provider id was resolved just before spawning this task");
-                let result = crate::features::ai_client::list_models(provider, &api_key).await;
+                let result =
+                    crate::features::ai_client::list_models(api, &base_url, &api_key).await;
                 (provider_id, result)
             },
             |(provider_id, result)| Message::ProviderModelsFetched(provider_id, result),

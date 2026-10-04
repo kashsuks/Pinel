@@ -10,7 +10,7 @@
 use serde::{Deserialize, Serialize};
 
 use super::chat::{ChatMessage, ChatRole};
-use super::chat_providers::{ProviderApi, ProviderInfo};
+use super::chat_providers::ProviderApi;
 
 const ANTHROPIC_VERSION: &str = "2023-06-01";
 const REQUEST_TIMEOUT_SECS: u64 = 60;
@@ -33,27 +33,35 @@ fn client() -> Result<reqwest::Client, String> {
 }
 
 /// Fetches the list of model ids a provider currently offers for the given
-/// API key.
-pub async fn list_models(provider: &ProviderInfo, api_key: &str) -> Result<Vec<String>, String> {
-    match provider.api {
-        ProviderApi::OpenAiCompatible => list_models_openai_compatible(provider, api_key).await,
-        ProviderApi::Anthropic => list_models_anthropic(provider, api_key).await,
+/// API key. `base_url` is the resolved URL to call (a saved override for
+/// locally-hosted providers, or the catalog default) rather than a fixed
+/// constant, since local servers run on a user-chosen host/port. `api_key`
+/// may be empty for providers that don't require one (local servers).
+pub async fn list_models(
+    api: ProviderApi,
+    base_url: &str,
+    api_key: &str,
+) -> Result<Vec<String>, String> {
+    match api {
+        ProviderApi::OpenAiCompatible => list_models_openai_compatible(base_url, api_key).await,
+        ProviderApi::Anthropic => list_models_anthropic(base_url, api_key).await,
     }
 }
 
 /// Sends the given conversation to a provider/model and returns the
-/// assistant's reply text.
+/// assistant's reply text. See [`list_models`] for `base_url`/`api_key`.
 pub async fn send_message(
-    provider: &ProviderInfo,
+    api: ProviderApi,
+    base_url: &str,
     api_key: &str,
     model: &str,
     messages: &[ChatMessage],
 ) -> Result<String, String> {
-    match provider.api {
+    match api {
         ProviderApi::OpenAiCompatible => {
-            send_message_openai_compatible(provider, api_key, model, messages).await
+            send_message_openai_compatible(base_url, api_key, model, messages).await
         },
-        ProviderApi::Anthropic => send_message_anthropic(provider, api_key, model, messages).await,
+        ProviderApi::Anthropic => send_message_anthropic(base_url, api_key, model, messages).await,
     }
 }
 
@@ -89,12 +97,16 @@ struct OpenAiModel {
 }
 
 async fn list_models_openai_compatible(
-    provider: &ProviderInfo,
+    base_url: &str,
     api_key: &str,
 ) -> Result<Vec<String>, String> {
     let client = client()?;
-    let url = format!("{}/models", provider.base_url);
-    let response = client.get(url).bearer_auth(api_key).send().await.map_err(|e| e.to_string())?;
+    let url = format!("{base_url}/models");
+    let mut request = client.get(url);
+    if !api_key.is_empty() {
+        request = request.bearer_auth(api_key);
+    }
+    let response = request.send().await.map_err(|e| e.to_string())?;
 
     if !response.status().is_success() {
         return Err(response_error(response).await);
@@ -134,26 +146,24 @@ struct OpenAiChoiceMessage {
 }
 
 async fn send_message_openai_compatible(
-    provider: &ProviderInfo,
+    base_url: &str,
     api_key: &str,
     model: &str,
     messages: &[ChatMessage],
 ) -> Result<String, String> {
     let client = client()?;
-    let url = format!("{}/chat/completions", provider.base_url);
+    let url = format!("{base_url}/chat/completions");
 
     let body = OpenAiChatRequest {
         model,
         messages: messages.iter().map(to_openai_message).collect(),
     };
 
-    let response = client
-        .post(url)
-        .bearer_auth(api_key)
-        .json(&body)
-        .send()
-        .await
-        .map_err(|e| e.to_string())?;
+    let mut request = client.post(url).json(&body);
+    if !api_key.is_empty() {
+        request = request.bearer_auth(api_key);
+    }
+    let response = request.send().await.map_err(|e| e.to_string())?;
 
     if !response.status().is_success() {
         return Err(response_error(response).await);
@@ -185,12 +195,9 @@ struct AnthropicModel {
     id: String,
 }
 
-async fn list_models_anthropic(
-    provider: &ProviderInfo,
-    api_key: &str,
-) -> Result<Vec<String>, String> {
+async fn list_models_anthropic(base_url: &str, api_key: &str) -> Result<Vec<String>, String> {
     let client = client()?;
-    let url = format!("{}/models", provider.base_url);
+    let url = format!("{base_url}/models");
     let response = client
         .get(url)
         .header("x-api-key", api_key)
@@ -230,13 +237,13 @@ struct AnthropicContentBlock {
 const ANTHROPIC_MAX_TOKENS: u32 = 4096;
 
 async fn send_message_anthropic(
-    provider: &ProviderInfo,
+    base_url: &str,
     api_key: &str,
     model: &str,
     messages: &[ChatMessage],
 ) -> Result<String, String> {
     let client = client()?;
-    let url = format!("{}/messages", provider.base_url);
+    let url = format!("{base_url}/messages");
 
     let body = AnthropicChatRequest {
         model,

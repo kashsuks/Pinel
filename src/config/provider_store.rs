@@ -14,6 +14,13 @@ use std::path::PathBuf;
 pub struct ProviderCredential {
     pub provider_id: String,
     pub api_key: String,
+    /// Overrides the provider's default base URL. Used for locally-hosted
+    /// providers (Ollama, LM Studio, ...) whose host/port depends on how
+    /// the user has set up their local server. `#[serde(default)]` keeps
+    /// older `providers.json` files (saved before this field existed)
+    /// loading correctly.
+    #[serde(default)]
+    pub base_url: Option<String>,
 }
 
 fn credentials_path() -> PathBuf {
@@ -50,10 +57,12 @@ mod tests {
             ProviderCredential {
                 provider_id: "openai".to_string(),
                 api_key: "sk-test".to_string(),
+                base_url: None,
             },
             ProviderCredential {
-                provider_id: "anthropic".to_string(),
-                api_key: "ant-test".to_string(),
+                provider_id: "ollama".to_string(),
+                api_key: String::new(),
+                base_url: Some("http://192.168.1.50:11434/v1".to_string()),
             },
         ];
 
@@ -61,6 +70,16 @@ mod tests {
         let restored: Vec<ProviderCredential> = serde_json::from_str(&json).unwrap();
 
         assert_eq!(restored, credentials);
+    }
+
+    #[test]
+    fn deserializing_credentials_saved_before_base_url_existed_still_works() {
+        let legacy_json = r#"[{"provider_id":"openai","api_key":"sk-test"}]"#;
+        let restored: Vec<ProviderCredential> = serde_json::from_str(legacy_json).unwrap();
+
+        assert_eq!(restored.len(), 1);
+        assert_eq!(restored[0].provider_id, "openai");
+        assert_eq!(restored[0].base_url, None);
     }
 
     #[test]

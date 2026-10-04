@@ -1692,7 +1692,8 @@ impl App {
                     return iced::Task::none();
                 };
 
-                let Some(api_key) = self.provider_api_key(provider.id).map(str::to_string) else {
+                let api_key = self.provider_api_key(provider.id).unwrap_or_default().to_string();
+                if provider.requires_api_key && api_key.is_empty() {
                     if let Some(session) = self.active_chat_session_mut() {
                         session.push(crate::features::chat::ChatMessage::assistant(format!(
                             "No API key attached for {}. Add one in Settings → Providers.",
@@ -1701,17 +1702,16 @@ impl App {
                     }
                     self.persist_chat_sessions();
                     return iced::Task::none();
-                };
+                }
 
                 self.chat_sending = true;
-                let provider_id = provider.id.to_string();
+                let base_url = self.provider_base_url(provider.id);
+                let api = provider.api;
 
                 iced::Task::perform(
                     async move {
-                        let provider = crate::features::chat_providers::by_id(&provider_id)
-                            .expect("provider id was resolved just before spawning this task");
                         let result = crate::features::ai_client::send_message(
-                            provider, &api_key, &model, &history,
+                            api, &base_url, &api_key, &model, &history,
                         )
                         .await;
                         (session_id, result)
@@ -2534,9 +2534,8 @@ impl App {
                 iced::Task::none()
             },
             Message::ProvidersSelect(provider_id) => {
-                self.providers_selected = provider_id.clone();
-                self.providers_key_input =
-                    self.provider_api_key(&provider_id).unwrap_or_default().to_string();
+                self.providers_selected = provider_id;
+                self.refresh_providers_key_input();
                 self.providers_key_visible = false;
                 iced::Task::none()
             },
@@ -2548,16 +2547,38 @@ impl App {
                 self.providers_key_visible = !self.providers_key_visible;
                 iced::Task::none()
             },
+            Message::ProvidersBaseUrlChanged(url) => {
+                self.providers_base_url_input = url;
+                iced::Task::none()
+            },
             Message::ProvidersSave => {
                 let provider_id = self.providers_selected.clone();
                 let key = self.providers_key_input.trim().to_string();
+                let base_url_input = self.providers_base_url_input.trim().to_string();
+                let requires_key = crate::features::chat_providers::by_id(&provider_id)
+                    .map(|p| p.requires_api_key)
+                    .unwrap_or(true);
+                let default_base_url = crate::features::chat_providers::by_id(&provider_id)
+                    .map(|p| p.base_url)
+                    .unwrap_or_default();
 
                 self.provider_credentials.retain(|c| c.provider_id != provider_id);
-                if !key.is_empty() {
+                // Always keep an entry for providers that don't need a key
+                // (saving with a blank key is how you mark "I'm using
+                // this local provider"). Hosted providers only get an
+                // entry when a key was actually entered.
+                if !key.is_empty() || !requires_key {
+                    let base_url =
+                        if base_url_input.is_empty() || base_url_input == default_base_url {
+                            None
+                        } else {
+                            Some(base_url_input)
+                        };
                     self.provider_credentials.push(
                         crate::config::provider_store::ProviderCredential {
                             provider_id: provider_id.clone(),
                             api_key: key,
+                            base_url,
                         },
                     );
                 }
@@ -2571,6 +2592,10 @@ impl App {
                 self.provider_model_state.remove(&provider_id);
                 if self.providers_selected == provider_id {
                     self.providers_key_input.clear();
+                    self.providers_base_url_input =
+                        crate::features::chat_providers::by_id(&provider_id)
+                            .map(|p| p.base_url.to_string())
+                            .unwrap_or_default();
                 }
                 iced::Task::none()
             },
@@ -2579,7 +2604,8 @@ impl App {
                 let Some(provider) = crate::features::chat_providers::by_id(&provider_id) else {
                     return iced::Task::none();
                 };
-                let Some(api_key) = self.provider_api_key(&provider_id).map(str::to_string) else {
+                let api_key = self.provider_api_key(&provider_id).unwrap_or_default().to_string();
+                if provider.requires_api_key && api_key.is_empty() {
                     self.provider_model_state.insert(
                         provider_id,
                         crate::features::ai_client::ModelFetchState::Error(
@@ -2587,17 +2613,20 @@ impl App {
                         ),
                     );
                     return iced::Task::none();
-                };
+                }
 
                 self.provider_model_state.insert(
                     provider_id.clone(),
                     crate::features::ai_client::ModelFetchState::Loading,
                 );
 
+                let base_url = self.provider_base_url(&provider_id);
+                let api = provider.api;
+
                 iced::Task::perform(
                     async move {
                         let result =
-                            crate::features::ai_client::list_models(provider, &api_key).await;
+                            crate::features::ai_client::list_models(api, &base_url, &api_key).await;
                         (provider_id, result)
                     },
                     |(provider_id, result)| Message::ProviderModelsFetched(provider_id, result),
