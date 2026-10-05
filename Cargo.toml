@@ -70,3 +70,4 @@ rodio = { version = "0.17", features = ["mp3", "wav", "vorbis", "flac"] }
 discord-rich-presence = "1.1.0"
 
 rustls-webpki = "0.103.13"
+trash = "5.2.9"

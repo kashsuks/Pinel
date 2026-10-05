@@ -1402,35 +1402,52 @@ impl App {
                 let Some(target) = self.context_menu.take() else {
                     return iced::Task::none();
                 };
-                let name = target.path.file_name()
-                    .map(|n| n.to_string_lossy().into_owned())
-                    .unwrap_or_else(|| target.path.display().to_string());
-                let description = if target.is_dir {
-                    format!("Permanently delete the folder \"{name}\" and everything in it? This cannot be undone.")
-                } else {
-                    format!("Permanently delete \"{name}\"? This cannot be undone.")
-                };
                 let (path, is_dir) = (target.path, target.is_dir);
                 iced::Task::perform(
                     async move {
+                        let trash_path = path.clone();
+                        let trashed = tokio::task::spawn_blocking(move || trash::delete(&trash_path))
+                            .await
+                            .map(|result| result.is_ok())
+                            .unwrap_or(false);
+                        if trashed {
+                            return (path, true);
+                        }
+
+                        // no usable trash (eg unsupported filesystem)
+                        // only delete for good if the user agrees
+                        let name = path
+                            .file_name()
+                            .map(|n| n.to_string_lossy().into_owned)
+                            .unwrap_or_else(|| path.display().to_string());
                         let answer = rfd::AsyncMessageDialog::new()
                             .set_level(rfd::MessageLevel::Warning)
-                            .set_title("Delete")
-                            .set_description(description)
+                            .set_title("Could not move to trash")
+                            .set_description(format!(
+                                "\"{name}\" could not be moved to trash. Delete it permanently instead? This cannot be undone."
+                            ))
                             .set_buttons(rfd::MessageButtons::YesNo)
                             .show()
                             .await;
-                        (answer == rfd::MessageDialogResult::Yes).then_some((path, is_dir))
+                        if answer != rfd::MessageDialogResult::Yes {
+                            return (path, false);
+                        }
+
+                        let remove_path = path.clone();
+                        let removed = tokio::task::spawn_blocking(move || {
+                            if is_dir { std::fs::remove_dir_all(&remove_path) }
+                            else { std::fs::remove_file(&remove_path) }
+                        })
+                        .await
+                        .map(|result| result.is_ok())
+                        .unwrap_or(false);
+                        (path, removed)
                     },
-                    |confirmed| match confirmed {
-                        Some((path, is_dir)) => Message::FileTreeDeleteConfirmed(path, is_dir),
-                        None => Message::FileTreeContextMenuClose,
-                    },
+                    |(path, removed)| Message::FileTreeDeleted(path, removed),
                 )
             },
-            Message::FileTreeDeleteConfirmed(path, is_dir) => {
-                let removed = if is_dir { std::fs::remove_dir_all(&path) } else { std::fs::remove_file(&path) };
-                if removed.is_ok() {
+            Message::FileTreeDeleted(path, removed) => {
+                if removed {
                     self.tabs.retain(|tab| !tab.path.starts_with(&path));
                     if let Some(ref mut tree) = self.file_tree {
                         tree.refresh();

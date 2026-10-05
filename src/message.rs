@@ -34,7 +34,7 @@ pub enum Message {
     FileTreeReveal,
     FileTreeCopyPath,
     FileTreeDelete,
-    FileTreeDeleteConfirmed(PathBuf, bool),
+    FileTreeDeleted(PathBuf, bool),
     /// Fired whenever the active file or open workspace changes, from any
     /// code path. Carries no data — consumers read the new state from
     /// `App::activity_state` when they receive this.
