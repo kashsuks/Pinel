@@ -1,3 +1,6 @@
+use std::io::Write;
+use std::path::Path;
+
 pub fn write_atomic(path: &Path, contents: impl AsRef<[u8]>) -> std::io::Result<()> {
     // fix symlinks so we can replace the real file and not the link
     let target = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
