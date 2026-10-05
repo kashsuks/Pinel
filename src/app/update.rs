@@ -1399,17 +1399,41 @@ impl App {
                 iced::Task::none()
             },
             Message::FileTreeDelete => {
-                if let Some(target) = self.context_menu.take() {
-                    let removed = if target.is_dir {
-                        std::fs::remove_dir_all(&target.path)
-                    } else {
-                        std::fs::remove_file(&target.path)
-                    };
-                    if removed.is_ok() {
-                        self.tabs.retain(|tab| !tab.path.starts_with(&target.path));
-                        if let Some(ref mut tree) = self.file_tree {
-                            tree.refresh();
-                        }
+                let Some(target) = self.context_menu.take() else {
+                    return iced::Task::none();
+                };
+                let name = target.path.file_name()
+                    .map(|n| n.to_string_lossy().into_owned())
+                    .unwrap_or_else(|| target.path.display().to_string());
+                let description = if target.is_dir {
+                    format!("Permanently delete the folder \"{name}\" and everything in it? This cannot be undone.")
+                } else {
+                    format!("Permanently delete \"{name}\"? This cannot be undone.")
+                };
+                let (path, is_dir) = (target.path, target.is_dir);
+                iced::Task::perform(
+                    async move {
+                        let answer = rfd::AsyncMessageDialog::new()
+                            .set_level(rfd::MessageLevel::Warning)
+                            .set_title("Delete")
+                            .set_description(description)
+                            .set_buttons(rfd::MessageButtons::YesNo)
+                            .show()
+                            .await;
+                        (answer == rfd::MessageDialogResult::Yes).then_some((path, is_dir))
+                    },
+                    |confirmed| match confirmed {
+                        Some((path, is_dir)) => Message::FileTreeDeleteConfirmed(path, is_dir),
+                        None => Message::FileTreeContextMenuClose,
+                    },
+                )
+            },
+            Message::FileTreeDeleteConfirmed(path, is_dir) => {
+                let removed = if is_dir { std::fs::remove_dir_all(&path) } else { std::fs::remove_file(&path) };
+                if removed.is_ok() {
+                    self.tabs.retain(|tab| !tab.path.starts_with(&path));
+                    if let Some(ref mut tree) = self.file_tree {
+                        tree.refresh();
                     }
                 }
                 iced::Task::none()
