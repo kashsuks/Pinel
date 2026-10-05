@@ -3,7 +3,8 @@
 //! Unlike `chat_store.rs`, this is not scoped per workspace - a provider's
 //! key is a machine-wide credential. Stored as plaintext JSON under
 //! `~/.config/pinel/`, consistent with how `wakatime/config.rs` keeps its
-//! API key (no OS keychain integration yet).
+//! API key (no OS keychain integration yet). The file is written atomically
+//! and kept owner-only (0600 on Unix).
 
 use super::theme_manager::get_config_dir;
 use serde::{Deserialize, Serialize};
@@ -23,7 +24,10 @@ fn credentials_path() -> PathBuf {
 /// Loads all saved provider credentials. Returns an empty list on first run
 /// or if the file is missing/corrupted.
 pub fn load() -> Vec<ProviderCredential> {
-    let Ok(content) = fs::read_to_string(credentials_path()) else {
+    let path = credentials_path();
+    // Keys saved by older versions used default permissions; fix them now.
+    crate::fs_util::restrict_to_owner(&path);
+    let Ok(content) = fs::read_to_string(&path) else {
         return Vec::new();
     };
     serde_json::from_str(&content).unwrap_or_default()
@@ -37,7 +41,7 @@ pub fn save(credentials: &[ProviderCredential]) -> std::io::Result<()> {
         fs::create_dir_all(parent)?;
     }
     let json = serde_json::to_string_pretty(credentials).unwrap_or_else(|_| "[]".to_string());
-    fs::write(path, json)
+    crate::fs_util::write_private(&path, json)
 }
 
 #[cfg(test)]

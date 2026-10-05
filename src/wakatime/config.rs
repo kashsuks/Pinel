@@ -6,7 +6,7 @@
 //! - Config file (.config/pinel) location
 //! - Parsing and/or writing to and from lua to theme code
 
-use std::{fs, io::Write, path::PathBuf};
+use std::{fs, path::PathBuf};
 
 #[derive(Debug, Clone)]
 pub struct WakaTimeConfig {
@@ -36,6 +36,8 @@ fn get_wakatime_path() -> PathBuf {
 
 pub fn load() -> WakaTimeConfig {
     let path = get_wakatime_path();
+    // Keys saved by older versions used default permissions; fix them now.
+    crate::fs_util::restrict_to_owner(&path);
     if let Ok(content) = fs::read_to_string(&path) {
         from_lua(&content).unwrap_or_default()
     } else {
@@ -49,9 +51,7 @@ pub fn save(cfg: &WakaTimeConfig) -> Result<(), std::io::Error> {
         fs::create_dir_all(parent)?;
     }
 
-    let mut file = fs::File::create(path)?;
-    file.write_all(to_lua(cfg).as_bytes())?;
-    Ok(())
+    crate::fs_util::write_private(&path, to_lua(cfg))
 }
 
 fn to_lua(cfg: &WakaTimeConfig) -> String {
