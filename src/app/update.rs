@@ -1418,7 +1418,7 @@ impl App {
                         // only delete for good if the user agrees
                         let name = path
                             .file_name()
-                            .map(|n| n.to_string_lossy().into_owned)
+                            .map(|n| n.to_string_lossy().into_owned())
                             .unwrap_or_else(|| path.display().to_string());
                         let answer = rfd::AsyncMessageDialog::new()
                             .set_level(rfd::MessageLevel::Warning)
