@@ -12,6 +12,7 @@ mod cli;
 mod config;
 mod discord_rpc;
 mod features;
+mod fs_util;
 mod lsp_setup;
 mod message;
 mod scripting;

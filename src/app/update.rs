@@ -205,7 +205,8 @@ impl App {
 
         iced::Task::perform(
             async move {
-                let result = std::fs::write(&write_path, write_content).map_err(|e| e.to_string());
+                let result = crate::fs_util::write_atomic(&write_path, write_content)
+                    .map_err(|e| e.to_string());
                 (path, saved_content, result)
             },
             |(path, saved_content, result)| Message::AutosaveFinished(path, saved_content, result),
@@ -1406,10 +1407,11 @@ impl App {
                 iced::Task::perform(
                     async move {
                         let trash_path = path.clone();
-                        let trashed = tokio::task::spawn_blocking(move || trash::delete(&trash_path))
-                            .await
-                            .map(|result| result.is_ok())
-                            .unwrap_or(false);
+                        let trashed =
+                            tokio::task::spawn_blocking(move || trash::delete(&trash_path))
+                                .await
+                                .map(|result| result.is_ok())
+                                .unwrap_or(false);
                         if trashed {
                             return (path, true);
                         }
@@ -1435,8 +1437,11 @@ impl App {
 
                         let remove_path = path.clone();
                         let removed = tokio::task::spawn_blocking(move || {
-                            if is_dir { std::fs::remove_dir_all(&remove_path) }
-                            else { std::fs::remove_file(&remove_path) }
+                            if is_dir {
+                                std::fs::remove_dir_all(&remove_path)
+                            } else {
+                                std::fs::remove_file(&remove_path)
+                            }
                         })
                         .await
                         .map(|result| result.is_ok())
@@ -1496,7 +1501,10 @@ impl App {
                                 return iced::Task::perform(async {}, |_| Message::SaveAs);
                             }
                             return iced::Task::perform(
-                                async move { std::fs::write(&path, content).map_err(|e| e.to_string()) },
+                                async move {
+                                    crate::fs_util::write_atomic(&path, content)
+                                        .map_err(|e| e.to_string())
+                                },
                                 Message::FileSaved,
                             );
                         }
@@ -1515,7 +1523,7 @@ impl App {
                             let content = code_editor.content();
                             return iced::Task::perform(
                                 async move {
-                                    std::fs::write(&path, content)
+                                    crate::fs_util::write_atomic(&path, content)
                                         .map(|_| path)
                                         .map_err(|e| e.to_string())
                                 },
