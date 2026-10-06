@@ -26,11 +26,6 @@ impl Default for WakaTimeConfig {
     }
 }
 
-fn get_config_dir() -> PathBuf {
-    let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
-    PathBuf::from(home).join(".config").join("pinel")
-}
-
 fn get_wakatime_path() -> PathBuf {
     get_config_dir().join("wakatime.lua") // as mentioned before the path is changed here for
                                           // hackatime/v1
