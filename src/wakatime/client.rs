@@ -37,13 +37,13 @@ fn build_command(entity: &str, is_write: bool, cfg: &WakaTimeConfig) -> Option<C
 mod tests {
     use crate::message::Message::ChatModelPicked;
 
-use super::*;
+    use super::*;
     use std::ffi::OsStr;
 
     fn config(api_key: &str, api_url: &str) -> WakaTimeConfig {
-        WakaTimeConfig { 
-            api_key: api_key.to_string(), 
-            api_url: api_url.to_string(), 
+        WakaTimeConfig {
+            api_key: api_key.to_string(),
+            api_url: api_url.to_string(),
         }
     }
 
