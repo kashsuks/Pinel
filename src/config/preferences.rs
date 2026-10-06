@@ -98,8 +98,7 @@ pub fn load_preferences() -> EditorPreferences {
 }
 
 fn legacy_preferences_path() -> Option<PathBuf> {
-    let home = std::env::var("HOME").ok()?;
-    Some(PathBuf::from(home).join(".config").join("pinel").join("preferences.lua"))
+    Some(get_config_dir().join("preferences.lua"))
 }
 
 fn parse_preferences(content: &str) -> EditorPreferences {

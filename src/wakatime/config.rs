@@ -8,6 +8,8 @@
 
 use std::{fs, path::PathBuf};
 
+use crate::config::theme_manager::get_config_dir;
+
 #[derive(Debug, Clone)]
 pub struct WakaTimeConfig {
     pub api_key: String,
