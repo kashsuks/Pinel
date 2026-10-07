@@ -54,8 +54,59 @@ pub fn save(cfg: &WakaTimeConfig) -> Result<(), std::io::Error> {
 fn to_lua(cfg: &WakaTimeConfig) -> String {
     format!(
         "return {{\n api_key = \"{}\",\n api_url = \"{}\",\n}}\n",
-        cfg.api_key, cfg.api_url
+        escape_lua_string(&cfg.api_key),
+        escape_lua_string(&cfg.api_url)
     )
+}
+
+fn escape_lua_string(value: &str) -> String {
+    let mut out = String::with_capacity(value.len());
+    for ch in value.chars() {
+        match ch {
+            '\\' => out.push_str("\\\\"),
+            '"' => out.push_str("\\\""),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            _ => out.push(ch),
+        }
+    }
+    out
+}
+
+/// Reverses ['escape_lua_string'] and unknown escape sequences are kept as written
+fn unescape_lua_string(value: &str) -> String {
+    let mut out = String::with_capacity(value.len());
+    let mut chars = value.chars();
+    while let Some(ch) = chars.next() {
+        if ch != '\\' {
+            out.push(ch);
+            continue;
+        }
+        match chars.next() {
+            Some('\\') => out.push('\\'),
+            Some('"') => out.push('"'),
+            Some('\'') => out.push('\''),
+            Some('n') => out.push('\n'),
+            Some('r') => out.push('\r'),
+            Some(other) => {
+                out.push('\\');
+                out.push(other);
+            },
+            None => out.push('\\'),
+        }
+    }
+    out
+}
+
+/// turns the right hand side of the 'key = value' into the string it holds
+fn parse_lua_string_value(raw: &str) -> String {
+    let raw = raw.trim().trim_end_matches(',').trim();
+    for quote in ['"', '\''] {
+        if let Some(inner) = raw.strip_prefix(quote).and_then(|r| r.strip_suffix(quote)) {
+            return unescape_lua_string(inner);
+        }
+    }
+    unescape_lua_string(raw)
 }
 
 /// Responsible for parsing lua theme code to wakatime config
@@ -77,12 +128,7 @@ fn from_lua(content: &str) -> Result<WakaTimeConfig, String> {
 
         if let Some((key, value)) = line.split_once('=') {
             let key = key.trim();
-            let value = value
-                .trim()
-                .trim_end_matches(',')
-                .trim_matches('"')
-                .trim_matches('\'')
-                .to_string();
+            let value = parse_lua_string_value(value);
 
             match key {
                 "api_key" => cfg.api_key = value, // secret, keep private
@@ -93,4 +139,116 @@ fn from_lua(content: &str) -> Result<WakaTimeConfig, String> {
     }
 
     Ok(cfg)
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    fn config(api_key: &str, api_url: &str) -> WakaTimeConfig {
+        WakaTimeConfig {
+            api_key: api_key.to_string(),
+            api_url: api_url.to_string(),
+        }
+    }
+
+    fn roundtrip(cfg: &WakaTimeConfig) -> WakaTimeConfig {
+        from_lua(&to_lua(cfg)).unwrap()
+    }
+
+    #[test]
+    fn plain_values_are_written_exactly_as_before() {
+        let text = to_lua(&config("waka_1234-abcd", "https://api.wakatime.com/api/v1"));
+
+        assert_eq!(
+            text,
+            "return {\n api_key = \"waka_1234-abcd\",\n api_url = \"https://api.wakatime.com/api/v1\",\n}\n"
+        );
+    }
+
+    #[test]
+    fn special_characters_roundtrip() {
+        for key in [
+            "a\"b",
+            "a\\b",
+            "ends with quote\"",
+            "\\\"",
+            "two\nlines",
+            "cr\rhere",
+            "a'b",
+        ] {
+            let loaded = roundtrip(&config(key, "https://x/api"));
+            assert_eq!(
+                loaded.api_key, key,
+                "key {key:?} did not survive a save and load"
+            );
+        }
+    }
+
+    #[test]
+    fn a_value_with_a_newline_stays_on_one_line() {
+        let text = to_lua(&config("first\nsecond", "https://x"));
+
+        // return {, api_key, api_url, } and no extra lines from the key
+        assert_eq!(text.lines().count(), 4);
+    }
+
+    #[test]
+    fn a_hostile_key_cannot_inject_a_second_setting() {
+        let text = to_lua(&config(
+            "k\",\n api_url = \"https://evil.example",
+            "https://good.example",
+        ));
+
+        let loaded = from_lua(&text).unwrap();
+        assert_eq!(loaded.api_url, "https://good.example");
+        assert_eq!(loaded.api_key, "k\",\n api_url = \"https://evil.example");
+    }
+
+    #[test]
+    fn written_values_are_valid_lua_string_escapes() {
+        let text = to_lua(&config("a\"b\\c", "u"));
+
+        assert!(text.contains(r#"api_key = "a\"b\\c","#));
+    }
+
+    #[test]
+    fn written_file_is_valid_lua_that_evaluates_to_the_same_values() {
+        let key = "a\"b\\c\nd'e";
+        let url = "https://x/\"y\"";
+        let text = to_lua(&config(key, url));
+
+        let lua = mlua::Lua::new();
+        let table: mlua::Table = lua.load(&text).eval().unwrap();
+
+        assert_eq!(table.get::<String>("api_key").unwrap(), key);
+        assert_eq!(table.get::<String>("api_url").unwrap(), url);
+    }
+
+    #[test]
+    fn files_written_by_older_versions_still_load() {
+        let old =
+            "return {\n api_key = \"waka_old\",\n api_url = \"https://hackatime/api/v1\",\n}\n";
+
+        let loaded = from_lua(old).unwrap();
+        assert_eq!(loaded.api_key, "waka_old");
+        assert_eq!(loaded.api_url, "https://hackatime/api/v1");
+    }
+
+    #[test]
+    fn single_quoted_and_unquoted_values_load() {
+        let loaded = from_lua("api_key = 'single',\napi_url = bare,\n").unwrap();
+
+        assert_eq!(loaded.api_key, "single");
+        assert_eq!(loaded.api_url, "bare");
+    }
+
+    #[test]
+    fn comments_and_unknown_keys_are_ignored() {
+        let loaded =
+            from_lua("-- note\nreturn {\n other = \"x\",\n api_key = \"k\",\n}\n").unwrap();
+
+        assert_eq!(loaded.api_key, "k");
+        assert_eq!(loaded.api_url, WakaTimeConfig::default().api_url);
+    }
 }
