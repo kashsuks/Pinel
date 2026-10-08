@@ -28,6 +28,8 @@ fn build_command(entity: &str, is_write: bool, cfg: &WakaTimeConfig) -> Option<C
 
     if !cfg.api_url.trim().is_empty() {
         cmd.arg("--api-url").arg(cfg.api_url.trim());
+    }
+    if is_write {
         cmd.arg("--write");
     }
     Some(cmd)
@@ -35,8 +37,6 @@ fn build_command(entity: &str, is_write: bool, cfg: &WakaTimeConfig) -> Option<C
 
 #[cfg(test)]
 mod tests {
-    use crate::message::Message::ChatModelPicked;
-
     use super::*;
     use std::ffi::OsStr;
 
@@ -101,5 +101,32 @@ mod tests {
         let cmd = build_command("a.rs", false, &config("k", "  ")).unwrap();
 
         assert_eq!(args(&cmd), ["--entity", "a.rs", "--plugin", "pinel/0.1.0"]);
+    }
+
+    #[test]
+    fn build_command_sends_write_flag_without_a_custom_api_url() {
+        let cmd = build_command("a.rs", true, &config("k", "  ")).unwrap();
+
+        assert_eq!(
+            args(&cmd),
+            ["--entity", "a.rs", "--plugin", "pinel/0.1.0", "--write"]
+        );
+    }
+
+    #[test]
+    fn build_command_omits_write_flag_with_a_custom_api_url() {
+        let cmd = build_command("a.rs", false, &config("k", "https://hackatime/api/v1")).unwrap();
+
+        assert_eq!(
+            args(&cmd),
+            [
+                "--entity",
+                "a.rs",
+                "--plugin",
+                "pinel/0.1.0",
+                "--api-url",
+                "https://hackatime/api/v1"
+            ]
+        );
     }
 }
