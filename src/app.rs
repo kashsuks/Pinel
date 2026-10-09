@@ -196,6 +196,7 @@ pub struct App {
 
     active_panel: ActivePanel,
     git_changes: Vec<crate::features::git::FileChange>,
+    git_history: Vec<crate::features::git::Commit>,
 
     chat_sessions: Vec<crate::features::chat::ChatSession>,
     active_chat_session: Option<String>,
@@ -381,6 +382,7 @@ impl Default for App {
 
             active_panel: ActivePanel::Files,
             git_changes: Vec::new(),
+            git_history: Vec::new(),
 
             chat_sessions: crate::config::chat_store::load_sessions(None),
             active_chat_session: None,

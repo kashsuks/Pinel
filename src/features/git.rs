@@ -176,6 +176,198 @@ pub async fn load_status_async(root: Option<PathBuf>) -> Vec<FileChange> {
         .unwrap_or_default()
 }
 
+/// How many commits the panel loads at once.
+///
+/// The graph is only as tall as the sidebar, so the limit exists to keep
+/// the walk short on a repository with a long history rather than to fill
+/// the view.
+pub const HISTORY_LIMIT: usize = 500;
+
+/// What a name attached to a commit refers to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RefKind {
+    LocalBranch,
+    RemoteBranch,
+    Tag,
+    /// `HEAD` itself, with no branch under it. A detached checkout.
+    Head,
+}
+
+/// A branch, tag or `HEAD` pointing at a commit.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GitRef {
+    /// The name without its `refs/` prefix, such as `master`,
+    /// `origin/master` or `v1.0`.
+    pub name: String,
+    pub kind: RefKind,
+    /// Whether this is the ref the working tree is currently on.
+    pub is_head: bool,
+}
+
+/// One commit in the history, with what it points at.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Commit {
+    pub hash: String,
+    /// Parent hashes, oldest branch first. Empty for a root commit, two or
+    /// more for a merge.
+    pub parents: Vec<String>,
+    /// The first line of the commit message.
+    pub subject: String,
+    /// Branches and tags that point here. Usually empty.
+    pub refs: Vec<GitRef>,
+    pub author: String,
+    /// Author date, as seconds since the Unix epoch.
+    pub timestamp: i64,
+}
+
+// Nothing draws the history yet, so these are only exercised by tests.
+#[allow(dead_code)]
+impl Commit {
+    /// The abbreviated hash shown in the panel.
+    pub fn short_hash(&self) -> &str {
+        &self.hash[..self.hash.len().min(7)]
+    }
+
+    /// Whether this commit joins two or more lines of history.
+    pub fn is_merge(&self) -> bool {
+        self.parents.len() > 1
+    }
+}
+
+/// Separates the fields within one commit record.
+const FIELD: u8 = 0x1f;
+/// Separates one commit record from the next.
+const RECORD: u8 = 0x1e;
+
+/// Parses the `%D` decoration list of one commit.
+///
+/// Reads the output of `--decorate=full`, where every name arrives fully
+/// qualified. The short form cannot be read reliably, because a local
+/// branch called `feature/x` and a remote branch called `origin/x` both
+/// look like a name with a slash in it.
+fn parse_refs(decoration: &str) -> Vec<GitRef> {
+    let mut refs = Vec::new();
+
+    for entry in decoration.split(", ") {
+        let entry = entry.trim();
+        if entry.is_empty() {
+            continue;
+        }
+
+        // `HEAD -> refs/heads/main` means HEAD is on that branch.
+        let (is_head, name) = match entry.strip_prefix("HEAD -> ") {
+            Some(rest) => (true, rest),
+            None => (false, entry),
+        };
+
+        if name == "HEAD" {
+            refs.push(GitRef {
+                name: "HEAD".to_string(),
+                kind: RefKind::Head,
+                is_head: true,
+            });
+            continue;
+        }
+
+        let (kind, name) = if let Some(tag) = name.strip_prefix("tag: ") {
+            (RefKind::Tag, tag.strip_prefix("refs/tags/").unwrap_or(tag))
+        } else if let Some(remote) = name.strip_prefix("refs/remotes/") {
+            (RefKind::RemoteBranch, remote)
+        } else if let Some(local) = name.strip_prefix("refs/heads/") {
+            (RefKind::LocalBranch, local)
+        } else {
+            // Anything else is a ref namespace we do not model, such as
+            // refs/stash. Keep the name so it is at least visible.
+            (RefKind::LocalBranch, name)
+        };
+
+        refs.push(GitRef {
+            name: name.to_string(),
+            kind,
+            is_head,
+        });
+    }
+
+    refs
+}
+
+/// Parses the output of the `git log` run by [`load_history`].
+///
+/// Records are separated by `0x1e` and fields within them by `0x1f`,
+/// control bytes that cannot appear in a branch name or a commit subject.
+/// A record missing fields is skipped rather than guessed at.
+pub fn parse_log(output: &[u8]) -> Vec<Commit> {
+    let mut commits = Vec::new();
+
+    for record in output.split(|byte| *byte == RECORD) {
+        // git puts a newline after each record, which lands at the front
+        // of the next one.
+        let record: &[u8] = match record.iter().position(|b| !b" \n\r".contains(b)) {
+            Some(start) => &record[start..],
+            None => continue,
+        };
+
+        let fields: Vec<&[u8]> = record.split(|byte| *byte == FIELD).collect();
+        let [hash, parents, subject, decoration, author, timestamp] = fields[..] else {
+            continue;
+        };
+
+        let text = |bytes: &[u8]| String::from_utf8_lossy(bytes).into_owned();
+
+        commits.push(Commit {
+            hash: text(hash),
+            parents: text(parents).split_whitespace().map(str::to_string).collect(),
+            subject: text(subject),
+            refs: parse_refs(&text(decoration)),
+            author: text(author),
+            timestamp: text(timestamp).trim().parse().unwrap_or(0),
+        });
+    }
+
+    commits
+}
+
+/// Reads up to `limit` commits of history from the repository at `root`.
+///
+/// Asks for branches, remotes and tags rather than `--all`. `--all` also
+/// walks private ref namespaces that tools write into, such as the
+/// checkpoint refs some editors keep, and those commits would appear in
+/// the graph as unrelated roots.
+///
+/// Returns an empty list when there is no repository, no commits yet, or
+/// no git on the machine.
+pub fn load_history(root: Option<&Path>, limit: usize) -> Vec<Commit> {
+    let format = format!(
+        "--format=%H%x1f%P%x1f%s%x1f%D%x1f%an%x1f%at%x{:02x}",
+        RECORD
+    );
+
+    let mut cmd = std::process::Command::new("git");
+    cmd.arg("log")
+        .arg("--branches")
+        .arg("--remotes")
+        .arg("--tags")
+        .arg("--date-order")
+        .arg("--decorate=full")
+        .arg(format!("--max-count={limit}"))
+        .arg(format);
+    if let Some(dir) = root {
+        cmd.current_dir(dir);
+    }
+
+    match cmd.output() {
+        Ok(out) if out.status.success() => parse_log(&out.stdout),
+        _ => Vec::new(),
+    }
+}
+
+/// Runs [`load_history`] off the UI thread.
+pub async fn load_history_async(root: Option<PathBuf>) -> Vec<Commit> {
+    tokio::task::spawn_blocking(move || load_history(root.as_deref(), HISTORY_LIMIT))
+        .await
+        .unwrap_or_default()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -237,5 +429,102 @@ mod tests {
         assert_eq!(change("src/app.rs").display_name(), "app.rs");
         assert_eq!(change("top.rs").display_name(), "top.rs");
         assert_eq!(change("a/sub/").display_name(), "sub/");
+    }
+
+    fn record(hash: &str, parents: &str, subject: &str, decoration: &str) -> Vec<u8> {
+        format!("{hash}\x1f{parents}\x1f{subject}\x1f{decoration}\x1fAda\x1f1700000000\x1e\n")
+            .into_bytes()
+    }
+
+    #[test]
+    fn test_parse_log_keeps_all_six_fields() {
+        let commits = parse_log(&record("abcdef1234", "p1", "do thing", ""));
+        assert_eq!(commits.len(), 1);
+        assert_eq!(commits[0].hash, "abcdef1234");
+        assert_eq!(commits[0].short_hash(), "abcdef1");
+        assert_eq!(commits[0].parents, vec!["p1"]);
+        assert_eq!(commits[0].subject, "do thing");
+        assert_eq!(commits[0].author, "Ada");
+        assert_eq!(commits[0].timestamp, 1_700_000_000);
+    }
+
+    #[test]
+    fn test_parse_log_merge_keeps_parent_order() {
+        let commits = parse_log(&record("m", "first second", "merge", ""));
+        assert!(commits[0].is_merge());
+        assert_eq!(commits[0].parents, vec!["first", "second"]);
+    }
+
+    #[test]
+    fn test_parse_log_root_commit_has_no_parents() {
+        let commits = parse_log(&record("r", "", "init", ""));
+        assert!(commits[0].parents.is_empty());
+        assert!(!commits[0].is_merge());
+    }
+
+    #[test]
+    fn test_parse_log_newline_stays_out_of_next_hash() {
+        let mut out = record("aaa", "", "one", "");
+        out.extend(record("bbb", "aaa", "two", ""));
+        let commits = parse_log(&out);
+        assert_eq!(commits.len(), 2);
+        assert_eq!(commits[1].hash, "bbb");
+    }
+
+    #[test]
+    fn test_parse_refs_kinds_are_told_apart() {
+        let refs =
+            parse_refs("HEAD -> refs/heads/main, tag: refs/tags/v1.0, refs/remotes/origin/main");
+        assert_eq!(refs.len(), 3);
+        assert_eq!(refs[0].kind, RefKind::LocalBranch);
+        assert!(refs[0].is_head);
+        assert_eq!(refs[0].name, "main");
+        assert_eq!(refs[1].kind, RefKind::Tag);
+        assert_eq!(refs[1].name, "v1.0");
+        assert_eq!(refs[2].kind, RefKind::RemoteBranch);
+        assert_eq!(refs[2].name, "origin/main");
+    }
+
+    #[test]
+    fn test_parse_refs_slash_branch_is_not_remote() {
+        let refs = parse_refs("refs/heads/feature/x, refs/remotes/origin/x");
+        assert_eq!(refs[0].kind, RefKind::LocalBranch);
+        assert_eq!(refs[0].name, "feature/x");
+        assert_eq!(refs[1].kind, RefKind::RemoteBranch);
+    }
+
+    #[test]
+    fn test_parse_refs_detached_head() {
+        let refs = parse_refs("HEAD");
+        assert_eq!(refs.len(), 1);
+        assert_eq!(refs[0].kind, RefKind::Head);
+        assert!(refs[0].is_head);
+    }
+
+    #[test]
+    fn test_parse_log_subject_with_commas_and_arrows() {
+        let commits = parse_log(&record("h", "", "fix a, b -> c", "refs/heads/main"));
+        assert_eq!(commits[0].subject, "fix a, b -> c");
+        assert_eq!(commits[0].refs.len(), 1);
+    }
+
+    #[test]
+    fn test_parse_log_missing_fields_skipped() {
+        assert!(parse_log(b"abc\x1fparent\x1e\n").is_empty());
+    }
+
+    #[test]
+    fn test_parse_log_empty_output() {
+        assert!(parse_log(b"").is_empty());
+    }
+
+    #[test]
+    fn test_load_history_empty_outside_repository() -> Result<(), Box<dyn std::error::Error>> {
+        let dir = std::env::temp_dir().join(format!("pinel-nogit-{}", std::process::id()));
+        std::fs::create_dir_all(&dir)?;
+        let commits = load_history(Some(&dir), 10);
+        std::fs::remove_dir_all(&dir)?;
+        assert!(commits.is_empty());
+        Ok(())
     }
 }

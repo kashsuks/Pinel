@@ -1571,7 +1571,10 @@ impl App {
                     self.active_panel = panel;
                     self.sidebar_visible = true;
                     if panel == ActivePanel::Git {
-                        return iced::Task::perform(async {}, |_| Message::RefreshGitStatus);
+                        return iced::Task::batch([
+                            iced::Task::done(Message::RefreshGitStatus),
+                            iced::Task::done(Message::RefreshGitHistory),
+                        ]);
                     }
                 }
                 iced::Task::none()
@@ -1585,6 +1588,17 @@ impl App {
             },
             Message::GitStatusLoaded(changes) => {
                 self.git_changes = changes;
+                iced::Task::none()
+            },
+            Message::RefreshGitHistory => {
+                let root = self.file_tree.as_ref().map(|t| t.root.clone());
+                iced::Task::perform(
+                    crate::features::git::load_history_async(root),
+                    Message::GitHistoryLoaded,
+                )
+            },
+            Message::GitHistoryLoaded(commits) => {
+                self.git_history = commits;
                 iced::Task::none()
             },
             Message::ChatNewSession => {

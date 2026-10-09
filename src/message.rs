@@ -163,6 +163,10 @@ pub enum Message {
 
     RefreshGitStatus,
     GitStatusLoaded(Vec<crate::features::git::FileChange>),
+    /// Re-reads the commit history behind the git panel's graph.
+    RefreshGitHistory,
+    /// Carries the commits reported by the last `git log`, newest first.
+    GitHistoryLoaded(Vec<crate::features::git::Commit>),
 
     /// Starts a new, empty chat session and makes it the active one.
     ChatNewSession,
