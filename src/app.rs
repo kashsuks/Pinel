@@ -195,7 +195,7 @@ pub struct App {
     command_input_id: iced::widget::Id,
 
     active_panel: ActivePanel,
-    git_changes: Vec<(String, String)>,
+    git_changes: Vec<crate::features::git::FileChange>,
 
     chat_sessions: Vec<crate::features::chat::ChatSession>,
     active_chat_session: Option<String>,

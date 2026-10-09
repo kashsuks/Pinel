@@ -162,7 +162,7 @@ pub enum Message {
     StartupToggleRunOnStartup,
 
     RefreshGitStatus,
-    GitStatusLoaded(Vec<(String, String)>),
+    GitStatusLoaded(Vec<crate::features::git::FileChange>),
 
     /// Starts a new, empty chat session and makes it the active one.
     ChatNewSession,

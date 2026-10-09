@@ -6,6 +6,7 @@ use iced::{
 use crate::{
     features::{
         file_tree::{FileEntry, FileTree},
+        git::{ChangeKind, FileChange},
         icons::{get_file_icon, get_folder_icon, icon_handle, IconAsset},
     },
     message::Message,
@@ -21,7 +22,20 @@ fn icon_widget<'a>(icon: IconAsset) -> Element<'a, Message> {
         .into()
 }
 
-pub fn view_git_panel<'a>(changes: &'a [(String, String)], width: f32) -> Element<'a, Message> {
+/// The colour each status letter is drawn in.
+fn change_color(kind: ChangeKind) -> iced::Color {
+    match kind {
+        ChangeKind::Modified | ChangeKind::TypeChanged => iced::Color::from_rgb(0.98, 0.74, 0.18),
+        ChangeKind::Added | ChangeKind::Untracked | ChangeKind::Copied => {
+            iced::Color::from_rgb(0.36, 0.86, 0.42)
+        },
+        ChangeKind::Deleted | ChangeKind::Conflicted => iced::Color::from_rgb(0.92, 0.37, 0.37),
+        ChangeKind::Renamed => iced::Color::from_rgb(0.40, 0.69, 0.98),
+        ChangeKind::Ignored => theme().text_muted,
+    }
+}
+
+pub fn view_git_panel<'a>(changes: &'a [FileChange], width: f32) -> Element<'a, Message> {
     let content: Element<'a, Message> = if changes.is_empty() {
         container(
             column![
@@ -49,30 +63,15 @@ pub fn view_git_panel<'a>(changes: &'a [(String, String)], width: f32) -> Elemen
             })
             .into()];
 
-        for (status, file) in changes {
-            let status_color = match status.as_str() {
-                "M" | "MM" => iced::Color::from_rgb(0.98, 0.74, 0.18),
-                "A" | "??" => iced::Color::from_rgb(0.36, 0.86, 0.42),
-                "D" => iced::Color::from_rgb(0.92, 0.37, 0.37),
-                _ => theme().text_muted,
-            };
-
-            let label = match status.as_str() {
-                "M" | "MM" => "M",
-                "A" => "A",
-                "D" => "D",
-                "??" => "U",
-                _ => status.as_str(),
-            };
-
-            let file_name = std::path::Path::new(file)
-                .file_name()
-                .and_then(|n| n.to_str())
-                .unwrap_or(file.as_str());
+        for change in changes {
+            let kind = change.primary_kind();
 
             let row_item = row![
-                text(label).size(11).color(status_color).width(Length::Fixed(16.0)),
-                text(file_name).size(12),
+                text(kind.letter())
+                    .size(11)
+                    .color(change_color(kind))
+                    .width(Length::Fixed(16.0)),
+                text(change.display_name()).size(12),
             ]
             .spacing(4)
             .align_y(iced::Alignment::Center);
