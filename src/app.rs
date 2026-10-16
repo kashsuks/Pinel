@@ -195,7 +195,9 @@ pub struct App {
     command_input_id: iced::widget::Id,
 
     active_panel: ActivePanel,
-    git_changes: Vec<(String, String)>,
+    git_changes: Vec<crate::features::git::FileChange>,
+    git_history: Vec<crate::features::git::Commit>,
+    git_graph: Vec<crate::features::git_graph::GraphRow>,
 
     chat_sessions: Vec<crate::features::chat::ChatSession>,
     active_chat_session: Option<String>,
@@ -381,6 +383,8 @@ impl Default for App {
 
             active_panel: ActivePanel::Files,
             git_changes: Vec::new(),
+            git_history: Vec::new(),
+            git_graph: Vec::new(),
 
             chat_sessions: crate::config::chat_store::load_sessions(None),
             active_chat_session: None,

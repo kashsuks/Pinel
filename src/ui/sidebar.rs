@@ -6,11 +6,16 @@ use iced::{
 use crate::{
     features::{
         file_tree::{FileEntry, FileTree},
+        git::{split_changes, ChangeKind, Commit, FileChange},
+        git_graph::GraphRow,
         icons::{get_file_icon, get_folder_icon, icon_handle, IconAsset},
     },
     message::Message,
     theme::*,
-    ui::styles::{rename_input_style, sidebar_container_style, tree_button_style},
+    ui::{
+        git_graph::view_commit_row,
+        styles::{rename_input_style, sidebar_container_style, tree_button_style},
+    },
 };
 
 /// Create an icon element from embedded bytes.
@@ -21,79 +26,61 @@ fn icon_widget<'a>(icon: IconAsset) -> Element<'a, Message> {
         .into()
 }
 
-pub fn view_git_panel<'a>(changes: &'a [(String, String)], width: f32) -> Element<'a, Message> {
-    let content: Element<'a, Message> = if changes.is_empty() {
-        container(
-            column![
-                text("No changes").size(13).color(theme().text_muted),
-                text("Working tree is clean").size(11).color(theme().text_placeholder),
-            ]
-            .spacing(4)
-            .align_x(iced::Alignment::Center),
-        )
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .center_x(Length::Fill)
-        .center_y(Length::Fill)
-        .into()
-    } else {
-        let header =
-            text(format!("Changes ({})", changes.len())).size(11).color(theme().text_muted);
+/// The colour each status letter is drawn in.
+fn change_color(kind: ChangeKind) -> iced::Color {
+    match kind {
+        ChangeKind::Modified | ChangeKind::TypeChanged => iced::Color::from_rgb(0.98, 0.74, 0.18),
+        ChangeKind::Added | ChangeKind::Untracked | ChangeKind::Copied => {
+            iced::Color::from_rgb(0.36, 0.86, 0.42)
+        },
+        ChangeKind::Deleted | ChangeKind::Conflicted => iced::Color::from_rgb(0.92, 0.37, 0.37),
+        ChangeKind::Renamed => iced::Color::from_rgb(0.40, 0.69, 0.98),
+        ChangeKind::Ignored => theme().text_muted,
+    }
+}
 
-        let mut items: Vec<Element<'a, Message>> = vec![container(header)
-            .padding(iced::Padding {
-                top: 4.0,
-                right: 4.0,
-                bottom: 4.0,
-                left: 4.0,
-            })
-            .into()];
+/// The git panel: changed files, then the commit graph below them.
+pub fn view_git_panel<'a>(
+    changes: &'a [FileChange],
+    history: &'a [Commit],
+    graph: &'a [GraphRow],
+    width: f32,
+) -> Element<'a, Message> {
+    let mut items: Vec<Element<'a, Message>> = Vec::new();
 
-        for (status, file) in changes {
-            let status_color = match status.as_str() {
-                "M" | "MM" => iced::Color::from_rgb(0.98, 0.74, 0.18),
-                "A" | "??" => iced::Color::from_rgb(0.36, 0.86, 0.42),
-                "D" => iced::Color::from_rgb(0.92, 0.37, 0.37),
-                _ => theme().text_muted,
-            };
+    if changes.is_empty() && history.is_empty() {
+        items.push(
+            container(
+                column![
+                    text("No changes").size(13).color(theme().text_muted),
+                    text("Working tree is clean").size(11).color(theme().text_placeholder),
+                ]
+                .spacing(4)
+                .align_x(iced::Alignment::Center),
+            )
+            .width(Length::Fill)
+            .center_x(Length::Fill)
+            .padding(16)
+            .into(),
+        );
+    }
 
-            let label = match status.as_str() {
-                "M" | "MM" => "M",
-                "A" => "A",
-                "D" => "D",
-                "??" => "U",
-                _ => status.as_str(),
-            };
+    let (staged, unstaged) = split_changes(changes);
+    if !staged.is_empty() {
+        items.push(section_header(format!("Staged Changes ({})", staged.len())));
+        items.extend(staged.into_iter().filter_map(|c| change_row(c, c.staged_kind())));
+    }
+    if !unstaged.is_empty() {
+        items.push(section_header(format!("Changes ({})", unstaged.len())));
+        items.extend(unstaged.into_iter().filter_map(|c| change_row(c, c.unstaged_kind())));
+    }
 
-            let file_name = std::path::Path::new(file)
-                .file_name()
-                .and_then(|n| n.to_str())
-                .unwrap_or(file.as_str());
+    if !history.is_empty() {
+        items.push(section_header("Commits".to_string()));
+        items.push(view_commit_graph(history, graph, width));
+    }
 
-            let row_item = row![
-                text(label).size(11).color(status_color).width(Length::Fixed(16.0)),
-                text(file_name).size(12),
-            ]
-            .spacing(4)
-            .align_y(iced::Alignment::Center);
-
-            items.push(
-                container(row_item)
-                    .padding(iced::Padding {
-                        top: 3.0,
-                        right: 4.0,
-                        bottom: 3.0,
-                        left: 8.0,
-                    })
-                    .width(Length::Fill)
-                    .into(),
-            );
-        }
-
-        column(items).spacing(0).into()
-    };
-
-    container(scrollable(content).height(Length::Fill))
+    container(scrollable(column(items).spacing(0)).height(Length::Fill))
         .width(Length::Fixed(width))
         .height(Length::Fill)
         .padding(iced::Padding {
@@ -104,6 +91,74 @@ pub fn view_git_panel<'a>(changes: &'a [(String, String)], width: f32) -> Elemen
         })
         .style(sidebar_container_style)
         .into()
+}
+
+/// One changed file: status letter, name, and its folder dimmed after it.
+fn change_row<'a>(
+    change: &'a FileChange,
+    kind: Option<ChangeKind>,
+) -> Option<Element<'a, Message>> {
+    let kind = kind?;
+    let mut line = row![
+        text(kind.letter())
+            .size(11)
+            .color(change_color(kind))
+            .width(Length::Fixed(16.0)),
+        text(change.display_name())
+            .size(12)
+            .wrapping(iced::widget::text::Wrapping::None),
+    ]
+    .spacing(4)
+    .align_y(iced::Alignment::Center);
+
+    let dir = change.parent_dir();
+    if !dir.is_empty() {
+        line = line.push(
+            text(dir)
+                .size(11)
+                .color(theme().text_placeholder)
+                .wrapping(iced::widget::text::Wrapping::None),
+        );
+    }
+
+    Some(
+        container(line)
+            .padding(iced::Padding {
+                top: 3.0,
+                right: 4.0,
+                bottom: 3.0,
+                left: 8.0,
+            })
+            .width(Length::Fill)
+            .clip(true)
+            .into(),
+    )
+}
+
+fn section_header<'a>(label: String) -> Element<'a, Message> {
+    container(text(label).size(11).color(theme().text_muted))
+        .padding(iced::Padding {
+            top: 8.0,
+            right: 4.0,
+            bottom: 4.0,
+            left: 4.0,
+        })
+        .into()
+}
+
+/// One row per commit, with refs and a subject sized to the panel.
+fn view_commit_graph<'a>(
+    history: &'a [Commit],
+    graph: &'a [GraphRow],
+    width: f32,
+) -> Element<'a, Message> {
+    let lanes = graph.iter().map(|r| r.width).max().unwrap_or(1);
+    let rows = history
+        .iter()
+        .zip(graph)
+        .map(|(commit, graph_row)| view_commit_row(commit, graph_row, lanes, width));
+
+    column(rows).spacing(0).clip(true).into()
 }
 
 pub fn view_sidebar<'a>(

@@ -1,6 +1,7 @@
 pub mod chat_panel;
 pub mod context_menu;
 pub mod editor;
+pub mod git_graph;
 pub mod sidebar;
 pub mod styles;
 

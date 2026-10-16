@@ -10,6 +10,8 @@ pub mod editor_buffer;
 pub mod file_tree;
 pub mod find_replace;
 pub mod fuzzy_finder;
+pub mod git;
+pub mod git_graph;
 pub mod icons;
 pub mod lsp;
 pub mod resources;
