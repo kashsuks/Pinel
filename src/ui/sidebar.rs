@@ -13,7 +13,7 @@ use crate::{
     message::Message,
     theme::*,
     ui::{
-        git_graph::{view_graph_row, ROW_HEIGHT},
+        git_graph::view_commit_row,
         styles::{rename_input_style, sidebar_container_style, tree_button_style},
     },
 };
@@ -96,7 +96,7 @@ pub fn view_git_panel<'a>(
 
     if !history.is_empty() {
         items.push(section_header("Commits".to_string()));
-        items.push(view_commit_graph(history, graph));
+        items.push(view_commit_graph(history, graph, width));
     }
 
     container(scrollable(column(items).spacing(0)).height(Length::Fill))
@@ -123,28 +123,17 @@ fn section_header<'a>(label: String) -> Element<'a, Message> {
         .into()
 }
 
-/// One row per commit: the graph cell, then the subject.
-fn view_commit_graph<'a>(history: &'a [Commit], graph: &'a [GraphRow]) -> Element<'a, Message> {
+/// One row per commit, with refs and a subject sized to the panel.
+fn view_commit_graph<'a>(
+    history: &'a [Commit],
+    graph: &'a [GraphRow],
+    width: f32,
+) -> Element<'a, Message> {
     let lanes = graph.iter().map(|r| r.width).max().unwrap_or(1);
-
-    let rows = history.iter().zip(graph).map(|(commit, graph_row)| {
-        let color = if graph_row.is_merge {
-            theme().text_muted
-        } else {
-            theme().text_primary
-        };
-        row![
-            view_graph_row(graph_row, lanes),
-            text(commit.subject.as_str())
-                .size(12)
-                .color(color)
-                .wrapping(iced::widget::text::Wrapping::None),
-        ]
-        .spacing(6)
-        .align_y(iced::Alignment::Center)
-        .height(Length::Fixed(ROW_HEIGHT))
-        .into()
-    });
+    let rows = history
+        .iter()
+        .zip(graph)
+        .map(|(commit, graph_row)| view_commit_row(commit, graph_row, lanes, width));
 
     column(rows).spacing(0).clip(true).into()
 }
