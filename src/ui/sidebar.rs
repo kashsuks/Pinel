@@ -6,12 +6,16 @@ use iced::{
 use crate::{
     features::{
         file_tree::{FileEntry, FileTree},
-        git::{ChangeKind, FileChange},
+        git::{ChangeKind, Commit, FileChange},
+        git_graph::GraphRow,
         icons::{get_file_icon, get_folder_icon, icon_handle, IconAsset},
     },
     message::Message,
     theme::*,
-    ui::styles::{rename_input_style, sidebar_container_style, tree_button_style},
+    ui::{
+        git_graph::{view_graph_row, ROW_HEIGHT},
+        styles::{rename_input_style, sidebar_container_style, tree_button_style},
+    },
 };
 
 /// Create an icon element from embedded bytes.
@@ -35,34 +39,34 @@ fn change_color(kind: ChangeKind) -> iced::Color {
     }
 }
 
-pub fn view_git_panel<'a>(changes: &'a [FileChange], width: f32) -> Element<'a, Message> {
-    let content: Element<'a, Message> = if changes.is_empty() {
-        container(
-            column![
-                text("No changes").size(13).color(theme().text_muted),
-                text("Working tree is clean").size(11).color(theme().text_placeholder),
-            ]
-            .spacing(4)
-            .align_x(iced::Alignment::Center),
-        )
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .center_x(Length::Fill)
-        .center_y(Length::Fill)
-        .into()
-    } else {
-        let header =
-            text(format!("Changes ({})", changes.len())).size(11).color(theme().text_muted);
+/// The git panel: changed files, then the commit graph below them.
+pub fn view_git_panel<'a>(
+    changes: &'a [FileChange],
+    history: &'a [Commit],
+    graph: &'a [GraphRow],
+    width: f32,
+) -> Element<'a, Message> {
+    let mut items: Vec<Element<'a, Message>> = Vec::new();
 
-        let mut items: Vec<Element<'a, Message>> = vec![container(header)
-            .padding(iced::Padding {
-                top: 4.0,
-                right: 4.0,
-                bottom: 4.0,
-                left: 4.0,
-            })
-            .into()];
+    if changes.is_empty() && history.is_empty() {
+        items.push(
+            container(
+                column![
+                    text("No changes").size(13).color(theme().text_muted),
+                    text("Working tree is clean").size(11).color(theme().text_placeholder),
+                ]
+                .spacing(4)
+                .align_x(iced::Alignment::Center),
+            )
+            .width(Length::Fill)
+            .center_x(Length::Fill)
+            .padding(16)
+            .into(),
+        );
+    }
 
+    if !changes.is_empty() {
+        items.push(section_header(format!("Changes ({})", changes.len())));
         for change in changes {
             let kind = change.primary_kind();
 
@@ -88,11 +92,14 @@ pub fn view_git_panel<'a>(changes: &'a [FileChange], width: f32) -> Element<'a, 
                     .into(),
             );
         }
+    }
 
-        column(items).spacing(0).into()
-    };
+    if !history.is_empty() {
+        items.push(section_header("Commits".to_string()));
+        items.push(view_commit_graph(history, graph));
+    }
 
-    container(scrollable(content).height(Length::Fill))
+    container(scrollable(column(items).spacing(0)).height(Length::Fill))
         .width(Length::Fixed(width))
         .height(Length::Fill)
         .padding(iced::Padding {
@@ -103,6 +110,43 @@ pub fn view_git_panel<'a>(changes: &'a [FileChange], width: f32) -> Element<'a, 
         })
         .style(sidebar_container_style)
         .into()
+}
+
+fn section_header<'a>(label: String) -> Element<'a, Message> {
+    container(text(label).size(11).color(theme().text_muted))
+        .padding(iced::Padding {
+            top: 8.0,
+            right: 4.0,
+            bottom: 4.0,
+            left: 4.0,
+        })
+        .into()
+}
+
+/// One row per commit: the graph cell, then the subject.
+fn view_commit_graph<'a>(history: &'a [Commit], graph: &'a [GraphRow]) -> Element<'a, Message> {
+    let lanes = graph.iter().map(|r| r.width).max().unwrap_or(1);
+
+    let rows = history.iter().zip(graph).map(|(commit, graph_row)| {
+        let color = if graph_row.is_merge {
+            theme().text_muted
+        } else {
+            theme().text_primary
+        };
+        row![
+            view_graph_row(graph_row, lanes),
+            text(commit.subject.as_str())
+                .size(12)
+                .color(color)
+                .wrapping(iced::widget::text::Wrapping::None),
+        ]
+        .spacing(6)
+        .align_y(iced::Alignment::Center)
+        .height(Length::Fixed(ROW_HEIGHT))
+        .into()
+    });
+
+    column(rows).spacing(0).clip(true).into()
 }
 
 pub fn view_sidebar<'a>(

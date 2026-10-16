@@ -1598,6 +1598,7 @@ impl App {
                 )
             },
             Message::GitHistoryLoaded(commits) => {
+                self.git_graph = crate::features::git_graph::build_graph(&commits);
                 self.git_history = commits;
                 iced::Task::none()
             },

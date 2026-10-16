@@ -1,8 +1,5 @@
 //! turning a commit list into the lanes of a `git log --graph` style drawing
 
-// dead_code: nothing draws the graph until the canvas lands in the git panel
-#![allow(dead_code)]
-
 use crate::features::git::Commit;
 
 /// A line between two lanes, covering the height of one row.

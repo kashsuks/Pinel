@@ -198,9 +198,12 @@ impl App {
                     &self.rename_input,
                     self.rename_input_id.clone(),
                 ),
-                ActivePanel::Git => {
-                    crate::ui::view_git_panel(&self.git_changes, self.sidebar_width)
-                },
+                ActivePanel::Git => crate::ui::view_git_panel(
+                    &self.git_changes,
+                    &self.git_history,
+                    &self.git_graph,
+                    self.sidebar_width,
+                ),
                 ActivePanel::Chat => crate::ui::view_chat_panel(
                     &self.chat_sessions,
                     self.active_chat_session.as_deref(),
