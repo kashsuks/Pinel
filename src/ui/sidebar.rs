@@ -6,7 +6,7 @@ use iced::{
 use crate::{
     features::{
         file_tree::{FileEntry, FileTree},
-        git::{ChangeKind, Commit, FileChange},
+        git::{split_changes, ChangeKind, Commit, FileChange},
         git_graph::GraphRow,
         icons::{get_file_icon, get_folder_icon, icon_handle, IconAsset},
     },
@@ -65,33 +65,14 @@ pub fn view_git_panel<'a>(
         );
     }
 
-    if !changes.is_empty() {
-        items.push(section_header(format!("Changes ({})", changes.len())));
-        for change in changes {
-            let kind = change.primary_kind();
-
-            let row_item = row![
-                text(kind.letter())
-                    .size(11)
-                    .color(change_color(kind))
-                    .width(Length::Fixed(16.0)),
-                text(change.display_name()).size(12),
-            ]
-            .spacing(4)
-            .align_y(iced::Alignment::Center);
-
-            items.push(
-                container(row_item)
-                    .padding(iced::Padding {
-                        top: 3.0,
-                        right: 4.0,
-                        bottom: 3.0,
-                        left: 8.0,
-                    })
-                    .width(Length::Fill)
-                    .into(),
-            );
-        }
+    let (staged, unstaged) = split_changes(changes);
+    if !staged.is_empty() {
+        items.push(section_header(format!("Staged Changes ({})", staged.len())));
+        items.extend(staged.into_iter().filter_map(|c| change_row(c, c.staged_kind())));
+    }
+    if !unstaged.is_empty() {
+        items.push(section_header(format!("Changes ({})", unstaged.len())));
+        items.extend(unstaged.into_iter().filter_map(|c| change_row(c, c.unstaged_kind())));
     }
 
     if !history.is_empty() {
@@ -110,6 +91,48 @@ pub fn view_git_panel<'a>(
         })
         .style(sidebar_container_style)
         .into()
+}
+
+/// One changed file: status letter, name, and its folder dimmed after it.
+fn change_row<'a>(
+    change: &'a FileChange,
+    kind: Option<ChangeKind>,
+) -> Option<Element<'a, Message>> {
+    let kind = kind?;
+    let mut line = row![
+        text(kind.letter())
+            .size(11)
+            .color(change_color(kind))
+            .width(Length::Fixed(16.0)),
+        text(change.display_name())
+            .size(12)
+            .wrapping(iced::widget::text::Wrapping::None),
+    ]
+    .spacing(4)
+    .align_y(iced::Alignment::Center);
+
+    let dir = change.parent_dir();
+    if !dir.is_empty() {
+        line = line.push(
+            text(dir)
+                .size(11)
+                .color(theme().text_placeholder)
+                .wrapping(iced::widget::text::Wrapping::None),
+        );
+    }
+
+    Some(
+        container(line)
+            .padding(iced::Padding {
+                top: 3.0,
+                right: 4.0,
+                bottom: 3.0,
+                left: 8.0,
+            })
+            .width(Length::Fill)
+            .clip(true)
+            .into(),
+    )
 }
 
 fn section_header<'a>(label: String) -> Element<'a, Message> {

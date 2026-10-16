@@ -58,18 +58,29 @@ pub struct FileChange {
     pub conflicted: bool,
 }
 
-// dead_code: is_staged/is_unstaged are only exercised by tests until the
-// staged/unstaged grouping lands in the git panel
-#[allow(dead_code)]
 impl FileChange {
-    /// the kind to show when there is only room for one letter
-    ///
-    /// a conflict outranks everything
-    pub fn primary_kind(&self) -> ChangeKind {
-        if self.conflicted {
-            return ChangeKind::Conflicted;
+    /// the kind to show in the staged list, `None` if nothing is staged
+    pub fn staged_kind(&self) -> Option<ChangeKind> {
+        if self.is_staged() {
+            self.index
+        } else {
+            None
         }
-        self.worktree.or(self.index).unwrap_or(ChangeKind::Modified)
+    }
+
+    /// the kind to show in the unstaged list, `None` if the file is fully staged
+    pub fn unstaged_kind(&self) -> Option<ChangeKind> {
+        if self.conflicted {
+            Some(ChangeKind::Conflicted)
+        } else {
+            self.worktree
+        }
+    }
+
+    /// the directory part of [`path`](Self::path), empty for a top-level file
+    pub fn parent_dir(&self) -> &str {
+        let trimmed = self.path.trim_end_matches('/');
+        trimmed.rsplit_once('/').map_or("", |(dir, _)| dir)
     }
 
     /// whether any part of this change is staged for the next commit
@@ -150,6 +161,16 @@ pub fn parse_status(output: &[u8]) -> Vec<FileChange> {
     }
 
     changes
+}
+
+/// Splits changes into the staged and unstaged lists.
+///
+/// A file changed both in the index and afterwards (`MM`) is in both, as
+/// it is in `git status`. A conflicted file is only ever unstaged.
+pub fn split_changes(changes: &[FileChange]) -> (Vec<&FileChange>, Vec<&FileChange>) {
+    let staged = changes.iter().filter(|c| c.is_staged()).collect();
+    let unstaged = changes.iter().filter(|c| c.is_unstaged()).collect();
+    (staged, unstaged)
 }
 
 /// runs `git status` in `root` and returns the changed files
@@ -391,7 +412,7 @@ mod tests {
     fn test_parse_status_untracked_is_not_staged() {
         let changes = parse_status(b"?? new.txt\0");
         assert!(!changes[0].is_staged());
-        assert_eq!(changes[0].primary_kind(), ChangeKind::Untracked);
+        assert_eq!(changes[0].unstaged_kind(), Some(ChangeKind::Untracked));
     }
 
     #[test]
@@ -408,7 +429,7 @@ mod tests {
         for record in [&b"UU f\0"[..], b"AA f\0", b"DD f\0", b"AU f\0"] {
             let changes = parse_status(record);
             assert!(changes[0].conflicted);
-            assert_eq!(changes[0].primary_kind(), ChangeKind::Conflicted);
+            assert_eq!(changes[0].unstaged_kind(), Some(ChangeKind::Conflicted));
         }
     }
 
@@ -429,6 +450,71 @@ mod tests {
         assert_eq!(change("src/app.rs").display_name(), "app.rs");
         assert_eq!(change("top.rs").display_name(), "top.rs");
         assert_eq!(change("a/sub/").display_name(), "sub/");
+    }
+
+    fn change(path: &str, index: Option<ChangeKind>, worktree: Option<ChangeKind>) -> FileChange {
+        FileChange {
+            path: path.to_string(),
+            original_path: None,
+            index,
+            worktree,
+            conflicted: false,
+        }
+    }
+
+    #[test]
+    fn test_split_changes_both_sides_lists_file_twice() {
+        let m = Some(ChangeKind::Modified);
+        let all = [
+            change("a", m, m),
+            change("b", m, None),
+            change("c", None, m),
+        ];
+        let (staged, unstaged) = split_changes(&all);
+        let names = |v: &[&FileChange]| v.iter().map(|c| c.path.clone()).collect::<Vec<_>>();
+        assert_eq!(names(&staged), vec!["a", "b"]);
+        assert_eq!(names(&unstaged), vec!["a", "c"]);
+    }
+
+    #[test]
+    fn test_split_changes_conflict_is_unstaged_only() {
+        let mut conflict = change("f", Some(ChangeKind::Added), Some(ChangeKind::Added));
+        conflict.conflicted = true;
+        let all = [conflict];
+        let (staged, unstaged) = split_changes(&all);
+        assert!(staged.is_empty());
+        assert_eq!(unstaged.len(), 1);
+        assert_eq!(unstaged[0].unstaged_kind(), Some(ChangeKind::Conflicted));
+        assert_eq!(unstaged[0].staged_kind(), None);
+    }
+
+    #[test]
+    fn test_split_changes_untracked_is_unstaged() {
+        let all = [change("n", None, Some(ChangeKind::Untracked))];
+        let (staged, unstaged) = split_changes(&all);
+        assert!(staged.is_empty());
+        assert_eq!(unstaged[0].unstaged_kind(), Some(ChangeKind::Untracked));
+    }
+
+    #[test]
+    fn test_split_changes_empty() {
+        let (staged, unstaged) = split_changes(&[]);
+        assert!(staged.is_empty() && unstaged.is_empty());
+    }
+
+    #[test]
+    fn test_staged_kind_reports_index_side() {
+        let c = change("a", Some(ChangeKind::Deleted), Some(ChangeKind::Modified));
+        assert_eq!(c.staged_kind(), Some(ChangeKind::Deleted));
+        assert_eq!(c.unstaged_kind(), Some(ChangeKind::Modified));
+    }
+
+    #[test]
+    fn test_parent_dir() {
+        let c = |p: &str| change(p, None, Some(ChangeKind::Modified));
+        assert_eq!(c("src/ui/a.rs").parent_dir(), "src/ui");
+        assert_eq!(c("top.rs").parent_dir(), "");
+        assert_eq!(c("a/sub/").parent_dir(), "a");
     }
 
     fn record(hash: &str, parents: &str, subject: &str, decoration: &str) -> Vec<u8> {
