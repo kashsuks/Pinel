@@ -13,7 +13,7 @@ use crate::{
     message::Message,
     theme::*,
     ui::{
-        git_graph::view_commit_row,
+        git_graph::{view_commit_row, ROW_HEIGHT},
         styles::{rename_input_style, sidebar_container_style, tree_button_style},
     },
 };
@@ -124,12 +124,14 @@ fn change_row<'a>(
     Some(
         container(line)
             .padding(iced::Padding {
-                top: 3.0,
+                top: 0.0,
                 right: 4.0,
-                bottom: 3.0,
+                bottom: 0.0,
                 left: 8.0,
             })
             .width(Length::Fill)
+            .height(Length::Fixed(ROW_HEIGHT))
+            .align_y(iced::alignment::Vertical::Center)
             .clip(true)
             .into(),
     )
@@ -138,11 +140,14 @@ fn change_row<'a>(
 fn section_header<'a>(label: String) -> Element<'a, Message> {
     container(text(label).size(11).color(theme().text_muted))
         .padding(iced::Padding {
-            top: 8.0,
+            top: 0.0,
             right: 4.0,
-            bottom: 4.0,
+            bottom: 0.0,
             left: 4.0,
         })
+        .width(Length::Fill)
+        .height(Length::Fixed(ROW_HEIGHT))
+        .align_y(iced::alignment::Vertical::Center)
         .into()
 }
 
