@@ -203,6 +203,8 @@ impl App {
                     &self.git_history,
                     &self.git_graph,
                     self.sidebar_width,
+                    self.git_scroll_offset,
+                    self.git_viewport_h,
                 ),
                 ActivePanel::Chat => crate::ui::view_chat_panel(
                     &self.chat_sessions,

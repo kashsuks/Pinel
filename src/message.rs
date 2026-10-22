@@ -168,6 +168,12 @@ pub enum Message {
     RefreshGitHistory,
     /// Carries the commits reported by the last `git log`, newest first.
     GitHistoryLoaded(Vec<crate::features::git::Commit>),
+    /// The git panel scrolled; `offset` is the distance scrolled from the
+    /// top and `viewport` the visible height, both in pixels.
+    GitPanelScrolled {
+        offset: f32,
+        viewport: f32,
+    },
 
     /// Starts a new, empty chat session and makes it the active one.
     ChatNewSession,

@@ -45,6 +45,8 @@ pub fn view_git_panel<'a>(
     history: &'a [Commit],
     graph: &'a [GraphRow],
     width: f32,
+    _scroll_offset: f32,
+    _viewport_h: f32,
 ) -> Element<'a, Message> {
     let mut items: Vec<Element<'a, Message>> = Vec::new();
 
@@ -80,17 +82,24 @@ pub fn view_git_panel<'a>(
         items.push(view_commit_graph(history, graph, width));
     }
 
-    container(scrollable(column(items).spacing(0)).height(Length::Fill))
-        .width(Length::Fixed(width))
-        .height(Length::Fill)
-        .padding(iced::Padding {
-            top: 14.0,
-            right: 2.0,
-            bottom: 2.0,
-            left: 4.0,
-        })
-        .style(sidebar_container_style)
-        .into()
+    container(
+        scrollable(column(items).spacing(0)).height(Length::Fill).on_scroll(|viewport| {
+            Message::GitPanelScrolled {
+                offset: viewport.absolute_offset().y,
+                viewport: viewport.bounds().height,
+            }
+        }),
+    )
+    .width(Length::Fixed(width))
+    .height(Length::Fill)
+    .padding(iced::Padding {
+        top: 14.0,
+        right: 2.0,
+        bottom: 2.0,
+        left: 4.0,
+    })
+    .style(sidebar_container_style)
+    .into()
 }
 
 /// One changed file: status letter, name, and its folder dimmed after it.
