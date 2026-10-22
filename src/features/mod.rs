@@ -19,3 +19,4 @@ pub mod search;
 pub mod syntax;
 pub mod terminal;
 pub mod updater;
+pub mod virtual_list;

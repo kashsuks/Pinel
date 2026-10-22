@@ -1651,6 +1651,11 @@ impl App {
                 self.git_history = commits;
                 iced::Task::none()
             },
+            Message::GitPanelScrolled { offset, viewport } => {
+                self.git_scroll_offset = offset;
+                self.git_viewport_h = viewport;
+                iced::Task::none()
+            },
             Message::ChatNewSession => {
                 let session = crate::features::chat::ChatSession::new(String::new(), String::new());
                 self.active_chat_session = Some(session.id.clone());

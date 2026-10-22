@@ -1,5 +1,7 @@
 use iced::{
-    widget::{button, column, container, image, mouse_area, row, scrollable, text, text_input},
+    widget::{
+        button, column, container, image, mouse_area, row, scrollable, text, text_input, Space,
+    },
     Element, Length,
 };
 
@@ -9,11 +11,12 @@ use crate::{
         git::{split_changes, ChangeKind, Commit, FileChange},
         git_graph::GraphRow,
         icons::{get_file_icon, get_folder_icon, icon_handle, IconAsset},
+        virtual_list::{spacer_heights, visible_range},
     },
     message::Message,
     theme::*,
     ui::{
-        git_graph::view_commit_row,
+        git_graph::{view_commit_row, ROW_HEIGHT},
         styles::{rename_input_style, sidebar_container_style, tree_button_style},
     },
 };
@@ -39,12 +42,51 @@ fn change_color(kind: ChangeKind) -> iced::Color {
     }
 }
 
+/// Extra rows built above and below the viewport so fast scrolling never
+/// shows a gap.
+const OVERSCAN: usize = 6;
+
+/// One line of the status section: a heading or a changed file.
+enum StatusEntry<'a> {
+    Header(String),
+    Change(&'a FileChange, ChangeKind),
+}
+
+/// Flattens staged and unstaged changes, with their headings, into one list
+/// so it can be windowed by index.
+fn status_entries(changes: &[FileChange]) -> Vec<StatusEntry<'_>> {
+    let (staged, unstaged) = split_changes(changes);
+    let mut entries = Vec::with_capacity(staged.len() + unstaged.len() + 2);
+    if !staged.is_empty() {
+        entries.push(StatusEntry::Header(format!(
+            "Staged Changes ({})",
+            staged.len()
+        )));
+        entries.extend(
+            staged
+                .into_iter()
+                .filter_map(|c| c.staged_kind().map(|k| StatusEntry::Change(c, k))),
+        );
+    }
+    if !unstaged.is_empty() {
+        entries.push(StatusEntry::Header(format!("Changes ({})", unstaged.len())));
+        entries.extend(
+            unstaged
+                .into_iter()
+                .filter_map(|c| c.unstaged_kind().map(|k| StatusEntry::Change(c, k))),
+        );
+    }
+    entries
+}
+
 /// The git panel: changed files, then the commit graph below them.
 pub fn view_git_panel<'a>(
     changes: &'a [FileChange],
     history: &'a [Commit],
     graph: &'a [GraphRow],
     width: f32,
+    scroll_offset: f32,
+    viewport_h: f32,
 ) -> Element<'a, Message> {
     let mut items: Vec<Element<'a, Message>> = Vec::new();
 
@@ -65,14 +107,27 @@ pub fn view_git_panel<'a>(
         );
     }
 
-    let (staged, unstaged) = split_changes(changes);
-    if !staged.is_empty() {
-        items.push(section_header(format!("Staged Changes ({})", staged.len())));
-        items.extend(staged.into_iter().filter_map(|c| change_row(c, c.staged_kind())));
+    let entries = status_entries(changes);
+    let range = visible_range(
+        scroll_offset,
+        viewport_h,
+        ROW_HEIGHT,
+        entries.len(),
+        OVERSCAN,
+    );
+    let (above, below) = spacer_heights(&range, entries.len(), ROW_HEIGHT);
+
+    if above > 0.0 {
+        items.push(Space::new().height(Length::Fixed(above)).into());
     }
-    if !unstaged.is_empty() {
-        items.push(section_header(format!("Changes ({})", unstaged.len())));
-        items.extend(unstaged.into_iter().filter_map(|c| change_row(c, c.unstaged_kind())));
+    for entry in &entries[range] {
+        match entry {
+            StatusEntry::Header(label) => items.push(section_header(label.clone())),
+            StatusEntry::Change(change, kind) => items.extend(change_row(change, Some(*kind))),
+        }
+    }
+    if below > 0.0 {
+        items.push(Space::new().height(Length::Fixed(below)).into());
     }
 
     if !history.is_empty() {
@@ -80,17 +135,24 @@ pub fn view_git_panel<'a>(
         items.push(view_commit_graph(history, graph, width));
     }
 
-    container(scrollable(column(items).spacing(0)).height(Length::Fill))
-        .width(Length::Fixed(width))
-        .height(Length::Fill)
-        .padding(iced::Padding {
-            top: 14.0,
-            right: 2.0,
-            bottom: 2.0,
-            left: 4.0,
-        })
-        .style(sidebar_container_style)
-        .into()
+    container(
+        scrollable(column(items).spacing(0)).height(Length::Fill).on_scroll(|viewport| {
+            Message::GitPanelScrolled {
+                offset: viewport.absolute_offset().y,
+                viewport: viewport.bounds().height,
+            }
+        }),
+    )
+    .width(Length::Fixed(width))
+    .height(Length::Fill)
+    .padding(iced::Padding {
+        top: 14.0,
+        right: 2.0,
+        bottom: 2.0,
+        left: 4.0,
+    })
+    .style(sidebar_container_style)
+    .into()
 }
 
 /// One changed file: status letter, name, and its folder dimmed after it.
@@ -124,12 +186,14 @@ fn change_row<'a>(
     Some(
         container(line)
             .padding(iced::Padding {
-                top: 3.0,
+                top: 0.0,
                 right: 4.0,
-                bottom: 3.0,
+                bottom: 0.0,
                 left: 8.0,
             })
             .width(Length::Fill)
+            .height(Length::Fixed(ROW_HEIGHT))
+            .align_y(iced::alignment::Vertical::Center)
             .clip(true)
             .into(),
     )
@@ -138,11 +202,14 @@ fn change_row<'a>(
 fn section_header<'a>(label: String) -> Element<'a, Message> {
     container(text(label).size(11).color(theme().text_muted))
         .padding(iced::Padding {
-            top: 8.0,
+            top: 0.0,
             right: 4.0,
-            bottom: 4.0,
+            bottom: 0.0,
             left: 4.0,
         })
+        .width(Length::Fill)
+        .height(Length::Fixed(ROW_HEIGHT))
+        .align_y(iced::alignment::Vertical::Center)
         .into()
 }
 

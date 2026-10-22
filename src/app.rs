@@ -198,6 +198,8 @@ pub struct App {
     git_changes: Vec<crate::features::git::FileChange>,
     git_history: Vec<crate::features::git::Commit>,
     git_graph: Vec<crate::features::git_graph::GraphRow>,
+    git_scroll_offset: f32,
+    git_viewport_h: f32,
 
     chat_sessions: Vec<crate::features::chat::ChatSession>,
     active_chat_session: Option<String>,
@@ -385,6 +387,9 @@ impl Default for App {
             git_changes: Vec::new(),
             git_history: Vec::new(),
             git_graph: Vec::new(),
+            git_scroll_offset: 0.0,
+            // generous until the first scroll event reports the real height
+            git_viewport_h: 1200.0,
 
             chat_sessions: crate::config::chat_store::load_sessions(None),
             active_chat_session: None,
