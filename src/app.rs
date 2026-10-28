@@ -199,6 +199,8 @@ pub struct App {
     git_history: Vec<crate::features::git::Commit>,
     git_graph: Vec<crate::features::git_graph::GraphRow>,
     git_scroll_offset: f32,
+    git_status_guard: crate::features::git::RefreshGuard,
+    git_history_guard: crate::features::git::RefreshGuard,
     git_viewport_h: f32,
 
     chat_sessions: Vec<crate::features::chat::ChatSession>,
@@ -388,6 +390,8 @@ impl Default for App {
             git_history: Vec::new(),
             git_graph: Vec::new(),
             git_scroll_offset: 0.0,
+            git_status_guard: crate::features::git::RefreshGuard::default(),
+            git_history_guard: crate::features::git::RefreshGuard::default(),
             // generous until the first scroll event reports the real height
             git_viewport_h: 1200.0,
 

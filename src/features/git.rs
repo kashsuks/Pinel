@@ -173,6 +173,32 @@ pub fn split_changes(changes: &[FileChange]) -> (Vec<&FileChange>, Vec<&FileChan
     (staged, unstaged)
 }
 
+/// Stops a refresh from starting while the previous one is still running.
+///
+/// Opening the panel, or any later trigger, can ask for a refresh faster
+/// than git answers on a large repository. Without this each request spawns
+/// another git process on top of the last.
+#[derive(Debug, Default)]
+pub struct RefreshGuard {
+    running: bool,
+}
+
+impl RefreshGuard {
+    /// Marks a refresh as started. Returns `false` if one is already running.
+    pub fn try_start(&mut self) -> bool {
+        if self.running {
+            return false;
+        }
+        self.running = true;
+        true
+    }
+
+    /// Marks the running refresh as done so the next request can start.
+    pub fn finish(&mut self) {
+        self.running = false;
+    }
+}
+
 /// The `git status` invocation behind [`load_status`].
 ///
 /// `--no-optional-locks` keeps a background refresh from taking the index

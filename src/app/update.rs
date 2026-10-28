@@ -1631,6 +1631,9 @@ impl App {
                 iced::Task::none()
             },
             Message::RefreshGitStatus => {
+                if !self.git_status_guard.try_start() {
+                    return iced::Task::none();
+                }
                 let root = self.file_tree.as_ref().map(|t| t.root.clone());
                 iced::Task::perform(
                     crate::features::git::load_status_async(root),
@@ -1638,10 +1641,14 @@ impl App {
                 )
             },
             Message::GitStatusLoaded(changes) => {
+                self.git_status_guard.finish();
                 self.git_changes = changes;
                 iced::Task::none()
             },
             Message::RefreshGitHistory => {
+                if !self.git_history_guard.try_start() {
+                    return iced::Task::none();
+                }
                 let root = self.file_tree.as_ref().map(|t| t.root.clone());
                 iced::Task::perform(
                     crate::features::git::load_history_async(root),
@@ -1649,6 +1656,7 @@ impl App {
                 )
             },
             Message::GitHistoryLoaded(commits) => {
+                self.git_history_guard.finish();
                 self.git_graph = crate::features::git_graph::build_graph(&commits);
                 self.git_history = commits;
                 iced::Task::none()
