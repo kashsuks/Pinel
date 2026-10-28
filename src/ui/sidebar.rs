@@ -500,3 +500,45 @@ fn render_rename_row<'a>(
     .width(Length::Fill)
     .into()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_commit_window_top_of_panel_shows_no_commits() {
+        // 10 status rows + the heading = 11 rows (242px) above the commits
+        let window = commit_window(0.0, 220.0, 10, 500);
+        assert_eq!(window, 0..OVERSCAN);
+    }
+
+    #[test]
+    fn test_commit_window_starts_at_section_boundary() {
+        // viewport top sits exactly on the first commit
+        let window = commit_window(242.0, 220.0, 10, 500);
+        assert_eq!(window, 0..(10 + OVERSCAN));
+    }
+
+    #[test]
+    fn test_commit_window_scrolled_into_the_middle() {
+        let window = commit_window(242.0 + 22.0 * 100.0, 220.0, 10, 500);
+        assert_eq!(window, (100 - OVERSCAN)..(110 + OVERSCAN));
+    }
+
+    #[test]
+    fn test_commit_window_clamped_at_the_end() {
+        let window = commit_window(1_000_000.0, 220.0, 10, 500);
+        assert_eq!(window, 500..500);
+    }
+
+    #[test]
+    fn test_commit_window_no_status_entries() {
+        let window = commit_window(22.0, 220.0, 0, 500);
+        assert_eq!(window, 0..(10 + OVERSCAN));
+    }
+
+    #[test]
+    fn test_commit_window_empty_history() {
+        assert_eq!(commit_window(0.0, 220.0, 10, 0), 0..0);
+    }
+}
