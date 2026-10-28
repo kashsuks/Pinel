@@ -177,9 +177,15 @@ pub fn split_changes(changes: &[FileChange]) -> (Vec<&FileChange>, Vec<&FileChan
 ///
 /// `--no-optional-locks` keeps a background refresh from taking the index
 /// lock, which would make the user's own git commands fail while it runs.
+/// `--untracked-files=normal` is spelled out so a `status.showUntrackedFiles
+/// = all` setting cannot turn one untracked folder into thousands of rows.
 fn status_command(root: Option<&Path>) -> std::process::Command {
     let mut cmd = std::process::Command::new("git");
-    cmd.arg("--no-optional-locks").arg("status").arg("--porcelain=v1").arg("-z");
+    cmd.arg("--no-optional-locks")
+        .arg("status")
+        .arg("--porcelain=v1")
+        .arg("-z")
+        .arg("--untracked-files=normal");
     if let Some(dir) = root {
         cmd.current_dir(dir);
     }
