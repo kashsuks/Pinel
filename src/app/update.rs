@@ -1614,6 +1614,8 @@ impl App {
             },
             Message::SetActivePanel(panel) => {
                 use crate::app::ActivePanel;
+                // the git panel's scrollable starts from the top whenever it is rebuilt
+                self.git_scroll_offset = 0.0;
                 if self.active_panel == panel {
                     self.sidebar_visible = !self.sidebar_visible;
                 } else {
