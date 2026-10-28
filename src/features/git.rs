@@ -644,6 +644,46 @@ mod tests {
     }
 
     #[test]
+    fn test_status_command_avoids_the_index_lock() {
+        let cmd = status_command(None);
+        let args: Vec<_> = cmd.get_args().collect();
+        // a global option, so it has to come before the subcommand
+        assert_eq!(
+            args.first(),
+            Some(&std::ffi::OsStr::new("--no-optional-locks"))
+        );
+        assert!(args.contains(&std::ffi::OsStr::new("status")));
+    }
+
+    #[test]
+    fn test_status_command_pins_untracked_mode() {
+        let cmd = status_command(None);
+        assert!(cmd.get_args().any(|a| a == "--untracked-files=normal"));
+    }
+
+    #[test]
+    fn test_refresh_guard_rejects_overlap() {
+        let mut guard = RefreshGuard::default();
+        assert!(guard.try_start());
+        assert!(!guard.try_start());
+    }
+
+    #[test]
+    fn test_refresh_guard_allows_restart_after_finish() {
+        let mut guard = RefreshGuard::default();
+        assert!(guard.try_start());
+        guard.finish();
+        assert!(guard.try_start());
+    }
+
+    #[test]
+    fn test_refresh_guard_finish_without_start_is_harmless() {
+        let mut guard = RefreshGuard::default();
+        guard.finish();
+        assert!(guard.try_start());
+    }
+
+    #[test]
     fn test_load_history_empty_outside_repository() -> Result<(), Box<dyn std::error::Error>> {
         let dir = std::env::temp_dir().join(format!("pinel-nogit-{}", std::process::id()));
         std::fs::create_dir_all(&dir)?;

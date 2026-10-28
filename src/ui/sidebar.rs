@@ -559,6 +559,75 @@ fn render_rename_row<'a>(
 mod tests {
     use super::*;
 
+    fn untracked(n: usize) -> Vec<FileChange> {
+        (0..n)
+            .map(|i| FileChange {
+                path: format!("f{i}"),
+                original_path: None,
+                index: None,
+                worktree: Some(ChangeKind::Untracked),
+                conflicted: false,
+            })
+            .collect()
+    }
+
+    fn count_files(entries: &[StatusEntry<'_>]) -> usize {
+        entries.iter().filter(|e| matches!(e, StatusEntry::Change(..))).count()
+    }
+
+    #[test]
+    fn test_status_entries_under_the_cap_has_no_show_more() {
+        let changes = untracked(5);
+        let entries = status_entries(&changes, 10);
+        assert_eq!(count_files(&entries), 5);
+        assert!(!entries.iter().any(|e| matches!(e, StatusEntry::ShowMore(_))));
+    }
+
+    #[test]
+    fn test_status_entries_over_the_cap_folds_the_rest() {
+        let changes = untracked(5);
+        let entries = status_entries(&changes, 3);
+        assert_eq!(count_files(&entries), 3);
+        assert!(matches!(entries.last(), Some(StatusEntry::ShowMore(2))));
+    }
+
+    #[test]
+    fn test_status_entries_header_keeps_the_true_count() {
+        let changes = untracked(5);
+        let entries = status_entries(&changes, 1);
+        assert!(matches!(entries.first(), Some(StatusEntry::Header(h)) if h == "Changes (5)"));
+    }
+
+    #[test]
+    fn test_status_entries_unlimited_lists_everything() {
+        let changes = untracked(50);
+        let entries = status_entries(&changes, usize::MAX);
+        assert_eq!(count_files(&entries), 50);
+    }
+
+    #[test]
+    fn test_status_entries_cap_spans_staged_and_unstaged() {
+        let mut changes = untracked(3);
+        for i in 0..3 {
+            changes.push(FileChange {
+                path: format!("s{i}"),
+                original_path: None,
+                index: Some(ChangeKind::Added),
+                worktree: None,
+                conflicted: false,
+            });
+        }
+        // staged are listed first, so a cap of 4 keeps 3 staged + 1 unstaged
+        let entries = status_entries(&changes, 4);
+        assert_eq!(count_files(&entries), 4);
+        assert!(matches!(entries.last(), Some(StatusEntry::ShowMore(2))));
+    }
+
+    #[test]
+    fn test_status_entries_empty() {
+        assert!(status_entries(&[], 10).is_empty());
+    }
+
     #[test]
     fn test_commit_window_top_of_panel_shows_no_commits() {
         // 10 status rows + the heading = 11 rows (242px) above the commits
