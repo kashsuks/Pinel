@@ -1616,6 +1616,7 @@ impl App {
                 use crate::app::ActivePanel;
                 // the git panel's scrollable starts from the top whenever it is rebuilt
                 self.git_scroll_offset = 0.0;
+                self.git_show_all_changes = false;
                 if self.active_panel == panel {
                     self.sidebar_visible = !self.sidebar_visible;
                 } else {
@@ -1659,6 +1660,10 @@ impl App {
                 self.git_history_guard.finish();
                 self.git_graph = crate::features::git_graph::build_graph(&commits);
                 self.git_history = commits;
+                iced::Task::none()
+            },
+            Message::GitShowAllChanges => {
+                self.git_show_all_changes = true;
                 iced::Task::none()
             },
             Message::GitPanelScrolled { offset, viewport } => {

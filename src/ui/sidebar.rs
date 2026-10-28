@@ -50,31 +50,55 @@ const OVERSCAN: usize = 6;
 enum StatusEntry<'a> {
     Header(String),
     Change(&'a FileChange, ChangeKind),
+    /// Closing row that lists the remaining files when pressed.
+    ShowMore(usize),
 }
+
+/// Changed files listed before the rest fold into a "show more" row.
+///
+/// Headings keep the true counts, so the cap never hides how much changed.
+pub const MAX_CHANGES_SHOWN: usize = 2000;
 
 /// Flattens staged and unstaged changes, with their headings, into one list
 /// so it can be windowed by index.
-fn status_entries(changes: &[FileChange]) -> Vec<StatusEntry<'_>> {
+///
+/// At most `limit` files are listed in total; the rest are summed into a
+/// closing [`StatusEntry::ShowMore`].
+fn status_entries(changes: &[FileChange], limit: usize) -> Vec<StatusEntry<'_>> {
     let (staged, unstaged) = split_changes(changes);
-    let mut entries = Vec::with_capacity(staged.len() + unstaged.len() + 2);
+    let total = staged.len() + unstaged.len();
+    let mut entries = Vec::with_capacity(total.min(limit) + 3);
+    let mut remaining = limit;
+
     if !staged.is_empty() {
         entries.push(StatusEntry::Header(format!(
             "Staged Changes ({})",
             staged.len()
         )));
+        let take = staged.len().min(remaining);
+        remaining -= take;
         entries.extend(
             staged
                 .into_iter()
+                .take(take)
                 .filter_map(|c| c.staged_kind().map(|k| StatusEntry::Change(c, k))),
         );
     }
     if !unstaged.is_empty() {
         entries.push(StatusEntry::Header(format!("Changes ({})", unstaged.len())));
+        let take = unstaged.len().min(remaining);
+        remaining -= take;
         entries.extend(
             unstaged
                 .into_iter()
+                .take(take)
                 .filter_map(|c| c.unstaged_kind().map(|k| StatusEntry::Change(c, k))),
         );
+    }
+
+    let hidden = total - (limit - remaining).min(total);
+    if hidden > 0 {
+        entries.push(StatusEntry::ShowMore(hidden));
     }
     entries
 }
@@ -107,6 +131,7 @@ pub fn view_git_panel<'a>(
     width: f32,
     scroll_offset: f32,
     viewport_h: f32,
+    show_all_changes: bool,
 ) -> Element<'a, Message> {
     let mut items: Vec<Element<'a, Message>> = Vec::new();
 
@@ -127,7 +152,12 @@ pub fn view_git_panel<'a>(
         );
     }
 
-    let entries = status_entries(changes);
+    let limit = if show_all_changes {
+        usize::MAX
+    } else {
+        MAX_CHANGES_SHOWN
+    };
+    let entries = status_entries(changes, limit);
     let total_rows = entries.len()
         + if history.is_empty() {
             0
@@ -151,6 +181,7 @@ pub fn view_git_panel<'a>(
         match entry {
             StatusEntry::Header(label) => items.push(section_header(label.clone())),
             StatusEntry::Change(change, kind) => items.extend(change_row(change, Some(*kind))),
+            StatusEntry::ShowMore(hidden) => items.push(show_more_row(*hidden)),
         }
     }
     if below > 0.0 {
@@ -225,6 +256,22 @@ fn change_row<'a>(
             .clip(true)
             .into(),
     )
+}
+
+/// The row that expands the capped changed-file list.
+fn show_more_row<'a>(hidden: usize) -> Element<'a, Message> {
+    button(text(format!("Show {hidden} more\u{2026}")).size(12).color(theme().text_muted))
+        .on_press(Message::GitShowAllChanges)
+        .style(tree_button_style)
+        .padding(iced::Padding {
+            top: 0.0,
+            right: 4.0,
+            bottom: 0.0,
+            left: 8.0,
+        })
+        .width(Length::Fill)
+        .height(Length::Fixed(ROW_HEIGHT))
+        .into()
 }
 
 fn section_header<'a>(label: String) -> Element<'a, Message> {

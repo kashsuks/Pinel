@@ -168,6 +168,8 @@ pub enum Message {
     RefreshGitHistory,
     /// Carries the commits reported by the last `git log`, newest first.
     GitHistoryLoaded(Vec<crate::features::git::Commit>),
+    /// Lifts the cap on how many changed files the git panel lists.
+    GitShowAllChanges,
     /// The git panel scrolled; `offset` is the distance scrolled from the
     /// top and `viewport` the visible height, both in pixels.
     GitPanelScrolled {
