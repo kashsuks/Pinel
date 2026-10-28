@@ -11,7 +11,7 @@ use crate::{
         git::{split_changes, ChangeKind, Commit, FileChange},
         git_graph::GraphRow,
         icons::{get_file_icon, get_folder_icon, icon_handle, IconAsset},
-        virtual_list::{spacer_heights, visible_range},
+        virtual_list::{clamp_offset, spacer_heights, visible_range},
     },
     message::Message,
     theme::*,
@@ -128,6 +128,13 @@ pub fn view_git_panel<'a>(
     }
 
     let entries = status_entries(changes);
+    let total_rows = entries.len()
+        + if history.is_empty() {
+            0
+        } else {
+            1 + history.len()
+        };
+    let scroll_offset = clamp_offset(scroll_offset, viewport_h, total_rows, ROW_HEIGHT);
     let range = visible_range(
         scroll_offset,
         viewport_h,

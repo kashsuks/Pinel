@@ -19,6 +19,15 @@ pub fn visible_range(
     start..end
 }
 
+/// Keeps `offset` inside a list of `total` rows.
+///
+/// The scrollable clamps itself when the list shrinks but reports nothing, so
+/// a stored offset can end up past the new end.
+pub fn clamp_offset(offset: f32, viewport: f32, total: usize, row_height: f32) -> f32 {
+    let max = (total as f32 * row_height - viewport).max(0.0);
+    offset.max(0.0).min(max)
+}
+
 pub fn spacer_heights(range: &Range<usize>, total: usize, row_height: f32) -> (f32, f32) {
     let above = range.start as f32 * row_height;
     let below = total.saturating_sub(range.end) as f32 * row_height;
@@ -69,6 +78,27 @@ mod tests {
     fn test_visible_range_rejects_bad_row_height() {
         assert_eq!(visible_range(0.0, 500.0, 0.0, 100, 2), 0..0);
         assert_eq!(visible_range(0.0, 500.0, -1.0, 100, 2), 0..0);
+    }
+
+    #[test]
+    fn test_clamp_offset_inside_list_is_unchanged() {
+        assert_eq!(clamp_offset(100.0, 200.0, 100, 22.0), 100.0);
+    }
+
+    #[test]
+    fn test_clamp_offset_past_the_end_stops_at_the_last_screen() {
+        assert_eq!(clamp_offset(99_999.0, 200.0, 100, 22.0), 2_000.0);
+    }
+
+    #[test]
+    fn test_clamp_offset_short_list_is_zero() {
+        assert_eq!(clamp_offset(500.0, 1_000.0, 10, 22.0), 0.0);
+    }
+
+    #[test]
+    fn test_clamp_offset_negative_and_nan_are_zero() {
+        assert_eq!(clamp_offset(-5.0, 200.0, 100, 22.0), 0.0);
+        assert_eq!(clamp_offset(f32::NAN, 200.0, 100, 22.0), 0.0);
     }
 
     #[test]
