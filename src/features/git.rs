@@ -173,18 +173,25 @@ pub fn split_changes(changes: &[FileChange]) -> (Vec<&FileChange>, Vec<&FileChan
     (staged, unstaged)
 }
 
+/// The `git status` invocation behind [`load_status`].
+///
+/// `--no-optional-locks` keeps a background refresh from taking the index
+/// lock, which would make the user's own git commands fail while it runs.
+fn status_command(root: Option<&Path>) -> std::process::Command {
+    let mut cmd = std::process::Command::new("git");
+    cmd.arg("--no-optional-locks").arg("status").arg("--porcelain=v1").arg("-z");
+    if let Some(dir) = root {
+        cmd.current_dir(dir);
+    }
+    cmd
+}
+
 /// runs `git status` in `root` and returns the changed files
 ///
 /// returns an empty list when `root` is not a repository, git is missing,
 /// or the command fails
 pub fn load_status(root: Option<&Path>) -> Vec<FileChange> {
-    let mut cmd = std::process::Command::new("git");
-    cmd.arg("status").arg("--porcelain=v1").arg("-z");
-    if let Some(dir) = root {
-        cmd.current_dir(dir);
-    }
-
-    match cmd.output() {
+    match status_command(root).output() {
         Ok(out) if out.status.success() => parse_status(&out.stdout),
         _ => Vec::new(),
     }
