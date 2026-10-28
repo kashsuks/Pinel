@@ -79,6 +79,26 @@ fn status_entries(changes: &[FileChange]) -> Vec<StatusEntry<'_>> {
     entries
 }
 
+/// Which commits to build, given where the commit section sits in the list.
+///
+/// The section starts after every status entry plus the "Commits" heading,
+/// so the scroll offset is measured from there.
+fn commit_window(
+    scroll_offset: f32,
+    viewport_h: f32,
+    status_len: usize,
+    commit_len: usize,
+) -> std::ops::Range<usize> {
+    let section_top = (status_len + 1) as f32 * ROW_HEIGHT;
+    visible_range(
+        scroll_offset - section_top,
+        viewport_h,
+        ROW_HEIGHT,
+        commit_len,
+        OVERSCAN,
+    )
+}
+
 /// The git panel: changed files, then the commit graph below them.
 pub fn view_git_panel<'a>(
     changes: &'a [FileChange],
@@ -132,7 +152,8 @@ pub fn view_git_panel<'a>(
 
     if !history.is_empty() {
         items.push(section_header("Commits".to_string()));
-        items.push(view_commit_graph(history, graph, width));
+        let window = commit_window(scroll_offset, viewport_h, entries.len(), history.len());
+        items.push(view_commit_graph(history, graph, width, window));
     }
 
     container(
@@ -218,12 +239,26 @@ fn view_commit_graph<'a>(
     history: &'a [Commit],
     graph: &'a [GraphRow],
     width: f32,
+    window: std::ops::Range<usize>,
 ) -> Element<'a, Message> {
+    // lane count comes from the whole history so the graph column keeps one
+    // width however far the user has scrolled
     let lanes = graph.iter().map(|r| r.width).max().unwrap_or(1);
-    let rows = history
-        .iter()
-        .zip(graph)
-        .map(|(commit, graph_row)| view_commit_row(commit, graph_row, lanes, width));
+    let (above, below) = spacer_heights(&window, history.len(), ROW_HEIGHT);
+
+    let mut rows: Vec<Element<'a, Message>> = Vec::new();
+    if above > 0.0 {
+        rows.push(Space::new().height(Length::Fixed(above)).into());
+    }
+    rows.extend(
+        history[window.clone()]
+            .iter()
+            .zip(&graph[window])
+            .map(|(commit, graph_row)| view_commit_row(commit, graph_row, lanes, width)),
+    );
+    if below > 0.0 {
+        rows.push(Space::new().height(Length::Fixed(below)).into());
+    }
 
     column(rows).spacing(0).clip(true).into()
 }
