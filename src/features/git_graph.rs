@@ -302,4 +302,44 @@ mod tests {
         assert_eq!(targets, vec![0, 1, 2]);
         assert_eq!(rows[0].width, 3);
     }
+
+    /// a trunk of `merges` merge commits, each pulling in a one-commit side
+    /// branch that forked from the next trunk commit
+    fn merge_heavy_history(merges: usize) -> Vec<Commit> {
+        let mut commits = Vec::with_capacity(merges * 2 + 1);
+        for i in 0..merges {
+            let next = format!("t{}", i + 1);
+            let side = format!("s{i}");
+            commits.push(Commit {
+                hash: format!("t{i}"),
+                ..commit("", &[&next, &side])
+            });
+            commits.push(Commit {
+                hash: side,
+                ..commit("", &[&next])
+            });
+        }
+        commits.push(commit(&format!("t{merges}"), &[]));
+        commits
+    }
+
+    #[test]
+    fn test_build_graph_large_history_stays_two_lanes_wide() {
+        let merges = 25_000;
+        let rows = build_graph(&merge_heavy_history(merges));
+
+        assert_eq!(rows.len(), merges * 2 + 1);
+        assert!(rows.iter().all(|r| r.width <= 2));
+        assert_eq!(rows.iter().filter(|r| r.is_merge).count(), merges);
+        for (i, row) in rows.iter().enumerate() {
+            let expected_lane = if i % 2 == 1 {
+                1
+            } else {
+                0
+            };
+            assert_eq!(row.lane, expected_lane, "row {i}");
+        }
+        // every side branch closes back into the trunk
+        assert_eq!(rows.last().map(|r| r.incoming.len()), Some(2));
+    }
 }
