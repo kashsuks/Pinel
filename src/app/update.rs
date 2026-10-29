@@ -1656,10 +1656,10 @@ impl App {
                     Message::GitHistoryLoaded,
                 )
             },
-            Message::GitHistoryLoaded(commits) => {
+            Message::GitHistoryLoaded(history) => {
                 self.git_history_guard.finish();
-                self.git_graph = crate::features::git_graph::build_graph(&commits);
-                self.git_history = commits;
+                self.git_graph = history.graph;
+                self.git_history = history.commits;
                 iced::Task::none()
             },
             Message::GitShowAllChanges => {

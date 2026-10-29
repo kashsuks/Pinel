@@ -421,11 +421,25 @@ pub fn load_history(root: Option<&Path>, limit: usize) -> Vec<Commit> {
     }
 }
 
-/// Runs [`load_history`] off the UI thread.
-pub async fn load_history_async(root: Option<PathBuf>) -> Vec<Commit> {
-    tokio::task::spawn_blocking(move || load_history(root.as_deref(), HISTORY_LIMIT))
-        .await
-        .unwrap_or_default()
+/// The commit history together with the graph drawn beside it.
+#[derive(Debug, Clone, Default)]
+pub struct History {
+    /// Commits newest first, as `git log` reported them.
+    pub commits: Vec<Commit>,
+    /// One graph row per entry in `commits`.
+    pub graph: Vec<crate::features::git_graph::GraphRow>,
+}
+
+/// Runs [`load_history`] and builds its graph off the UI thread, so a long
+/// history never stalls a frame.
+pub async fn load_history_async(root: Option<PathBuf>) -> History {
+    tokio::task::spawn_blocking(move || {
+        let commits = load_history(root.as_deref(), HISTORY_LIMIT);
+        let graph = crate::features::git_graph::build_graph(&commits);
+        History { commits, graph }
+    })
+    .await
+    .unwrap_or_default()
 }
 
 #[cfg(test)]

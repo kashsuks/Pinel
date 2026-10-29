@@ -166,8 +166,9 @@ pub enum Message {
     GitStatusLoaded(Vec<crate::features::git::FileChange>),
     /// Re-reads the commit history behind the git panel's graph.
     RefreshGitHistory,
-    /// Carries the commits reported by the last `git log`, newest first.
-    GitHistoryLoaded(Vec<crate::features::git::Commit>),
+    /// Carries the commits reported by the last `git log`, newest first,
+    /// with the graph already built.
+    GitHistoryLoaded(crate::features::git::History),
     /// Lifts the cap on how many changed files the git panel lists.
     GitShowAllChanges,
     /// The git panel scrolled; `offset` is the distance scrolled from the
