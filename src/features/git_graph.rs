@@ -1,5 +1,7 @@
 //! turning a commit list into the lanes of a `git log --graph` style drawing
 
+use std::collections::HashMap;
+
 use crate::features::git::Commit;
 
 /// A line between two lanes, covering the height of one row.
@@ -30,8 +32,6 @@ pub struct GraphRow {
 }
 
 struct ActiveLane {
-    /// the commit this lane is heading towards
-    awaiting: String,
     color: usize,
 }
 
@@ -56,16 +56,15 @@ fn claim(lanes: &mut Vec<Option<ActiveLane>>, lane: ActiveLane) -> usize {
 /// off, simply leaves its lane running off the bottom.
 pub fn build_graph(commits: &[Commit]) -> Vec<GraphRow> {
     let mut lanes: Vec<Option<ActiveLane>> = Vec::new();
+    // which lanes are heading towards each commit, so finding them is a
+    // lookup rather than a scan comparing every lane's hash
+    let mut awaiting: HashMap<&str, Vec<usize>> = HashMap::new();
     let mut next_color = 0;
     let mut rows = Vec::with_capacity(commits.len());
 
     for commit in commits {
-        let converging: Vec<usize> = lanes
-            .iter()
-            .enumerate()
-            .filter(|(_, slot)| slot.as_ref().is_some_and(|l| l.awaiting == commit.hash))
-            .map(|(index, _)| index)
-            .collect();
+        let mut converging = awaiting.remove(commit.hash.as_str()).unwrap_or_default();
+        converging.sort_unstable();
 
         // a commit nobody was waiting for is a branch tip
         let (lane, color) = match converging.first() {
@@ -73,13 +72,8 @@ pub fn build_graph(commits: &[Commit]) -> Vec<GraphRow> {
             None => {
                 let color = next_color;
                 next_color += 1;
-                let lane = claim(
-                    &mut lanes,
-                    ActiveLane {
-                        awaiting: commit.hash.clone(),
-                        color,
-                    },
-                );
+                // held only until the slots are cleared below
+                let lane = claim(&mut lanes, ActiveLane { color });
                 (lane, color)
             },
         };
@@ -121,7 +115,7 @@ pub fn build_graph(commits: &[Commit]) -> Vec<GraphRow> {
             let existing = if n == 0 {
                 None
             } else {
-                lanes.iter().position(|s| s.as_ref().is_some_and(|l| &l.awaiting == parent))
+                awaiting.get(parent.as_str()).and_then(|waiting| waiting.iter().min().copied())
             };
 
             match existing {
@@ -134,10 +128,8 @@ pub fn build_graph(commits: &[Commit]) -> Vec<GraphRow> {
                     });
                 },
                 None if n == 0 => {
-                    lanes[lane] = Some(ActiveLane {
-                        awaiting: parent.clone(),
-                        color,
-                    });
+                    lanes[lane] = Some(ActiveLane { color });
+                    awaiting.entry(parent.as_str()).or_default().push(lane);
                     outgoing.push(Segment {
                         from: lane,
                         to: lane,
@@ -147,13 +139,8 @@ pub fn build_graph(commits: &[Commit]) -> Vec<GraphRow> {
                 None => {
                     let line_color = next_color;
                     next_color += 1;
-                    let to = claim(
-                        &mut lanes,
-                        ActiveLane {
-                            awaiting: parent.clone(),
-                            color: line_color,
-                        },
-                    );
+                    let to = claim(&mut lanes, ActiveLane { color: line_color });
+                    awaiting.entry(parent.as_str()).or_default().push(to);
                     outgoing.push(Segment {
                         from: lane,
                         to,
