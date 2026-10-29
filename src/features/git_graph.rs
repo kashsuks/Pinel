@@ -31,8 +31,19 @@ pub struct GraphRow {
     pub width: usize,
 }
 
+#[derive(Debug, Clone)]
 struct ActiveLane {
     color: usize,
+}
+
+/// The lane state left after laying out some commits, so the graph can
+/// carry on when the next page of older commits arrives.
+#[derive(Debug, Clone, Default)]
+pub struct GraphBuilder {
+    lanes: Vec<Option<ActiveLane>>,
+    // which lanes are heading toward each commit
+    awaiting: HashMap<String, Vec<usize>>,
+    next_color: usize,
 }
 
 /// takes the lowest free slot so the trunk stays at the left edge
@@ -55,128 +66,136 @@ fn claim(lanes: &mut Vec<Option<ActiveLane>>, lane: ActiveLane) -> usize {
 /// produces. A parent missing from the list, because the history was cut
 /// off, simply leaves its lane running off the bottom.
 pub fn build_graph(commits: &[Commit]) -> Vec<GraphRow> {
-    let mut lanes: Vec<Option<ActiveLane>> = Vec::new();
-    // which lanes are heading towards each commit, so finding them is a
-    // lookup rather than a scan comparing every lane's hash
-    let mut awaiting: HashMap<&str, Vec<usize>> = HashMap::new();
-    let mut next_color = 0;
-    let mut rows = Vec::with_capacity(commits.len());
+    GraphBuilder::default().extend(commits)
+}
 
-    for commit in commits {
-        let mut converging = awaiting.remove(commit.hash.as_str()).unwrap_or_default();
-        converging.sort_unstable();
+impl GraphBuilder {
+    /// Lays out `commits`, which must be the next older stretch of the
+    /// history this builder has seen so far, and returns one row each.
+    pub fn extend(&mut self, commits: &[Commit]) -> Vec<GraphRow> {
+        let Self {
+            lanes,
+            awaiting,
+            next_color,
+        } = self;
+        let mut rows = Vec::with_capacity(commits.len());
 
-        // a commit nobody was waiting for is a branch tip
-        let (lane, color) = match converging.first() {
-            Some(&index) => (index, lanes[index].as_ref().map_or(0, |l| l.color)),
-            None => {
-                let color = next_color;
-                next_color += 1;
-                // held only until the slots are cleared below
-                let lane = claim(&mut lanes, ActiveLane { color });
-                (lane, color)
-            },
-        };
+        for commit in commits {
+            let mut converging = awaiting.remove(commit.hash.as_str()).unwrap_or_default();
+            converging.sort_unstable();
 
-        let incoming: Vec<Segment> = converging
-            .iter()
-            .filter_map(|&i| {
-                lanes[i].as_ref().map(|l| Segment {
-                    from: i,
-                    to: lane,
-                    color: l.color,
-                })
-            })
-            .collect();
-
-        let passing: Vec<Segment> = lanes
-            .iter()
-            .enumerate()
-            .filter(|(i, _)| !converging.contains(i) && *i != lane)
-            .filter_map(|(i, slot)| {
-                slot.as_ref().map(|l| Segment {
-                    from: i,
-                    to: i,
-                    color: l.color,
-                })
-            })
-            .collect();
-
-        for &i in &converging {
-            lanes[i] = None;
-        }
-        lanes[lane] = None;
-
-        let mut outgoing = Vec::new();
-        for (n, parent) in commit.parents.iter().enumerate() {
-            // The first parent always carries on in this lane, even when
-            // another lane already waits for it. Both lanes then converge
-            // on the parent's row, which is how a side branch rejoins.
-            let existing = if n == 0 {
-                None
-            } else {
-                awaiting.get(parent.as_str()).and_then(|waiting| waiting.iter().min().copied())
+            // a commit nobody was waiting for is a branch tip
+            let (lane, color) = match converging.first() {
+                Some(&index) => (index, lanes[index].as_ref().map_or(0, |l| l.color)),
+                None => {
+                    let color = *next_color;
+                    *next_color += 1;
+                    // held only until the slots are cleared below
+                    let lane = claim(lanes, ActiveLane { color });
+                    (lane, color)
+                },
             };
 
-            match existing {
-                Some(index) => {
-                    let line_color = lanes[index].as_ref().map_or(color, |l| l.color);
-                    outgoing.push(Segment {
-                        from: lane,
-                        to: index,
-                        color: line_color,
-                    });
-                },
-                None if n == 0 => {
-                    lanes[lane] = Some(ActiveLane { color });
-                    awaiting.entry(parent.as_str()).or_default().push(lane);
-                    outgoing.push(Segment {
-                        from: lane,
+            let incoming: Vec<Segment> = converging
+                .iter()
+                .filter_map(|&i| {
+                    lanes[i].as_ref().map(|l| Segment {
+                        from: i,
                         to: lane,
-                        color,
-                    });
-                },
-                None => {
-                    let line_color = next_color;
-                    next_color += 1;
-                    let to = claim(&mut lanes, ActiveLane { color: line_color });
-                    awaiting.entry(parent.as_str()).or_default().push(to);
-                    outgoing.push(Segment {
-                        from: lane,
-                        to,
-                        color: line_color,
-                    });
-                },
+                        color: l.color,
+                    })
+                })
+                .collect();
+
+            let passing: Vec<Segment> = lanes
+                .iter()
+                .enumerate()
+                .filter(|(i, _)| !converging.contains(i) && *i != lane)
+                .filter_map(|(i, slot)| {
+                    slot.as_ref().map(|l| Segment {
+                        from: i,
+                        to: i,
+                        color: l.color,
+                    })
+                })
+                .collect();
+
+            for &i in &converging {
+                lanes[i] = None;
             }
+            lanes[lane] = None;
+
+            let mut outgoing = Vec::new();
+            for (n, parent) in commit.parents.iter().enumerate() {
+                // The first parent always carries on in this lane, even when
+                // another lane already waits for it. Both lanes then converge
+                // on the parent's row, which is how a side branch rejoins.
+                let existing = if n == 0 {
+                    None
+                } else {
+                    awaiting.get(parent.as_str()).and_then(|waiting| waiting.iter().min().copied())
+                };
+
+                match existing {
+                    Some(index) => {
+                        let line_color = lanes[index].as_ref().map_or(color, |l| l.color);
+                        outgoing.push(Segment {
+                            from: lane,
+                            to: index,
+                            color: line_color,
+                        });
+                    },
+                    None if n == 0 => {
+                        lanes[lane] = Some(ActiveLane { color });
+                        awaiting.entry(parent.clone()).or_default().push(lane);
+                        outgoing.push(Segment {
+                            from: lane,
+                            to: lane,
+                            color,
+                        });
+                    },
+                    None => {
+                        let line_color = *next_color;
+                        *next_color += 1;
+                        let to = claim(lanes, ActiveLane { color: line_color });
+                        awaiting.entry(parent.clone()).or_default().push(to);
+                        outgoing.push(Segment {
+                            from: lane,
+                            to,
+                            color: line_color,
+                        });
+                    },
+                }
+            }
+
+            // a root commit, or a first parent that merged into another lane,
+            // can leave empty slots on the right
+            while matches!(lanes.last(), Some(None)) {
+                lanes.pop();
+            }
+
+            let width = incoming
+                .iter()
+                .chain(&outgoing)
+                .chain(&passing)
+                .flat_map(|s| [s.from, s.to])
+                .chain(std::iter::once(lane))
+                .max()
+                .map_or(1, |m| m + 1);
+
+            rows.push(GraphRow {
+                lane,
+                color,
+                is_merge: commit.parents.len() > 1,
+                incoming,
+                outgoing,
+                passing,
+                width,
+            });
         }
 
-        // a root commit, or a first parent that merged into another lane,
-        // can leave empty slots on the right
-        while matches!(lanes.last(), Some(None)) {
-            lanes.pop();
-        }
-
-        let width = incoming
-            .iter()
-            .chain(&outgoing)
-            .chain(&passing)
-            .flat_map(|s| [s.from, s.to])
-            .chain(std::iter::once(lane))
-            .max()
-            .map_or(1, |m| m + 1);
-
-        rows.push(GraphRow {
-            lane,
-            color,
-            is_merge: commit.parents.len() > 1,
-            incoming,
-            outgoing,
-            passing,
-            width,
-        });
+        rows
     }
-
-    rows
 }
 
 #[cfg(test)]
