@@ -197,6 +197,11 @@ impl RefreshGuard {
     pub fn finish(&mut self) {
         self.running = false;
     }
+
+    /// Whether a refresh has started and not yet finished.
+    pub fn is_running(&self) -> bool {
+        self.running
+    }
 }
 
 /// The `git status` invocation behind [`load_status`].
@@ -428,6 +433,8 @@ pub fn load_history(root: Option<&Path>, skip: usize, limit: usize) -> Vec<Commi
 pub struct HistoryPage {
     /// Which refresh asked for this page; pages from an older one are dropped.
     pub generation: u64,
+    /// How many newer commits came before this page.
+    pub skip: usize,
     /// Commits newest first, as `git log` reported them.
     pub commits: Vec<Commit>,
     /// One graph row per entry in `commits`.
@@ -452,6 +459,7 @@ pub async fn load_history_page_async(
         let exhausted = commits.len() < HISTORY_PAGE;
         HistoryPage {
             generation,
+            skip,
             commits,
             graph,
             builder,
@@ -462,6 +470,7 @@ pub async fn load_history_page_async(
     // a panicked task leaves nothing to page through
     .unwrap_or_else(|_| HistoryPage {
         generation,
+        skip,
         exhausted: true,
         ..HistoryPage::default()
     })
@@ -713,6 +722,16 @@ mod tests {
         assert!(guard.try_start());
         guard.finish();
         assert!(guard.try_start());
+    }
+
+    #[test]
+    fn test_refresh_guard_is_running_tracks_start_and_finish() {
+        let mut guard = RefreshGuard::default();
+        assert!(!guard.is_running());
+        assert!(guard.try_start());
+        assert!(guard.is_running());
+        guard.finish();
+        assert!(!guard.is_running());
     }
 
     #[test]

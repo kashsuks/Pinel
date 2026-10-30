@@ -1650,7 +1650,9 @@ impl App {
                 if !self.git_history_guard.try_start() {
                     return iced::Task::none();
                 }
+                // pages still on their way belong to the old history
                 self.git_history_generation = self.git_history_generation.wrapping_add(1);
+                self.git_history_page_loading = false;
                 let root = self.file_tree.as_ref().map(|t| t.root.clone());
                 iced::Task::perform(
                     crate::features::git::load_history_page_async(
@@ -1662,13 +1664,42 @@ impl App {
                     Message::GitHistoryLoaded,
                 )
             },
+            Message::LoadMoreGitHistory => {
+                if self.git_history_exhausted
+                    || self.git_history_page_loading
+                    || self.git_history_guard.is_running()
+                    || self.git_history.is_empty()
+                {
+                    return iced::Task::none();
+                }
+                self.git_history_page_loading = true;
+                let root = self.file_tree.as_ref().map(|t| t.root.clone());
+                iced::Task::perform(
+                    crate::features::git::load_history_page_async(
+                        root,
+                        self.git_history_generation,
+                        self.git_history.len(),
+                        self.git_graph_builder.clone(),
+                    ),
+                    Message::GitHistoryLoaded,
+                )
+            },
             Message::GitHistoryLoaded(page) => {
                 if page.generation != self.git_history_generation {
                     return iced::Task::none();
                 }
-                self.git_history_guard.finish();
-                self.git_graph = page.graph;
-                self.git_history = page.commits;
+                if page.skip == 0 {
+                    self.git_history_guard.finish();
+                    self.git_graph = page.graph;
+                    self.git_history = page.commits;
+                } else if page.skip == self.git_history.len() {
+                    self.git_history_page_loading = false;
+                    self.git_graph.extend(page.graph);
+                    self.git_history.extend(page.commits);
+                } else {
+                    // a page for a position the list has already moved past
+                    return iced::Task::none();
+                }
                 self.git_graph_builder = page.builder;
                 self.git_history_exhausted = page.exhausted;
                 iced::Task::none()
