@@ -65,6 +65,8 @@ fn claim(lanes: &mut Vec<Option<ActiveLane>>, lane: ActiveLane) -> usize {
 /// Expects children before parents, which is what `git log --date-order`
 /// produces. A parent missing from the list, because the history was cut
 /// off, simply leaves its lane running off the bottom.
+// only the tests lay out a whole history in one go; the app pages through it
+#[cfg(test)]
 pub fn build_graph(commits: &[Commit]) -> Vec<GraphRow> {
     GraphBuilder::default().extend(commits)
 }

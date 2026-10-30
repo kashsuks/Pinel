@@ -236,12 +236,11 @@ pub async fn load_status_async(root: Option<PathBuf>) -> Vec<FileChange> {
         .unwrap_or_default()
 }
 
-/// How many commits the panel loads at once.
+/// How many commits each page of history holds.
 ///
-/// The graph is only as tall as the sidebar, so the limit exists to keep
-/// the walk short on a repository with a long history rather than to fill
-/// the view.
-pub const HISTORY_LIMIT: usize = 500;
+/// Several screens of a tall sidebar, so the first page fills the view and
+/// later pages load well before the scroll reaches them.
+pub const HISTORY_PAGE: usize = 200;
 
 /// What a name attached to a commit refers to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -387,7 +386,8 @@ pub fn parse_log(output: &[u8]) -> Vec<Commit> {
     commits
 }
 
-/// Reads up to `limit` commits of history from the repository at `root`.
+/// Reads up to `limit` commits of history from the repository at `root`,
+/// after passing over the newest `skip`.
 ///
 /// Asks for branches, remotes and tags rather than `--all`. `--all` also
 /// walks private ref namespaces that tools write into, such as the
@@ -396,7 +396,7 @@ pub fn parse_log(output: &[u8]) -> Vec<Commit> {
 ///
 /// Returns an empty list when there is no repository, no commits yet, or
 /// no git on the machine.
-pub fn load_history(root: Option<&Path>, limit: usize) -> Vec<Commit> {
+pub fn load_history(root: Option<&Path>, skip: usize, limit: usize) -> Vec<Commit> {
     let format = format!(
         "--format=%H%x1f%P%x1f%s%x1f%D%x1f%an%x1f%at%x{:02x}",
         RECORD
@@ -409,6 +409,7 @@ pub fn load_history(root: Option<&Path>, limit: usize) -> Vec<Commit> {
         .arg("--tags")
         .arg("--date-order")
         .arg("--decorate=full")
+        .arg(format!("--skip={skip}"))
         .arg(format!("--max-count={limit}"))
         .arg(format);
     if let Some(dir) = root {
@@ -421,25 +422,49 @@ pub fn load_history(root: Option<&Path>, limit: usize) -> Vec<Commit> {
     }
 }
 
-/// The commit history together with the graph drawn beside it.
+/// One page of history with its graph rows, plus the builder state needed
+/// to continue the graph on the next page.
 #[derive(Debug, Clone, Default)]
-pub struct History {
+pub struct HistoryPage {
+    /// Which refresh asked for this page; pages from an older one are dropped.
+    pub generation: u64,
     /// Commits newest first, as `git log` reported them.
     pub commits: Vec<Commit>,
     /// One graph row per entry in `commits`.
     pub graph: Vec<crate::features::git_graph::GraphRow>,
+    /// The lane state after this page, for laying out the next one.
+    pub builder: crate::features::git_graph::GraphBuilder,
+    /// Set when git returned less than a full page, so nothing older remains.
+    pub exhausted: bool,
 }
 
-/// Runs [`load_history`] and builds its graph off the UI thread, so a long
-/// history never stalls a frame.
-pub async fn load_history_async(root: Option<PathBuf>) -> History {
+/// Reads the page of history after the newest `skip` commits and continues
+/// `builder`'s graph over it, all off the UI thread.
+pub async fn load_history_page_async(
+    root: Option<PathBuf>,
+    generation: u64,
+    skip: usize,
+    mut builder: crate::features::git_graph::GraphBuilder,
+) -> HistoryPage {
     tokio::task::spawn_blocking(move || {
-        let commits = load_history(root.as_deref(), HISTORY_LIMIT);
-        let graph = crate::features::git_graph::build_graph(&commits);
-        History { commits, graph }
+        let commits = load_history(root.as_deref(), skip, HISTORY_PAGE);
+        let graph = builder.extend(&commits);
+        let exhausted = commits.len() < HISTORY_PAGE;
+        HistoryPage {
+            generation,
+            commits,
+            graph,
+            builder,
+            exhausted,
+        }
     })
     .await
-    .unwrap_or_default()
+    // a panicked task leaves nothing to page through
+    .unwrap_or_else(|_| HistoryPage {
+        generation,
+        exhausted: true,
+        ..HistoryPage::default()
+    })
 }
 
 #[cfg(test)]
@@ -701,7 +726,7 @@ mod tests {
     fn test_load_history_empty_outside_repository() -> Result<(), Box<dyn std::error::Error>> {
         let dir = std::env::temp_dir().join(format!("pinel-nogit-{}", std::process::id()));
         std::fs::create_dir_all(&dir)?;
-        let commits = load_history(Some(&dir), 10);
+        let commits = load_history(Some(&dir), 0, 10);
         std::fs::remove_dir_all(&dir)?;
         assert!(commits.is_empty());
         Ok(())

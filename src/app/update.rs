@@ -1650,16 +1650,27 @@ impl App {
                 if !self.git_history_guard.try_start() {
                     return iced::Task::none();
                 }
+                self.git_history_generation = self.git_history_generation.wrapping_add(1);
                 let root = self.file_tree.as_ref().map(|t| t.root.clone());
                 iced::Task::perform(
-                    crate::features::git::load_history_async(root),
+                    crate::features::git::load_history_page_async(
+                        root,
+                        self.git_history_generation,
+                        0,
+                        crate::features::git_graph::GraphBuilder::default(),
+                    ),
                     Message::GitHistoryLoaded,
                 )
             },
-            Message::GitHistoryLoaded(history) => {
+            Message::GitHistoryLoaded(page) => {
+                if page.generation != self.git_history_generation {
+                    return iced::Task::none();
+                }
                 self.git_history_guard.finish();
-                self.git_graph = history.graph;
-                self.git_history = history.commits;
+                self.git_graph = page.graph;
+                self.git_history = page.commits;
+                self.git_graph_builder = page.builder;
+                self.git_history_exhausted = page.exhausted;
                 iced::Task::none()
             },
             Message::GitShowAllChanges => {
