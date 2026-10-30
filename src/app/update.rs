@@ -849,7 +849,7 @@ impl App {
                                 }
                             }
                         }
-                        return None;
+                        None
                     }
                     #[cfg(not(target_os = "macos"))]
                     {
@@ -1042,7 +1042,7 @@ impl App {
                             TabKind::Audio {
                                 file_path: path.clone(),
                                 sink: std::sync::Arc::new(std::sync::Mutex::new(sink)),
-                                stream: std::sync::Arc::new((stream, stream_handle)),
+                                stream: std::rc::Rc::new((stream, stream_handle)),
                                 playing: false,
                                 duration_secs,
                                 position_secs: 0.0,
@@ -1089,7 +1089,7 @@ impl App {
                             TabKind::Audio {
                                 file_path: path.clone(),
                                 sink: std::sync::Arc::new(std::sync::Mutex::new(sink)),
-                                stream: std::sync::Arc::new((stream, stream_handle)),
+                                stream: std::rc::Rc::new((stream, stream_handle)),
                                 playing: false,
                                 duration_secs,
                                 position_secs: 0.0,

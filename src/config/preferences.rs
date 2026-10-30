@@ -361,16 +361,20 @@ mod tests {
 
     #[test]
     fn indent_unit_returns_spaces_when_uses_spaces_true() {
-        let mut prefs = EditorPreferences::default();
-        prefs.use_spaces = true;
-        prefs.tab_size = 3;
+        let prefs = EditorPreferences {
+            use_spaces: true,
+            tab_size: 3,
+            ..EditorPreferences::default()
+        };
         assert_eq!(prefs.indent_unit(), "   ");
     }
 
     #[test]
     fn indent_unit_returns_tab_when_use_spaces_false() {
-        let mut prefs = EditorPreferences::default();
-        prefs.use_spaces = false;
+        let prefs = EditorPreferences {
+            use_spaces: false,
+            ..EditorPreferences::default()
+        };
         assert_eq!(prefs.indent_unit(), "\t");
     }
 
@@ -412,10 +416,12 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("preferences.lua");
 
-        let mut prefs = EditorPreferences::default();
-        prefs.tab_size = 2;
-        prefs.use_spaces = false;
-        prefs.theme_name = "Custom Theme".to_string();
+        let prefs = EditorPreferences {
+            tab_size: 2,
+            use_spaces: false,
+            theme_name: "Custom Theme".to_string(),
+            ..EditorPreferences::default()
+        };
 
         save_preferences_to_path(&prefs, &path).unwrap();
         let loaded = read_preferences_from(&path).expect("file should parse");

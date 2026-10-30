@@ -75,7 +75,7 @@ pub enum TabKind {
     Audio {
         file_path: std::path::PathBuf,
         sink: std::sync::Arc<std::sync::Mutex<Option<rodio::Sink>>>,
-        stream: std::sync::Arc<(rodio::OutputStream, rodio::OutputStreamHandle)>,
+        stream: std::rc::Rc<(rodio::OutputStream, rodio::OutputStreamHandle)>,
         playing: bool,
         duration_secs: f32,
         position_secs: f32,

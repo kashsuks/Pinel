@@ -1,6 +1,5 @@
 //! small filesystem helpers shared across the app
 
-use std::fs::metadata;
 use std::io::Write;
 use std::path::Path;
 
