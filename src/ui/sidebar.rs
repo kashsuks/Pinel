@@ -59,6 +59,10 @@ enum StatusEntry<'a> {
 /// Headings keep the true counts, so the cap never hides how much changed.
 pub const MAX_CHANGES_SHOWN: usize = 2000;
 
+/// How many rows from the end of the commit list the next page of history
+/// starts loading.
+pub const HISTORY_PREFETCH_ROWS: usize = 60;
+
 /// Flattens staged and unstaged changes, with their headings, into one list
 /// so it can be windowed by index.
 ///
@@ -199,6 +203,7 @@ pub fn view_git_panel<'a>(
             Message::GitPanelScrolled {
                 offset: viewport.absolute_offset().y,
                 viewport: viewport.bounds().height,
+                content: viewport.content_bounds().height,
             }
         }),
     )

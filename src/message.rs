@@ -174,10 +174,12 @@ pub enum Message {
     /// Lifts the cap on how many changed files the git panel lists.
     GitShowAllChanges,
     /// The git panel scrolled; `offset` is the distance scrolled from the
-    /// top and `viewport` the visible height, both in pixels.
+    /// top, `viewport` the visible height and `content` the height of
+    /// everything in the list, all in pixels.
     GitPanelScrolled {
         offset: f32,
         viewport: f32,
+        content: f32,
     },
 
     /// Starts a new, empty chat session and makes it the active one.

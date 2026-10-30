@@ -1708,9 +1708,19 @@ impl App {
                 self.git_show_all_changes = true;
                 iced::Task::none()
             },
-            Message::GitPanelScrolled { offset, viewport } => {
+            Message::GitPanelScrolled {
+                offset,
+                viewport,
+                content,
+            } => {
                 self.git_scroll_offset = offset;
                 self.git_viewport_h = viewport;
+                let margin = crate::ui::sidebar::HISTORY_PREFETCH_ROWS as f32
+                    * crate::ui::git_graph::ROW_HEIGHT;
+                if crate::features::virtual_list::near_end(offset, viewport, content, margin) {
+                    // ignored unless the panel has another page to fetch
+                    return iced::Task::done(Message::LoadMoreGitHistory);
+                }
                 iced::Task::none()
             },
             Message::ChatNewSession => {

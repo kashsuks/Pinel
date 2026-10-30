@@ -28,6 +28,12 @@ pub fn clamp_offset(offset: f32, viewport: f32, total: usize, row_height: f32) -
     offset.max(0.0).min(max)
 }
 
+/// Whether the bottom of the viewport is within `margin` pixels of the end
+/// of content `content` pixels tall.
+pub fn near_end(offset: f32, viewport: f32, content: f32, margin: f32) -> bool {
+    content - (offset + viewport) <= margin
+}
+
 pub fn spacer_heights(range: &Range<usize>, total: usize, row_height: f32) -> (f32, f32) {
     let above = range.start as f32 * row_height;
     let below = total.saturating_sub(range.end) as f32 * row_height;
@@ -99,6 +105,22 @@ mod tests {
     fn test_clamp_offset_negative_and_nan_are_zero() {
         assert_eq!(clamp_offset(-5.0, 200.0, 100, 22.0), 0.0);
         assert_eq!(clamp_offset(f32::NAN, 200.0, 100, 22.0), 0.0);
+    }
+
+    #[test]
+    fn test_near_end_inside_margin() {
+        // 1000 px of content, viewport bottom at 900
+        assert!(near_end(500.0, 400.0, 1000.0, 100.0));
+    }
+
+    #[test]
+    fn test_near_end_outside_margin() {
+        assert!(!near_end(0.0, 400.0, 1000.0, 100.0));
+    }
+
+    #[test]
+    fn test_near_end_content_shorter_than_viewport() {
+        assert!(near_end(0.0, 400.0, 200.0, 0.0));
     }
 
     #[test]
