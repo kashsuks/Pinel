@@ -300,9 +300,6 @@ fn view_commit_graph<'a>(
     width: f32,
     window: std::ops::Range<usize>,
 ) -> Element<'a, Message> {
-    // lane count comes from the whole history so the graph column keeps one
-    // width however far the user has scrolled
-    let lanes = graph.iter().map(|r| r.width).max().unwrap_or(1);
     let (above, below) = spacer_heights(&window, history.len(), ROW_HEIGHT);
 
     let mut rows: Vec<Element<'a, Message>> = Vec::new();
@@ -313,7 +310,7 @@ fn view_commit_graph<'a>(
         history[window.clone()]
             .iter()
             .zip(&graph[window])
-            .map(|(commit, graph_row)| view_commit_row(commit, graph_row, lanes, width)),
+            .map(|(commit, graph_row)| view_commit_row(commit, graph_row, width)),
     );
     if below > 0.0 {
         rows.push(Space::new().height(Length::Fixed(below)).into());

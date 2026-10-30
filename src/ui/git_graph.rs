@@ -271,12 +271,15 @@ fn pill<'a>(label: String, color: Color) -> Element<'a, Message> {
 }
 
 /// One commit's line: graph cell, ref pills, then as much subject as fits.
+///
+/// The graph cell is only as wide as the lanes this row touches, so the
+/// text starts right after the rightmost line rather than in one column.
 pub fn view_commit_row<'a>(
     commit: &'a Commit,
     graph_row: &'a GraphRow,
-    lanes: usize,
     panel_width: f32,
 ) -> Element<'a, Message> {
+    let lanes = graph_row.width;
     let color = if graph_row.is_merge {
         theme().text_muted
     } else {
@@ -285,7 +288,7 @@ pub fn view_commit_row<'a>(
     let (shown, hidden) = visible_refs(&commit.refs);
     let pill_chars = pill_char_budget(panel_width, lanes, &commit.refs);
 
-    let mut line = row![view_graph_row(graph_row, lanes)]
+    let mut line = row![view_graph_row(graph_row)]
         .spacing(CELL_GAP)
         .align_y(iced::Alignment::Center)
         .height(Length::Fixed(ROW_HEIGHT));
@@ -309,10 +312,10 @@ pub fn view_commit_row<'a>(
     .into()
 }
 
-/// the graph cell for one commit, `lanes` wide
-pub fn view_graph_row<'a>(row: &'a GraphRow, lanes: usize) -> Element<'a, Message> {
+/// the graph cell for one commit, as wide as the lanes it touches
+pub fn view_graph_row<'a>(row: &'a GraphRow) -> Element<'a, Message> {
     Canvas::new(RowProgram { row })
-        .width(Length::Fixed(graph_width(lanes)))
+        .width(Length::Fixed(graph_width(row.width)))
         .height(Length::Fixed(ROW_HEIGHT))
         .into()
 }
