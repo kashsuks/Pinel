@@ -849,7 +849,7 @@ impl App {
                                 }
                             }
                         }
-                        return None;
+                        None
                     }
                     #[cfg(not(target_os = "macos"))]
                     {
@@ -1042,7 +1042,7 @@ impl App {
                             TabKind::Audio {
                                 file_path: path.clone(),
                                 sink: std::sync::Arc::new(std::sync::Mutex::new(sink)),
-                                stream: std::sync::Arc::new((stream, stream_handle)),
+                                stream: std::rc::Rc::new((stream, stream_handle)),
                                 playing: false,
                                 duration_secs,
                                 position_secs: 0.0,
@@ -1089,7 +1089,7 @@ impl App {
                             TabKind::Audio {
                                 file_path: path.clone(),
                                 sink: std::sync::Arc::new(std::sync::Mutex::new(sink)),
-                                stream: std::sync::Arc::new((stream, stream_handle)),
+                                stream: std::rc::Rc::new((stream, stream_handle)),
                                 playing: false,
                                 duration_secs,
                                 position_secs: 0.0,
@@ -1614,6 +1614,9 @@ impl App {
             },
             Message::SetActivePanel(panel) => {
                 use crate::app::ActivePanel;
+                // the git panel's scrollable starts from the top whenever it is rebuilt
+                self.git_scroll_offset = 0.0;
+                self.git_show_all_changes = false;
                 if self.active_panel == panel {
                     self.sidebar_visible = !self.sidebar_visible;
                 } else {
@@ -1629,6 +1632,9 @@ impl App {
                 iced::Task::none()
             },
             Message::RefreshGitStatus => {
+                if !self.git_status_guard.try_start() {
+                    return iced::Task::none();
+                }
                 let root = self.file_tree.as_ref().map(|t| t.root.clone());
                 iced::Task::perform(
                     crate::features::git::load_status_async(root),
@@ -1636,19 +1642,85 @@ impl App {
                 )
             },
             Message::GitStatusLoaded(changes) => {
+                self.git_status_guard.finish();
                 self.git_changes = changes;
                 iced::Task::none()
             },
             Message::RefreshGitHistory => {
+                if !self.git_history_guard.try_start() {
+                    return iced::Task::none();
+                }
+                // pages still on their way belong to the old history
+                self.git_history_generation = self.git_history_generation.wrapping_add(1);
+                self.git_history_page_loading = false;
                 let root = self.file_tree.as_ref().map(|t| t.root.clone());
                 iced::Task::perform(
-                    crate::features::git::load_history_async(root),
+                    crate::features::git::load_history_page_async(
+                        root,
+                        self.git_history_generation,
+                        0,
+                        crate::features::git_graph::GraphBuilder::default(),
+                    ),
                     Message::GitHistoryLoaded,
                 )
             },
-            Message::GitHistoryLoaded(commits) => {
-                self.git_graph = crate::features::git_graph::build_graph(&commits);
-                self.git_history = commits;
+            Message::LoadMoreGitHistory => {
+                if self.git_history_exhausted
+                    || self.git_history_page_loading
+                    || self.git_history_guard.is_running()
+                    || self.git_history.is_empty()
+                {
+                    return iced::Task::none();
+                }
+                self.git_history_page_loading = true;
+                let root = self.file_tree.as_ref().map(|t| t.root.clone());
+                iced::Task::perform(
+                    crate::features::git::load_history_page_async(
+                        root,
+                        self.git_history_generation,
+                        self.git_history.len(),
+                        self.git_graph_builder.clone(),
+                    ),
+                    Message::GitHistoryLoaded,
+                )
+            },
+            Message::GitHistoryLoaded(page) => {
+                if page.generation != self.git_history_generation {
+                    return iced::Task::none();
+                }
+                if page.skip == 0 {
+                    self.git_history_guard.finish();
+                    self.git_graph = page.graph;
+                    self.git_history = page.commits;
+                } else if page.skip == self.git_history.len() {
+                    self.git_history_page_loading = false;
+                    self.git_graph.extend(page.graph);
+                    self.git_history.extend(page.commits);
+                } else {
+                    // a page for a position the list has already moved past
+                    return iced::Task::none();
+                }
+                self.git_graph_builder = page.builder;
+                self.git_history_exhausted = page.exhausted;
+                iced::Task::none()
+            },
+            Message::GitShowAllChanges => {
+                self.git_show_all_changes = true;
+                iced::Task::none()
+            },
+            Message::GitPanelScrolled {
+                offset,
+                viewport,
+                content,
+            } => {
+                self.git_scroll_offset = offset;
+                self.git_viewport_h = viewport;
+                let margin = crate::ui::sidebar::HISTORY_PREFETCH_ROWS as f32
+                    * crate::ui::git_graph::ROW_HEIGHT;
+                if crate::features::virtual_list::near_end(offset, viewport, content, margin) {
+                    // ignored unless the panel has another page to fetch
+                    return iced::Task::done(Message::LoadMoreGitHistory);
+                }
                 iced::Task::none()
             },
             Message::ChatNewSession => {

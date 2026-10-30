@@ -166,8 +166,21 @@ pub enum Message {
     GitStatusLoaded(Vec<crate::features::git::FileChange>),
     /// Re-reads the commit history behind the git panel's graph.
     RefreshGitHistory,
-    /// Carries the commits reported by the last `git log`, newest first.
-    GitHistoryLoaded(Vec<crate::features::git::Commit>),
+    /// Loads the page of commits older than the ones the panel holds.
+    LoadMoreGitHistory,
+    /// Carries one page of commits from `git log`, newest first, with its
+    /// graph rows already built.
+    GitHistoryLoaded(crate::features::git::HistoryPage),
+    /// Lifts the cap on how many changed files the git panel lists.
+    GitShowAllChanges,
+    /// The git panel scrolled; `offset` is the distance scrolled from the
+    /// top, `viewport` the visible height and `content` the height of
+    /// everything in the list, all in pixels.
+    GitPanelScrolled {
+        offset: f32,
+        viewport: f32,
+        content: f32,
+    },
 
     /// Starts a new, empty chat session and makes it the active one.
     ChatNewSession,
