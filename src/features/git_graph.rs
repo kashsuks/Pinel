@@ -363,4 +363,51 @@ mod tests {
         // every side branch closes back into the trunk
         assert_eq!(rows.last().map(|r| r.incoming.len()), Some(2));
     }
+
+    /// lays `commits` out `page` at a time through one builder
+    fn build_paged(commits: &[Commit], page: usize) -> Vec<GraphRow> {
+        let mut builder = GraphBuilder::default();
+        commits.chunks(page).flat_map(|chunk| builder.extend(chunk)).collect()
+    }
+
+    #[test]
+    fn test_graph_builder_extend_paged_matches_single_pass() {
+        let commits = merge_heavy_history(500);
+        let whole = build_graph(&commits);
+        for page in [1, 2, 3, 7, 200, 2000] {
+            assert_eq!(build_paged(&commits, page), whole, "page size {page}");
+        }
+    }
+
+    #[test]
+    fn test_graph_builder_extend_lane_open_across_page_boundary() {
+        // m's second parent s only arrives on the next page
+        let commits = [
+            commit("m", &["b", "s"]),
+            commit("b", &["a"]),
+            commit("s", &["a"]),
+            commit("a", &[]),
+        ];
+        assert_eq!(build_paged(&commits, 2), build_graph(&commits));
+    }
+
+    #[test]
+    fn test_graph_builder_extend_missing_parent_across_pages() {
+        let commits = [
+            commit("c", &["gone"]),
+            commit("d", &[]),
+            commit("e", &["d"]),
+        ];
+        assert_eq!(build_paged(&commits, 1), build_graph(&commits));
+    }
+
+    #[test]
+    fn test_graph_builder_extend_empty_page_changes_nothing() {
+        let commits = [commit("b", &["a"]), commit("a", &[])];
+        let mut builder = GraphBuilder::default();
+        let mut rows = builder.extend(&commits[..1]);
+        assert!(builder.extend(&[]).is_empty());
+        rows.extend(builder.extend(&commits[1..]));
+        assert_eq!(rows, build_graph(&commits));
+    }
 }
