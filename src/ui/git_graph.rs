@@ -136,6 +136,10 @@ const PILL_CHAR_WIDTH: f32 = 5.6;
 const PILL_CHROME: f32 = 14.0;
 /// most pills shown on one commit before the rest fold into `+N`
 const MAX_PILLS: usize = 2;
+/// most characters a pill shows before its name is cut with `…`
+const MAX_PILL_CHARS: usize = 24;
+/// fewest characters a pill is cut to, however narrow the panel
+const MIN_PILL_CHARS: usize = 6;
 /// space the panel keeps for its own padding and the scrollbar
 const PANEL_CHROME: f32 = 24.0;
 /// gap between the graph, the pills and the subject
@@ -159,18 +163,61 @@ pub fn truncate_subject(subject: &str, max_chars: usize) -> String {
     }
 }
 
+/// Fits a ref name into `max_chars`, keeping the part that tells refs apart.
+///
+/// When the name is too long, each leading path segment shrinks to its first
+/// letter, so `upstream/mxg-add-balance-alerts` becomes
+/// `u/mxg-add-balance-alerts`, and only then is the end cut with `…`.
+pub fn short_ref_name(name: &str, max_chars: usize) -> String {
+    if name.chars().count() <= max_chars {
+        return name.to_string();
+    }
+    let abbreviated = match name.rsplit_once('/') {
+        Some((dirs, last)) => {
+            let mut short: String = dirs
+                .split('/')
+                .filter_map(|segment| segment.chars().next())
+                .flat_map(|first| [first, '/'])
+                .collect();
+            short.push_str(last);
+            short
+        },
+        None => name.to_string(),
+    };
+    truncate_subject(&abbreviated, max_chars)
+}
+
 /// The refs that get a pill, and how many were left out.
 pub fn visible_refs(refs: &[GitRef]) -> (&[GitRef], usize) {
     let shown = refs.len().min(MAX_PILLS);
     (&refs[..shown], refs.len() - shown)
 }
 
+/// How many characters each pill may show beside a graph `lanes` wide.
+///
+/// Pills share at most half the room left of the graph, so a commit with
+/// long branch names still shows some of its subject.
+pub fn pill_char_budget(panel_width: f32, lanes: usize, refs: &[GitRef]) -> usize {
+    let (shown, hidden) = visible_refs(refs);
+    let pills = shown.len() + usize::from(hidden > 0);
+    if pills == 0 {
+        return MAX_PILL_CHARS;
+    }
+    let room = panel_width - PANEL_CHROME - graph_width(lanes) - CELL_GAP;
+    let per_pill = room.max(0.0) / 2.0 / pills as f32 - PILL_CHROME - CELL_GAP;
+    ((per_pill.max(0.0) / PILL_CHAR_WIDTH) as usize).clamp(MIN_PILL_CHARS, MAX_PILL_CHARS)
+}
+
 /// pixels the pills for these refs take up, including the `+N` marker
-fn pills_width(refs: &[GitRef]) -> f32 {
+fn pills_width(refs: &[GitRef], max_chars: usize) -> f32 {
     let (shown, hidden) = visible_refs(refs);
     let mut width: f32 = shown
         .iter()
-        .map(|r| r.name.chars().count() as f32 * PILL_CHAR_WIDTH + PILL_CHROME + CELL_GAP)
+        .map(|r| {
+            short_ref_name(&r.name, max_chars).chars().count() as f32 * PILL_CHAR_WIDTH
+                + PILL_CHROME
+                + CELL_GAP
+        })
         .sum();
     if hidden > 0 {
         width += format!("+{hidden}").len() as f32 * PILL_CHAR_WIDTH + PILL_CHROME + CELL_GAP;
@@ -183,7 +230,8 @@ fn pills_width(refs: &[GitRef]) -> f32 {
 /// Grows as the sidebar is dragged wider, which is the point: a wider
 /// panel shows more of each message.
 pub fn subject_budget(panel_width: f32, lanes: usize, refs: &[GitRef]) -> usize {
-    let room = panel_width - PANEL_CHROME - graph_width(lanes) - CELL_GAP - pills_width(refs);
+    let pills = pills_width(refs, pill_char_budget(panel_width, lanes, refs));
+    let room = panel_width - PANEL_CHROME - graph_width(lanes) - CELL_GAP - pills;
     (room.max(0.0) / SUBJECT_CHAR_WIDTH) as usize
 }
 
@@ -198,22 +246,28 @@ fn ref_color(git_ref: &GitRef) -> Color {
 }
 
 fn pill<'a>(label: String, color: Color) -> Element<'a, Message> {
-    container(text(label).size(10).color(Color::from_rgb(0.08, 0.09, 0.12)))
-        .padding(iced::Padding {
-            top: 1.0,
-            right: 6.0,
-            bottom: 1.0,
-            left: 6.0,
-        })
-        .style(move |_| container::Style {
-            background: Some(Background::Color(color)),
-            border: Border {
-                radius: 8.0.into(),
-                ..Border::default()
-            },
-            ..container::Style::default()
-        })
-        .into()
+    container(
+        text(label)
+            .size(10)
+            .color(Color::from_rgb(0.08, 0.09, 0.12))
+            // a wrapped pill grows taller than its row and spills onto the next
+            .wrapping(iced::widget::text::Wrapping::None),
+    )
+    .padding(iced::Padding {
+        top: 1.0,
+        right: 6.0,
+        bottom: 1.0,
+        left: 6.0,
+    })
+    .style(move |_| container::Style {
+        background: Some(Background::Color(color)),
+        border: Border {
+            radius: 8.0.into(),
+            ..Border::default()
+        },
+        ..container::Style::default()
+    })
+    .into()
 }
 
 /// One commit's line: graph cell, ref pills, then as much subject as fits.
@@ -229,13 +283,17 @@ pub fn view_commit_row<'a>(
         theme().text_primary
     };
     let (shown, hidden) = visible_refs(&commit.refs);
+    let pill_chars = pill_char_budget(panel_width, lanes, &commit.refs);
 
     let mut line = row![view_graph_row(graph_row, lanes)]
         .spacing(CELL_GAP)
         .align_y(iced::Alignment::Center)
         .height(Length::Fixed(ROW_HEIGHT));
     for git_ref in shown {
-        line = line.push(pill(git_ref.name.clone(), ref_color(git_ref)));
+        line = line.push(pill(
+            short_ref_name(&git_ref.name, pill_chars),
+            ref_color(git_ref),
+        ));
     }
     if hidden > 0 {
         line = line.push(pill(format!("+{hidden}"), theme().text_muted));
@@ -329,6 +387,56 @@ mod tests {
             subject_budget(10.0, 8, &[git_ref("a-very-long-branch-name")]),
             0
         );
+    }
+
+    #[test]
+    fn test_short_ref_name_fits_untouched() {
+        assert_eq!(short_ref_name("origin/main", 24), "origin/main");
+    }
+
+    #[test]
+    fn test_short_ref_name_abbreviates_leading_segments() {
+        assert_eq!(
+            short_ref_name("upstream/mxg-add-balance-alerts", 24),
+            "u/mxg-add-balance-alerts"
+        );
+        assert_eq!(
+            short_ref_name("upstream/gh-readonly-queue/main/pr-15185", 24),
+            "u/g/m/pr-15185"
+        );
+    }
+
+    #[test]
+    fn test_short_ref_name_cuts_after_abbreviating() {
+        let short = short_ref_name("upstream/gh-readonly-queue/main/pr-14996-975d8b0c", 12);
+        assert_eq!(short, "u/g/m/pr-14…");
+        assert_eq!(short.chars().count(), 12);
+    }
+
+    #[test]
+    fn test_short_ref_name_without_slash_only_cuts() {
+        assert_eq!(short_ref_name("a-very-long-branch-name", 8), "a-very-…");
+    }
+
+    #[test]
+    fn test_pill_char_budget_capped_on_a_wide_panel() {
+        assert_eq!(
+            pill_char_budget(2000.0, 1, &[git_ref("main")]),
+            MAX_PILL_CHARS
+        );
+    }
+
+    #[test]
+    fn test_pill_char_budget_floored_on_a_narrow_panel() {
+        let refs = [git_ref("a"), git_ref("b"), git_ref("c")];
+        assert_eq!(pill_char_budget(50.0, 8, &refs), MIN_PILL_CHARS);
+    }
+
+    #[test]
+    fn test_pill_char_budget_leaves_room_for_the_subject() {
+        let long = "upstream/gh-readonly-queue/main/pr-14996-975d8b0c989c2fb3bc4d83445aca5dc4";
+        let refs = [git_ref(long), git_ref(long)];
+        assert!(subject_budget(300.0, 4, &refs) > 0);
     }
 
     #[test]
