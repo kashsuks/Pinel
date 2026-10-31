@@ -313,10 +313,12 @@ impl App {
                 with_notification
             };
 
-        let with_git_card: Element<'_, Message> = match self.view_git_card_overlay() {
-            Some(card) => stack![with_drag_ghost, card].into(),
-            None => with_drag_ghost,
-        };
+        // always a two-layer stack: if the tree changed shape when the card opened, iced
+        // would rebuild the sidebar's state and reset its scroll position
+        let git_card: Element<'_, Message> = self
+            .view_git_card_overlay()
+            .unwrap_or_else(|| iced::widget::Space::new().into());
+        let with_git_card: Element<'_, Message> = stack![with_drag_ghost, git_card].into();
 
         let with_context_menu: Element<'_, Message> = if self.context_menu.is_some() {
             stack![with_git_card, self.view_context_menu_overlay()].into()

@@ -1749,11 +1749,15 @@ impl App {
                 viewport,
                 content,
             } => {
+                // iced also reports a scroll when the widget tree is rebuilt, which
+                // the card's own opening does, so only a changed offset counts
+                if (offset - self.git_scroll_offset).abs() > f32::EPSILON {
+                    // rows move under a still cursor, so the card would point at the wrong commit
+                    self.git_card = None;
+                    self.git_card_hovered = false;
+                }
                 self.git_scroll_offset = offset;
                 self.git_viewport_h = viewport;
-                // rows move under a still cursor, so the card would point at the wrong commit
-                self.git_card = None;
-                self.git_card_hovered = false;
                 let margin = crate::ui::sidebar::HISTORY_PREFETCH_ROWS as f32
                     * crate::ui::git_graph::ROW_HEIGHT;
                 if crate::features::virtual_list::near_end(offset, viewport, content, margin) {
