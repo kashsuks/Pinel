@@ -3,6 +3,40 @@ use iced::widget::column;
 use super::*;
 
 impl App {
+    /// The commit card for the row the cursor rests on, if one is open.
+    pub(super) fn view_git_card_overlay(&self) -> Option<Element<'_, Message>> {
+        use crate::ui::commit_card::{view_commit_card, CARD_HEIGHT_ESTIMATE};
+
+        if !self.sidebar_visible || self.active_panel != ActivePanel::Git {
+            return None;
+        }
+        let card = self.git_card.as_ref()?;
+        let commit = self.git_history.iter().find(|c| c.hash == card.hash)?;
+        let body = view_commit_card(
+            commit,
+            self.git_commit_details.get(&card.hash),
+            crate::features::git_commit::unix_now(),
+        );
+
+        // just right of the sidebar and level with the row, kept inside the window
+        let left = self.sidebar_width + 60.0;
+        let max_top = (self.editor_preferences.window_height - CARD_HEIGHT_ESTIMATE).max(0.0);
+        let top = (card.anchor.y - 16.0).clamp(0.0, max_top);
+
+        Some(
+            container(body)
+                .padding(iced::Padding {
+                    top,
+                    right: 0.0,
+                    bottom: 0.0,
+                    left,
+                })
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .into(),
+        )
+    }
+
     pub(super) fn view_context_menu_overlay(&self) -> Element<'_, Message> {
         use iced::widget::{opaque, stack, Space};
 

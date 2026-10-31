@@ -181,6 +181,20 @@ pub enum Message {
         viewport: f32,
         content: f32,
     },
+    /// The cursor entered a commit row in the git graph.
+    GitCommitHovered(String),
+    /// The cursor left a commit row in the git graph.
+    GitCommitUnhovered,
+    /// The card's open delay ran out. The number says which hover it was for.
+    GitCardShow(u64),
+    /// The card's close delay ran out. The number says which leave it was for.
+    GitCardHide(u64),
+    /// The cursor entered (`true`) or left (`false`) the commit card.
+    GitCardHovered(bool),
+    /// Carries the full details of one commit, or `None` if git could not read it.
+    GitCommitDetailLoaded(String, Option<crate::features::git_commit::CommitDetail>),
+    /// Opens a web link in the default browser.
+    OpenUrl(String),
 
     /// Starts a new, empty chat session and makes it the active one.
     ChatNewSession,

@@ -157,6 +157,42 @@ impl App {
         }
     }
 
+    /// Opens the card for `hash` beside the cursor and starts reading its details.
+    fn show_git_card(&mut self, hash: String) -> iced::Task<Message> {
+        self.git_card = Some(GitCard {
+            hash: hash.clone(),
+            anchor: self.last_cursor_position,
+        });
+        self.fetch_commit_detail(hash)
+    }
+
+    /// Starts reading a commit's details unless they are cached or already on their way.
+    pub(super) fn fetch_commit_detail(&mut self, hash: String) -> iced::Task<Message> {
+        if self.git_commit_details.contains_key(&hash)
+            || !self.git_detail_loading.insert(hash.clone())
+        {
+            return iced::Task::none();
+        }
+        let root = self.file_tree.as_ref().map(|t| t.root.clone());
+        iced::Task::perform(
+            crate::features::git_commit::load_commit_detail_async(root, hash.clone()),
+            move |detail| Message::GitCommitDetailLoaded(hash.clone(), detail),
+        )
+    }
+
+    /// Closes the card after a short grace period, unless the cursor comes back.
+    fn schedule_git_card_hide(&mut self) -> iced::Task<Message> {
+        self.git_hover_token = self.git_hover_token.wrapping_add(1);
+        let token = self.git_hover_token;
+        iced::Task::perform(
+            async move {
+                tokio::time::sleep(GIT_CARD_CLOSE_DELAY).await;
+                token
+            },
+            Message::GitCardHide,
+        )
+    }
+
     pub(super) fn open_path_task(path: PathBuf) -> iced::Task<Message> {
         iced::Task::perform(
             async move {
@@ -1715,11 +1751,81 @@ impl App {
             } => {
                 self.git_scroll_offset = offset;
                 self.git_viewport_h = viewport;
+                // rows move under a still cursor, so the card would point at the wrong commit
+                self.git_card = None;
+                self.git_card_hovered = false;
                 let margin = crate::ui::sidebar::HISTORY_PREFETCH_ROWS as f32
                     * crate::ui::git_graph::ROW_HEIGHT;
                 if crate::features::virtual_list::near_end(offset, viewport, content, margin) {
                     // ignored unless the panel has another page to fetch
                     return iced::Task::done(Message::LoadMoreGitHistory);
+                }
+                iced::Task::none()
+            },
+            Message::GitCommitHovered(hash) => {
+                self.git_hover_token = self.git_hover_token.wrapping_add(1);
+                self.git_hover_hash = Some(hash.clone());
+                if self.git_card.is_some() {
+                    // moving between rows while a card is open swaps it at once
+                    return self.show_git_card(hash);
+                }
+                let token = self.git_hover_token;
+                iced::Task::perform(
+                    async move {
+                        tokio::time::sleep(GIT_CARD_OPEN_DELAY).await;
+                        token
+                    },
+                    Message::GitCardShow,
+                )
+            },
+            Message::GitCommitUnhovered => {
+                self.git_hover_hash = None;
+                self.schedule_git_card_hide()
+            },
+            Message::GitCardShow(token) => {
+                if token != self.git_hover_token {
+                    return iced::Task::none();
+                }
+                match self.git_hover_hash.clone() {
+                    Some(hash) => self.show_git_card(hash),
+                    None => iced::Task::none(),
+                }
+            },
+            Message::GitCardHide(token) => {
+                if token == self.git_hover_token && !self.git_card_hovered {
+                    self.git_card = None;
+                }
+                iced::Task::none()
+            },
+            Message::GitCardHovered(hovered) => {
+                self.git_card_hovered = hovered;
+                if hovered {
+                    // cancels any close timer already running
+                    self.git_hover_token = self.git_hover_token.wrapping_add(1);
+                    iced::Task::none()
+                } else {
+                    self.schedule_git_card_hide()
+                }
+            },
+            Message::GitCommitDetailLoaded(hash, detail) => {
+                self.git_detail_loading.remove(&hash);
+                if let Some(detail) = detail {
+                    self.git_commit_details.insert(hash, detail);
+                }
+                iced::Task::none()
+            },
+            Message::OpenUrl(url) => {
+                // the card builds these itself; refuse anything that is not a web link
+                if url.starts_with("https://") {
+                    #[cfg(target_os = "macos")]
+                    let _ = std::process::Command::new("open").arg(&url).spawn();
+                    #[cfg(target_os = "windows")]
+                    let _ = std::process::Command::new("rundll32")
+                        .arg("url.dll,FileProtocolHandler")
+                        .arg(&url)
+                        .spawn();
+                    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+                    let _ = std::process::Command::new("xdg-open").arg(&url).spawn();
                 }
                 iced::Task::none()
             },

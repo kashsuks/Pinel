@@ -313,10 +313,15 @@ impl App {
                 with_notification
             };
 
+        let with_git_card: Element<'_, Message> = match self.view_git_card_overlay() {
+            Some(card) => stack![with_drag_ghost, card].into(),
+            None => with_drag_ghost,
+        };
+
         let with_context_menu: Element<'_, Message> = if self.context_menu.is_some() {
-            stack![with_drag_ghost, self.view_context_menu_overlay()].into()
+            stack![with_git_card, self.view_context_menu_overlay()].into()
         } else {
-            with_drag_ghost
+            with_git_card
         };
 
         if self.update_banner.is_some() {

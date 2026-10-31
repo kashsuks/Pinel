@@ -135,6 +135,17 @@ struct PendingHoverRequest {
 }
 
 const HOVER_TRIGGER_DELAY: Duration = Duration::from_secs(2);
+/// How long the cursor rests on a commit before its card opens.
+const GIT_CARD_OPEN_DELAY: Duration = Duration::from_millis(300);
+/// How long the card stays after the cursor leaves the row and the card.
+const GIT_CARD_CLOSE_DELAY: Duration = Duration::from_millis(150);
+
+/// The commit card shown beside the git graph.
+struct GitCard {
+    hash: String,
+    /// Where the cursor was when the card opened, in window coordinates.
+    anchor: iced::Point,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ActivePanel {
@@ -207,6 +218,15 @@ pub struct App {
     git_status_guard: crate::features::git::RefreshGuard,
     git_history_guard: crate::features::git::RefreshGuard,
     git_viewport_h: f32,
+    /// Full details of commits the cursor has rested on. A commit never
+    /// changes, so entries are kept for the life of the app.
+    git_commit_details: HashMap<String, crate::features::git_commit::CommitDetail>,
+    git_detail_loading: std::collections::HashSet<String>,
+    git_hover_hash: Option<String>,
+    git_card: Option<GitCard>,
+    git_card_hovered: bool,
+    /// Bumped on every hover change, so a stale open or close timer is ignored.
+    git_hover_token: u64,
 
     chat_sessions: Vec<crate::features::chat::ChatSession>,
     active_chat_session: Option<String>,
@@ -404,6 +424,12 @@ impl Default for App {
             git_history_guard: crate::features::git::RefreshGuard::default(),
             // generous until the first scroll event reports the real height
             git_viewport_h: 1200.0,
+            git_commit_details: HashMap::new(),
+            git_detail_loading: std::collections::HashSet::new(),
+            git_hover_hash: None,
+            git_card: None,
+            git_card_hovered: false,
+            git_hover_token: 0,
 
             chat_sessions: crate::config::chat_store::load_sessions(None),
             active_chat_session: None,
