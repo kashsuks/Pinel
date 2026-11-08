@@ -46,6 +46,7 @@ mod commands;
 mod lifecycle;
 mod subscription;
 mod update;
+mod view_commit;
 mod view_editor;
 mod view_finders;
 mod view_integrations;
@@ -80,6 +81,17 @@ pub enum TabKind {
         duration_secs: f32,
         position_secs: f32,
     },
+    /// One commit's diff, opened from the git graph. Its details come from
+    /// `App::git_commit_details`.
+    Commit {
+        hash: String,
+        /// `None` until `git show` answers.
+        diff: Option<Vec<crate::features::git_diff::FileDiff>>,
+        /// Files folded away, by index into `diff`.
+        collapsed: std::collections::HashSet<usize>,
+        /// Whether the next commit clicked in the graph replaces this tab.
+        preview: bool,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -99,6 +111,7 @@ impl std::fmt::Debug for TabKind {
             #[cfg(feature = "video")]
             TabKind::Video { .. } => f.debug_struct("Video").finish_non_exhaustive(),
             TabKind::Audio { .. } => f.debug_struct("Audio").finish_non_exhaustive(),
+            TabKind::Commit { .. } => f.debug_struct("Commit").finish_non_exhaustive(),
         }
     }
 }
@@ -135,6 +148,18 @@ struct PendingHoverRequest {
 }
 
 const HOVER_TRIGGER_DELAY: Duration = Duration::from_secs(2);
+/// How long the cursor rests on a commit before its card opens.
+const GIT_CARD_OPEN_DELAY: Duration = Duration::from_millis(300);
+/// How long the card stays after the cursor leaves the row and the card.
+const GIT_CARD_CLOSE_DELAY: Duration = Duration::from_millis(150);
+const DOUBLE_CLICK: Duration = Duration::from_millis(400);
+
+/// The commit card shown beside the git graph.
+struct GitCard {
+    hash: String,
+    /// Where the cursor was when the card opened, in window coordinates.
+    anchor: iced::Point,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ActivePanel {
@@ -207,6 +232,16 @@ pub struct App {
     git_status_guard: crate::features::git::RefreshGuard,
     git_history_guard: crate::features::git::RefreshGuard,
     git_viewport_h: f32,
+    /// Full details of commits the cursor has rested on. A commit never
+    /// changes, so entries are kept for the life of the app.
+    git_commit_details: HashMap<String, crate::features::git_commit::CommitDetail>,
+    git_detail_loading: std::collections::HashSet<String>,
+    git_hover_hash: Option<String>,
+    git_card: Option<GitCard>,
+    git_card_hovered: bool,
+    /// Bumped on every hover change, so a stale open or close timer is ignored.
+    git_hover_token: u64,
+    preview_tab_pressed_at: Option<Instant>,
 
     chat_sessions: Vec<crate::features::chat::ChatSession>,
     active_chat_session: Option<String>,
@@ -404,6 +439,13 @@ impl Default for App {
             git_history_guard: crate::features::git::RefreshGuard::default(),
             // generous until the first scroll event reports the real height
             git_viewport_h: 1200.0,
+            git_commit_details: HashMap::new(),
+            git_detail_loading: std::collections::HashSet::new(),
+            git_hover_hash: None,
+            git_card: None,
+            git_card_hovered: false,
+            git_hover_token: 0,
+            preview_tab_pressed_at: None,
 
             chat_sessions: crate::config::chat_store::load_sessions(None),
             active_chat_session: None,
@@ -621,8 +663,12 @@ impl App {
     pub(super) fn current_session_state(&self) -> crate::config::session::SessionState {
         let folder = self.file_tree.as_ref().map(|tree| tree.root.clone());
 
-        let open_tabs: Vec<std::path::PathBuf> =
-            self.tabs.iter().map(|tab| tab.path.clone()).collect();
+        let open_tabs: Vec<std::path::PathBuf> = self
+            .tabs
+            .iter()
+            .filter(|tab| !matches!(tab.kind, TabKind::Commit { .. }))
+            .map(|tab| tab.path.clone())
+            .collect();
 
         let cursor_position = self
             .tabs
@@ -641,6 +687,7 @@ impl App {
             active_tab_index: self
                 .active_tab
                 .and_then(|idx| self.tabs.get(idx))
+                .filter(|tab| !matches!(tab.kind, TabKind::Commit { .. }))
                 .map(|tab| tab.path.clone()),
             cursor_position,
         }
@@ -749,6 +796,10 @@ impl App {
         let Some(tab) = self.tabs.get(idx) else {
             return;
         };
+
+        if matches!(tab.kind, TabKind::Commit { .. }) {
+            return;
+        }
 
         let cursor = match &tab.kind {
             TabKind::Editor { code_editor, .. } => code_editor.cursor_position(),

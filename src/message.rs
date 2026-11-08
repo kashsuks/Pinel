@@ -181,6 +181,33 @@ pub enum Message {
         viewport: f32,
         content: f32,
     },
+    /// The cursor entered a commit row in the git graph.
+    GitCommitHovered(String),
+    /// The cursor left a commit row in the git graph.
+    GitCommitUnhovered,
+    /// The card's open delay ran out. The number says which hover it was for.
+    GitCardShow(u64),
+    /// The card's close delay ran out. The number says which leave it was for.
+    GitCardHide(u64),
+    /// The cursor entered (`true`) or left (`false`) the commit card.
+    GitCardHovered(bool),
+    /// Carries the full details of one commit, or `None` if git could not read it.
+    GitCommitDetailLoaded(String, Option<crate::features::git_commit::CommitDetail>),
+    /// Opens a web link in the default browser.
+    OpenUrl(String),
+    /// Opens a commit from the git graph in the preview tab.
+    OpenCommitTab(String),
+    /// Keeps the commit's tab it stops being the preview tab, so the next
+    /// click in the graph opens a new one
+    PinCommit(String),
+    /// A preview tab was pressed. Two quick presses to pin it
+    PreviewTabPressed(usize),
+    /// Carries the per-file diffs of a commit for its tab.
+    GitCommitDiffLoaded(String, Vec<crate::features::git_diff::FileDiff>),
+    /// Folds or unfolds one file's diff in the active commit tab.
+    ToggleCommitFile(usize),
+    /// Copies text to the clipboard.
+    CopyText(String),
 
     /// Starts a new, empty chat session and makes it the active one.
     ChatNewSession,

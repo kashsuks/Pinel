@@ -4,7 +4,7 @@ use iced::{
     mouse,
     widget::{
         canvas::{self, Canvas, Frame, Geometry, Path, Stroke},
-        container, row, text,
+        container, mouse_area, row, text,
     },
     Background, Border, Color, Element, Length, Point, Rectangle, Renderer, Theme,
 };
@@ -235,7 +235,8 @@ pub fn subject_budget(panel_width: f32, lanes: usize, refs: &[GitRef]) -> usize 
     (room.max(0.0) / SUBJECT_CHAR_WIDTH) as usize
 }
 
-fn ref_color(git_ref: &GitRef) -> Color {
+/// the colour of the pill for a ref
+pub fn ref_color(git_ref: &GitRef) -> Color {
     match git_ref.kind {
         _ if git_ref.is_head => Color::from_rgb(0.40, 0.69, 0.98),
         RefKind::LocalBranch => Color::from_rgb(0.36, 0.86, 0.42),
@@ -245,7 +246,8 @@ fn ref_color(git_ref: &GitRef) -> Color {
     }
 }
 
-fn pill<'a>(label: String, color: Color) -> Element<'a, Message> {
+/// a rounded label in `color`
+pub fn pill<'a>(label: String, color: Color) -> Element<'a, Message> {
     container(
         text(label)
             .size(10)
@@ -274,6 +276,8 @@ fn pill<'a>(label: String, color: Color) -> Element<'a, Message> {
 ///
 /// The graph cell is only as wide as the lanes this row touches, so the
 /// text starts right after the rightmost line rather than in one column.
+/// The whole row reports when the cursor enters or leaves it. A click opens
+/// the commit in the preview tab and a double-click pins it.
 pub fn view_commit_row<'a>(
     commit: &'a Commit,
     graph_row: &'a GraphRow,
@@ -291,6 +295,7 @@ pub fn view_commit_row<'a>(
     let mut line = row![view_graph_row(graph_row)]
         .spacing(CELL_GAP)
         .align_y(iced::Alignment::Center)
+        .width(Length::Fill)
         .height(Length::Fixed(ROW_HEIGHT));
     for git_ref in shown {
         line = line.push(pill(
@@ -303,13 +308,20 @@ pub fn view_commit_row<'a>(
     }
 
     let budget = subject_budget(panel_width, lanes, &commit.refs);
-    line.push(
+    let line = line.push(
         text(truncate_subject(&commit.subject, budget))
             .size(12)
             .color(color)
             .wrapping(iced::widget::text::Wrapping::None),
-    )
-    .into()
+    );
+
+    mouse_area(line)
+        .on_enter(Message::GitCommitHovered(commit.hash.clone()))
+        .on_exit(Message::GitCommitUnhovered)
+        .on_press(Message::OpenCommitTab(commit.hash.clone()))
+        .on_double_click(Message::PinCommit(commit.hash.clone()))
+        .interaction(iced::mouse::Interaction::Pointer)
+        .into()
 }
 
 /// the graph cell for one commit, as wide as the lanes it touches

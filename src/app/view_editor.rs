@@ -71,9 +71,26 @@ impl App {
                     iced::Color::TRANSPARENT
                 };
 
+                let is_preview = matches!(tab.kind, TabKind::Commit { preview: true, .. });
+
+                let title = text(&tab.name).size(12).color(tab_text_color);
+                let title = if is_preview {
+                    title.font(iced::Font {
+                        style: iced::font::Style::Italic,
+                        ..iced::Font::DEFAULT
+                    })
+                } else {
+                    title
+                };
+                let on_press = if is_preview {
+                    Message::PreviewTabPressed(real_idx)
+                } else {
+                    Message::TabSelected(real_idx)
+                };
+
                 let tab_content = button(
                     row![
-                        text(&tab.name).size(12).color(tab_text_color),
+                        title,
                         button(close_icon)
                             .style(tab_close_button_style)
                             .on_press(Message::TabClosed(real_idx))
@@ -99,7 +116,7 @@ impl App {
                     shadow: iced::Shadow::default(),
                     snap: false,
                 })
-                .on_press(Message::TabSelected(real_idx))
+                .on_press(on_press)
                 .padding(iced::Padding {
                     top: 5.0,
                     right: 12.0,
@@ -559,6 +576,14 @@ impl App {
                         )
                         .height(Length::Fill)
                         .into();
+                    },
+                    TabKind::Commit {
+                        hash,
+                        diff,
+                        collapsed,
+                        ..
+                    } => {
+                        return self.view_commit_tab(hash, diff.as_deref(), collapsed);
                     },
                     TabKind::Image { handle } => {
                         return container(

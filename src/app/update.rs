@@ -157,6 +157,56 @@ impl App {
         }
     }
 
+    /// Opens the card for `hash` beside the cursor and starts reading its details.
+    fn show_git_card(&mut self, hash: String) -> iced::Task<Message> {
+        self.git_card = Some(GitCard {
+            hash: hash.clone(),
+            anchor: self.last_cursor_position,
+        });
+        self.fetch_commit_detail(hash)
+    }
+
+    /// Starts reading a commit's details unless they are cached or already on their way.
+    pub(super) fn fetch_commit_detail(&mut self, hash: String) -> iced::Task<Message> {
+        if self.git_commit_details.contains_key(&hash)
+            || !self.git_detail_loading.insert(hash.clone())
+        {
+            return iced::Task::none();
+        }
+        let root = self.file_tree.as_ref().map(|t| t.root.clone());
+        iced::Task::perform(
+            crate::features::git_commit::load_commit_detail_async(root, hash.clone()),
+            move |detail| Message::GitCommitDetailLoaded(hash.clone(), detail),
+        )
+    }
+
+    /// Closes the card after a short grace period, unless the cursor comes back.
+    fn schedule_git_card_hide(&mut self) -> iced::Task<Message> {
+        self.git_hover_token = self.git_hover_token.wrapping_add(1);
+        let token = self.git_hover_token;
+        iced::Task::perform(
+            async move {
+                tokio::time::sleep(GIT_CARD_CLOSE_DELAY).await;
+                token
+            },
+            Message::GitCardHide,
+        )
+    }
+
+    /// The tab title for a commit: its short hash and a cut-down subject.
+    fn commit_tab_name(&self, hash: &str) -> String {
+        let short = &hash[..hash.len().min(7)];
+        match self.git_history.iter().find(|c| c.hash == hash) {
+            Some(commit) => {
+                format!(
+                    "{short} {}",
+                    crate::ui::git_graph::truncate_subject(&commit.subject, 24)
+                )
+            },
+            None => short.to_string(),
+        }
+    }
+
     pub(super) fn open_path_task(path: PathBuf) -> iced::Task<Message> {
         iced::Task::perform(
             async move {
@@ -383,20 +433,13 @@ impl App {
                 .map(|name| name.to_string_lossy().to_string())
                 .unwrap_or_else(|| path.to_string_lossy().to_string())
         });
-        let details = match &file_name {
-            Some(file_name) => format!("Editing {file_name}"),
-            None => "Idle".to_string(),
-        };
+        let (details, icon_key) = presence_details(file_name.as_deref());
         let state = self
             .activity_state
             .workspace_name
             .as_deref()
             .map(|name| format!("Workspace: {name}"));
 
-        let icon_key = file_name
-            .as_deref()
-            .map(crate::features::icons::file_icon_key)
-            .unwrap_or("pinel");
         let icon_text = prettify_icon_key(icon_key);
         let large_image = Some(crate::discord_rpc::LargeImage {
             key: icon_key,
@@ -1713,6 +1756,13 @@ impl App {
                 viewport,
                 content,
             } => {
+                // iced also reports a scroll when the widget tree is rebuilt, which
+                // the card's own opening does, so only a changed offset counts
+                if (offset - self.git_scroll_offset).abs() > f32::EPSILON {
+                    // rows move under a still cursor, so the card would point at the wrong commit
+                    self.git_card = None;
+                    self.git_card_hovered = false;
+                }
                 self.git_scroll_offset = offset;
                 self.git_viewport_h = viewport;
                 let margin = crate::ui::sidebar::HISTORY_PREFETCH_ROWS as f32
@@ -1720,6 +1770,193 @@ impl App {
                 if crate::features::virtual_list::near_end(offset, viewport, content, margin) {
                     // ignored unless the panel has another page to fetch
                     return iced::Task::done(Message::LoadMoreGitHistory);
+                }
+                iced::Task::none()
+            },
+            Message::GitCommitHovered(hash) => {
+                self.git_hover_token = self.git_hover_token.wrapping_add(1);
+                self.git_hover_hash = Some(hash.clone());
+                if self.git_card.is_some() {
+                    // moving between rows while a card is open swaps it at once
+                    return self.show_git_card(hash);
+                }
+                let token = self.git_hover_token;
+                iced::Task::perform(
+                    async move {
+                        tokio::time::sleep(GIT_CARD_OPEN_DELAY).await;
+                        token
+                    },
+                    Message::GitCardShow,
+                )
+            },
+            Message::GitCommitUnhovered => {
+                self.git_hover_hash = None;
+                self.schedule_git_card_hide()
+            },
+            Message::GitCardShow(token) => {
+                if token != self.git_hover_token {
+                    return iced::Task::none();
+                }
+                match self.git_hover_hash.clone() {
+                    Some(hash) => self.show_git_card(hash),
+                    None => iced::Task::none(),
+                }
+            },
+            Message::GitCardHide(token) => {
+                if token == self.git_hover_token && !self.git_card_hovered {
+                    self.git_card = None;
+                }
+                iced::Task::none()
+            },
+            Message::GitCardHovered(hovered) => {
+                self.git_card_hovered = hovered;
+                if hovered {
+                    // cancels any close timer already running
+                    self.git_hover_token = self.git_hover_token.wrapping_add(1);
+                    iced::Task::none()
+                } else {
+                    self.schedule_git_card_hide()
+                }
+            },
+            Message::GitCommitDetailLoaded(hash, detail) => {
+                self.git_detail_loading.remove(&hash);
+                if let Some(detail) = detail {
+                    self.git_commit_details.insert(hash, detail);
+                }
+                iced::Task::none()
+            },
+            Message::OpenUrl(url) => {
+                // the card builds these itself; refuse anything that is not a web link
+                if url.starts_with("https://") {
+                    #[cfg(target_os = "macos")]
+                    let _ = std::process::Command::new("open").arg(&url).spawn();
+                    #[cfg(target_os = "windows")]
+                    let _ = std::process::Command::new("rundll32")
+                        .arg("url.dll,FileProtocolHandler")
+                        .arg(&url)
+                        .spawn();
+                    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+                    let _ = std::process::Command::new("xdg-open").arg(&url).spawn();
+                }
+                iced::Task::none()
+            },
+            Message::CopyText(text) => iced::clipboard::write(text),
+            Message::OpenCommitTab(hash) => {
+                // the card is in the way once a click has opened the commit info
+                self.git_card = None;
+                self.git_card_hovered = false;
+
+                let path = PathBuf::from(format!("commit:{hash}"));
+                let idx = match self.tabs.iter().position(|t| t.path == path) {
+                    // already open, whether pinned or as the current preview
+                    Some(idx) => idx,
+                    None => {
+                        let name = self.commit_tab_name(&hash);
+                        let kind = TabKind::Commit {
+                            hash: hash.clone(),
+                            diff: None,
+                            collapsed: std::collections::HashSet::new(),
+                            preview: true,
+                        };
+                        let preview_slot = self
+                            .tabs
+                            .iter()
+                            .position(|t| matches!(t.kind, TabKind::Commit { preview: true, .. }));
+                        match preview_slot {
+                            // the preview tab moves on to this commit
+                            Some(idx) => {
+                                let tab = &mut self.tabs[idx];
+                                tab.path = path;
+                                tab.name = name;
+                                tab.kind = kind;
+                                idx
+                            },
+                            None => {
+                                self.tabs.push(Tab {
+                                    path,
+                                    name,
+                                    kind,
+                                    autosave_requested_at: None,
+                                    autosave_in_flight: false,
+                                });
+                                self.tabs.len() - 1
+                            },
+                        }
+                    },
+                };
+
+                let needs_diff = matches!(&self.tabs[idx].kind, TabKind::Commit { diff: None, .. });
+                let select = self.update(Message::TabSelected(idx));
+                let details = self.fetch_commit_detail(hash.clone());
+                if !needs_diff {
+                    return iced::Task::batch([select, details]);
+                }
+                let root = self.file_tree.as_ref().map(|t| t.root.clone());
+                let diff = iced::Task::perform(
+                    crate::features::git_diff::load_commit_diff_async(root, hash.clone()),
+                    move |files| Message::GitCommitDiffLoaded(hash.clone(), files),
+                );
+                iced::Task::batch([select, details, diff])
+            },
+            Message::PinCommit(hash) => {
+                for tab in &mut self.tabs {
+                    if let TabKind::Commit {
+                        hash: shown,
+                        preview,
+                        ..
+                    } = &mut tab.kind
+                    {
+                        if *shown == hash {
+                            *preview = false;
+                        }
+                    }
+                }
+                iced::Task::none()
+            },
+            Message::PreviewTabPressed(idx) => {
+                let double =
+                    self.preview_tab_pressed_at.is_some_and(|at| at.elapsed() < DOUBLE_CLICK);
+
+                // a third press should start counting again, not pin twice
+                self.preview_tab_pressed_at = if double {
+                    None
+                } else {
+                    Some(Instant::now())
+                };
+                if double {
+                    if let Some(Tab {
+                        kind: TabKind::Commit { preview, .. },
+                        ..
+                    }) = self.tabs.get_mut(idx)
+                    {
+                        *preview = false;
+                    }
+                }
+                self.update(Message::TabSelected(idx))
+            },
+            Message::GitCommitDiffLoaded(hash, files) => {
+                // the preview tab may have moved on to another commit by now
+                let slot = self.tabs.iter_mut().find_map(|tab| match &mut tab.kind {
+                    TabKind::Commit {
+                        hash: shown, diff, ..
+                    } if *shown == hash => Some(diff),
+                    _ => None,
+                });
+                if let Some(diff) = slot {
+                    *diff = Some(files);
+                }
+                iced::Task::none()
+            },
+            Message::ToggleCommitFile(file) => {
+                let active = self.active_tab.and_then(|idx| self.tabs.get_mut(idx));
+                if let Some(Tab {
+                    kind: TabKind::Commit { collapsed, .. },
+                    ..
+                }) = active
+                {
+                    if !collapsed.remove(&file) {
+                        collapsed.insert(file);
+                    }
                 }
                 iced::Task::none()
             },
@@ -3315,6 +3552,28 @@ impl App {
     }
 }
 
+/// The Rich Presence details line and large image key for the active tab's
+/// file name. A commit tab's synthetic `commit:<hash>` name shows as
+/// "Viewing commit: <short hash>" with the git logo. 
+fn presence_details(file_name: Option<&str>) -> (String, &'static str) {
+    match file_name {
+        Some(name) => match name.strip_prefix("commit:") {
+            Some(hash) => (
+                format!(
+                    "Viewing commit: {}",
+                    hash.chars().take(7).collect::<String>()
+                ),
+                "git",
+            ),
+            None => (
+                format!("Editing {name}"),
+                crate::features::icons::file_icon_key(name),
+            ),
+        },
+        None => ("Idle".to_string(), "pinel"),
+    }
+}
+
 /// Turns an icon/asset key like "cpp-h" or "javascript" into a readable
 /// tooltip like "Cpp H" / "Javascript" for the Discord large image hover text.
 fn prettify_icon_key(key: &str) -> String {
@@ -3328,4 +3587,41 @@ fn prettify_icon_key(key: &str) -> String {
         })
         .collect::<Vec<_>>()
         .join(" ")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_presence_details_commit_tab_shows_short_hash() {
+        let (details, icon) =
+            presence_details(Some("commit:34c2516f4c117e9aa18733fff7198feae7945a2a"));
+        assert_eq!(details, "Viewing commit: 34c2516");
+        assert_eq!(icon, "git");
+    }
+
+    #[test]
+    fn test_presence_details_short_commit_hash_is_kept_whole() {
+        let (details, _) = presence_details(Some("commit:abc"));
+        assert_eq!(details, "Viewing commit: abc");
+    }
+
+    #[test]
+    fn test_presence_details_file_tab_is_unchanged() {
+        let (details, icon) = presence_details(Some("update.rs"));
+        assert_eq!(details, "Editing update.rs");
+        assert_eq!(icon, crate::features::icons::file_icon_key("update.rs"));
+    }
+
+    #[test]
+    fn test_presence_details_non_ascii_name_does_not_panic() {
+        let (details, _) = presence_details(Some("commit:éééééééé"));
+        assert_eq!(details, "Viewing commit: ééééééé");
+    }
+
+    #[test]
+    fn test_presence_details_no_tab_is_idle() {
+        assert_eq!(presence_details(None), ("Idle".to_string(), "pinel"));
+    }
 }
