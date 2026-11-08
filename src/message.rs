@@ -197,6 +197,11 @@ pub enum Message {
     OpenUrl(String),
     /// Opens a commit from the git graph in the preview tab.
     OpenCommitTab(String),
+    /// Keeps the commit's tab it stops being the preview tab, so the next
+    /// click in the graph opens a new one
+    PinCommit(String),
+    /// A preview tab was pressed. Two quick presses to pin it
+    PreviewTabPressed(usize),
     /// Carries the per-file diffs of a commit for its tab.
     GitCommitDiffLoaded(String, Vec<crate::features::git_diff::FileDiff>),
     /// Folds or unfolds one file's diff in the active commit tab.

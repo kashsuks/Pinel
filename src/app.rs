@@ -152,6 +152,7 @@ const HOVER_TRIGGER_DELAY: Duration = Duration::from_secs(2);
 const GIT_CARD_OPEN_DELAY: Duration = Duration::from_millis(300);
 /// How long the card stays after the cursor leaves the row and the card.
 const GIT_CARD_CLOSE_DELAY: Duration = Duration::from_millis(150);
+const DOUBLE_CLICK: Duration = Duration::from_millis(400);
 
 /// The commit card shown beside the git graph.
 struct GitCard {
@@ -240,6 +241,7 @@ pub struct App {
     git_card_hovered: bool,
     /// Bumped on every hover change, so a stale open or close timer is ignored.
     git_hover_token: u64,
+    preview_tab_pressed_at: Option<Instant>,
 
     chat_sessions: Vec<crate::features::chat::ChatSession>,
     active_chat_session: Option<String>,
@@ -443,6 +445,7 @@ impl Default for App {
             git_card: None,
             git_card_hovered: false,
             git_hover_token: 0,
+            preview_tab_pressed_at: None,
 
             chat_sessions: crate::config::chat_store::load_sessions(None),
             active_chat_session: None,

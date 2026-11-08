@@ -277,7 +277,7 @@ pub fn pill<'a>(label: String, color: Color) -> Element<'a, Message> {
 /// The graph cell is only as wide as the lanes this row touches, so the
 /// text starts right after the rightmost line rather than in one column.
 /// The whole row reports when the cursor enters or leaves it. A click opens
-/// the commit in a tab.
+/// the commit in the preview tab and a double-click pins it.
 pub fn view_commit_row<'a>(
     commit: &'a Commit,
     graph_row: &'a GraphRow,
@@ -319,6 +319,7 @@ pub fn view_commit_row<'a>(
         .on_enter(Message::GitCommitHovered(commit.hash.clone()))
         .on_exit(Message::GitCommitUnhovered)
         .on_press(Message::OpenCommitTab(commit.hash.clone()))
+        .on_double_click(Message::PinCommit(commit.hash.clone()))
         .interaction(iced::mouse::Interaction::Pointer)
         .into()
 }

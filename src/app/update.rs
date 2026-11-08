@@ -1905,6 +1905,42 @@ impl App {
                 );
                 iced::Task::batch([select, details, diff])
             },
+            Message::PinCommit(hash) => {
+                for tab in &mut self.tabs {
+                    if let TabKind::Commit {
+                        hash: shown,
+                        preview,
+                        ..
+                    } = &mut tab.kind
+                    {
+                        if *shown == hash {
+                            *preview = false;
+                        }
+                    }
+                }
+                iced::Task::none()
+            },
+            Message::PreviewTabPressed(idx) => {
+                let double =
+                    self.preview_tab_pressed_at.is_some_and(|at| at.elapsed() < DOUBLE_CLICK);
+
+                // a third press should start counting again, not pin twice
+                self.preview_tab_pressed_at = if double {
+                    None
+                } else {
+                    Some(Instant::now())
+                };
+                if double {
+                    if let Some(Tab {
+                        kind: TabKind::Commit { preview, .. },
+                        ..
+                    }) = self.tabs.get_mut(idx)
+                    {
+                        *preview = false;
+                    }
+                }
+                self.update(Message::TabSelected(idx))
+            },
             Message::GitCommitDiffLoaded(hash, files) => {
                 // the preview tab may have moved on to another commit by now
                 let slot = self.tabs.iter_mut().find_map(|tab| match &mut tab.kind {
