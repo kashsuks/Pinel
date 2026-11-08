@@ -251,14 +251,10 @@ impl App {
             .width(Length::FillPortion(2)),
             text_input("4", &self.editor_preferences.tab_size.to_string())
                 .on_input(Message::SettingsTabSizeChanged)
-                .size(13)
-                .padding(iced::Padding {
-                    top: 8.0,
-                    right: 12.0,
-                    bottom: 8.0,
-                    left: 12.0
-                })
-                .style(search_input_style)
+                .size(12)
+                .align_x(iced::Alignment::Center)
+                .padding(SETTINGS_CONTROL_PADDING)
+                .style(settings_input_style)
                 .width(Length::Fixed(80.0)),
         ]
         .spacing(16)
@@ -290,12 +286,7 @@ impl App {
                     text_color: theme().text_primary,
                     ..Default::default()
                 })
-                .padding(iced::Padding {
-                    top: 6.0,
-                    right: 16.0,
-                    bottom: 6.0,
-                    left: 16.0
-                }),
+                .padding(SETTINGS_CONTROL_PADDING),
         ]
         .spacing(16)
         .align_y(iced::Alignment::Center);
@@ -326,12 +317,7 @@ impl App {
                     text_color: theme().text_primary,
                     ..Default::default()
                 })
-                .padding(iced::Padding {
-                    top: 6.0,
-                    right: 16.0,
-                    bottom: 6.0,
-                    left: 16.0
-                }),
+                .padding(SETTINGS_CONTROL_PADDING),
         ]
         .spacing(16)
         .align_y(iced::Alignment::Center);
@@ -362,12 +348,7 @@ impl App {
                     text_color: theme().text_primary,
                     ..Default::default()
                 })
-                .padding(iced::Padding {
-                    top: 6.0,
-                    right: 16.0,
-                    bottom: 6.0,
-                    left: 16.0
-                }),
+                .padding(SETTINGS_CONTROL_PADDING),
         ]
         .spacing(16)
         .align_y(iced::Alignment::Center);
@@ -398,12 +379,7 @@ impl App {
                     text_color: theme().text_primary,
                     ..Default::default()
                 })
-                .padding(iced::Padding {
-                    top: 6.0,
-                    right: 16.0,
-                    bottom: 6.0,
-                    left: 16.0
-                }),
+                .padding(SETTINGS_CONTROL_PADDING),
         ]
         .spacing(16)
         .align_y(iced::Alignment::Center);
@@ -434,12 +410,7 @@ impl App {
                     text_color: theme().text_primary,
                     ..Default::default()
                 })
-                .padding(iced::Padding {
-                    top: 6.0,
-                    right: 16.0,
-                    bottom: 6.0,
-                    left: 16.0
-                }),
+                .padding(SETTINGS_CONTROL_PADDING),
         ]
         .spacing(16)
         .align_y(iced::Alignment::Center);
@@ -462,19 +433,14 @@ impl App {
                 .style(|_theme, _status| button::Style {
                     background: Some(Background::Color(theme().bg_secondary)),
                     border: iced::Border {
-                        color: Color::from_rgba(1.0, 1.0, 1.0, 0.88),
+                        color: Color::from_rgba(1.0, 1.0, 1.0, 0.08),
                         width: 1.0,
                         radius: 4.0.into(),
                     },
                     text_color: theme().text_primary,
                     ..Default::default()
                 })
-                .padding(iced::Padding {
-                    top: 6.0,
-                    right: 16.0,
-                    bottom: 6.0,
-                    left: 16.0
-                }),
+                .padding(SETTINGS_CONTROL_PADDING),
         ]
         .spacing(16)
         .align_y(iced::Alignment::Center);
@@ -493,14 +459,10 @@ impl App {
                 &self.editor_preferences.autosave_interval_ms.to_string()
             )
             .on_input(Message::SettingsAutosaveIntervalChanged)
-            .size(13)
-            .padding(iced::Padding {
-                top: 8.0,
-                right: 12.0,
-                bottom: 8.0,
-                left: 12.0
-            })
-            .style(search_input_style)
+            .size(12)
+            .align_x(iced::Alignment::Center)
+            .padding(SETTINGS_CONTROL_PADDING)
+            .style(settings_input_style)
             .width(Length::Fixed(100.0)),
         ]
         .spacing(16)
@@ -532,12 +494,7 @@ impl App {
                     text_color: theme().text_primary,
                     ..Default::default()
                 })
-                .padding(iced::Padding {
-                    top: 6.0,
-                    right: 16.0,
-                    bottom: 6.0,
-                    left: 16.0,
-                }),
+                .padding(SETTINGS_CONTROL_PADDING),
         ]
         .spacing(16)
         .align_y(iced::Alignment::Center);
@@ -551,14 +508,10 @@ impl App {
             .width(Length::FillPortion(2)),
             text_input("40", &self.editor_preferences.line_number_width.to_string())
                 .on_input(Message::SettingsLineNumberWidthChanged)
-                .size(13)
-                .padding(iced::Padding {
-                    top: 8.0,
-                    right: 12.0,
-                    bottom: 8.0,
-                    left: 12.0
-                })
-                .style(search_input_style)
+                .size(12)
+                .align_x(iced::Alignment::Center)
+                .padding(SETTINGS_CONTROL_PADDING)
+                .style(settings_input_style)
                 .width(Length::Fixed(80.0)),
         ]
         .spacing(16)
@@ -819,12 +772,7 @@ impl App {
                     text_color: theme().text_primary,
                     ..Default::default()
                 })
-                .padding(iced::Padding {
-                    top: 6.0,
-                    right: 16.0,
-                    bottom: 6.0,
-                    left: 16.0,
-                });
+                .padding(SETTINGS_CONTROL_PADDING);
 
         let developer_mode_row = row![
             column![
@@ -861,12 +809,7 @@ impl App {
                 text_color: theme().text_primary,
                 ..Default::default()
             })
-            .padding(iced::Padding {
-                top: 6.0,
-                right: 16.0,
-                bottom: 6.0,
-                left: 16.0,
-            });
+            .padding(SETTINGS_CONTROL_PADDING);
 
         let lsp_row = row![
             column![
@@ -966,12 +909,7 @@ impl App {
                 text_color: theme().text_primary,
                 ..Default::default()
             })
-            .padding(iced::Padding {
-                top: 6.0,
-                right: 16.0,
-                bottom: 6.0,
-                left: 16.0,
-            });
+            .padding(SETTINGS_CONTROL_PADDING);
 
         let log_count = self.developer_logs.len();
         let logs_header = row![
@@ -1380,5 +1318,36 @@ impl App {
             .width(Length::Fill)
             .height(Length::Fill)
             .into()
+    }
+}
+
+/// Padding shared by the settings toggle buttons and number inputs, so every
+/// control on the right of a row is the same height.
+const SETTINGS_CONTROL_PADDING: iced::Padding = iced::Padding {
+    top: 6.0,
+    right: 16.0,
+    bottom: 6.0,
+    left: 16.0,
+};
+
+/// A number field drawn as the same box as the settings toggle buttons, with
+/// a brighter border while it is being edited.
+fn settings_input_style(
+    iced_theme: &iced::Theme,
+    status: iced::widget::text_input::Status,
+) -> iced::widget::text_input::Style {
+    let border_alpha = if matches!(status, iced::widget::text_input::Status::Focused { .. }) {
+        0.24
+    } else {
+        0.08
+    };
+    iced::widget::text_input::Style {
+        background: Background::Color(theme().bg_secondary),
+        border: iced::Border {
+            color: Color::from_rgba(1.0, 1.0, 1.0, border_alpha),
+            width: 1.0,
+            radius: 4.0.into(),
+        },
+        ..search_input_style(iced_theme, status)
     }
 }

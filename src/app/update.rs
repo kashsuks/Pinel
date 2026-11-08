@@ -3554,7 +3554,7 @@ impl App {
 
 /// The Rich Presence details line and large image key for the active tab's
 /// file name. A commit tab's synthetic `commit:<hash>` name shows as
-/// "Viewing commit: <short hash>" with the git logo. 
+/// "Viewing commit: <short hash>" with the git logo.
 fn presence_details(file_name: Option<&str>) -> (String, &'static str) {
     match file_name {
         Some(name) => match name.strip_prefix("commit:") {
