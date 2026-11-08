@@ -195,6 +195,14 @@ pub enum Message {
     GitCommitDetailLoaded(String, Option<crate::features::git_commit::CommitDetail>),
     /// Opens a web link in the default browser.
     OpenUrl(String),
+    /// Opens a commit from the git graph in the preview tab.
+    OpenCommitTab(String),
+    /// Carries the per-file diffs of a commit for its tab.
+    GitCommitDiffLoaded(String, Vec<crate::features::git_diff::FileDiff>),
+    /// Folds or unfolds one file's diff in the active commit tab.
+    ToggleCommitFile(usize),
+    /// Copies text to the clipboard.
+    CopyText(String),
 
     /// Starts a new, empty chat session and makes it the active one.
     ChatNewSession,

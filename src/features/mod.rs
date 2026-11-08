@@ -12,6 +12,7 @@ pub mod find_replace;
 pub mod fuzzy_finder;
 pub mod git;
 pub mod git_commit;
+pub mod git_diff;
 pub mod git_graph;
 pub mod icons;
 pub mod lsp;

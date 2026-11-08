@@ -193,6 +193,20 @@ impl App {
         )
     }
 
+    /// The tab title for a commit: its short hash and a cut-down subject.
+    fn commit_tab_name(&self, hash: &str) -> String {
+        let short = &hash[..hash.len().min(7)];
+        match self.git_history.iter().find(|c| c.hash == hash) {
+            Some(commit) => {
+                format!(
+                    "{short} {}",
+                    crate::ui::git_graph::truncate_subject(&commit.subject, 24)
+                )
+            },
+            None => short.to_string(),
+        }
+    }
+
     pub(super) fn open_path_task(path: PathBuf) -> iced::Task<Message> {
         iced::Task::perform(
             async move {
@@ -1830,6 +1844,90 @@ impl App {
                         .spawn();
                     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
                     let _ = std::process::Command::new("xdg-open").arg(&url).spawn();
+                }
+                iced::Task::none()
+            },
+            Message::CopyText(text) => iced::clipboard::write(text),
+            Message::OpenCommitTab(hash) => {
+                // the card is in the way once a click has opened the commit info
+                self.git_card = None;
+                self.git_card_hovered = false;
+
+                let path = PathBuf::from(format!("commit:{hash}"));
+                let idx = match self.tabs.iter().position(|t| t.path == path) {
+                    // already open, whether pinned or as the current preview
+                    Some(idx) => idx,
+                    None => {
+                        let name = self.commit_tab_name(&hash);
+                        let kind = TabKind::Commit {
+                            hash: hash.clone(),
+                            diff: None,
+                            collapsed: std::collections::HashSet::new(),
+                            preview: true,
+                        };
+                        let preview_slot = self
+                            .tabs
+                            .iter()
+                            .position(|t| matches!(t.kind, TabKind::Commit { preview: true, .. }));
+                        match preview_slot {
+                            // the preview tab moves on to this commit
+                            Some(idx) => {
+                                let tab = &mut self.tabs[idx];
+                                tab.path = path;
+                                tab.name = name;
+                                tab.kind = kind;
+                                idx
+                            },
+                            None => {
+                                self.tabs.push(Tab {
+                                    path,
+                                    name,
+                                    kind,
+                                    autosave_requested_at: None,
+                                    autosave_in_flight: false,
+                                });
+                                self.tabs.len() - 1
+                            },
+                        }
+                    },
+                };
+
+                let needs_diff = matches!(&self.tabs[idx].kind, TabKind::Commit { diff: None, .. });
+                let select = self.update(Message::TabSelected(idx));
+                let details = self.fetch_commit_detail(hash.clone());
+                if !needs_diff {
+                    return iced::Task::batch([select, details]);
+                }
+                let root = self.file_tree.as_ref().map(|t| t.root.clone());
+                let diff = iced::Task::perform(
+                    crate::features::git_diff::load_commit_diff_async(root, hash.clone()),
+                    move |files| Message::GitCommitDiffLoaded(hash.clone(), files),
+                );
+                iced::Task::batch([select, details, diff])
+            },
+            Message::GitCommitDiffLoaded(hash, files) => {
+                // the preview tab may have moved on to another commit by now
+                let slot = self.tabs.iter_mut().find_map(|tab| match &mut tab.kind {
+                    TabKind::Commit {
+                        hash: shown, diff, ..
+                    } if *shown == hash => Some(diff),
+                    _ => None,
+                });
+                if let Some(diff) = slot {
+                    *diff = Some(files);
+                }
+                iced::Task::none()
+            },
+            Message::ToggleCommitFile(file) => {
+                let active = self.active_tab.and_then(|idx| self.tabs.get_mut(idx));
+                if let Some(Tab {
+                    kind: TabKind::Commit { collapsed, .. },
+                    ..
+                }) = active
+                {
+                    if !collapsed.remove(&file) {
+                        collapsed.insert(file);
+                    }
                 }
                 iced::Task::none()
             },

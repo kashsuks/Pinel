@@ -560,6 +560,14 @@ impl App {
                         .height(Length::Fill)
                         .into();
                     },
+                    TabKind::Commit {
+                        hash,
+                        diff,
+                        collapsed,
+                        ..
+                    } => {
+                        return self.view_commit_tab(hash, diff.as_deref(), collapsed);
+                    },
                     TabKind::Image { handle } => {
                         return container(
                             scrollable(

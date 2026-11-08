@@ -46,6 +46,7 @@ mod commands;
 mod lifecycle;
 mod subscription;
 mod update;
+mod view_commit;
 mod view_editor;
 mod view_finders;
 mod view_integrations;
@@ -80,6 +81,17 @@ pub enum TabKind {
         duration_secs: f32,
         position_secs: f32,
     },
+    /// One commit's diff, opened from the git graph. Its details come from
+    /// `App::git_commit_details`.
+    Commit {
+        hash: String,
+        /// `None` until `git show` answers.
+        diff: Option<Vec<crate::features::git_diff::FileDiff>>,
+        /// Files folded away, by index into `diff`.
+        collapsed: std::collections::HashSet<usize>,
+        /// Whether the next commit clicked in the graph replaces this tab.
+        preview: bool,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -99,6 +111,7 @@ impl std::fmt::Debug for TabKind {
             #[cfg(feature = "video")]
             TabKind::Video { .. } => f.debug_struct("Video").finish_non_exhaustive(),
             TabKind::Audio { .. } => f.debug_struct("Audio").finish_non_exhaustive(),
+            TabKind::Commit { .. } => f.debug_struct("Commit").finish_non_exhaustive(),
         }
     }
 }
@@ -647,8 +660,12 @@ impl App {
     pub(super) fn current_session_state(&self) -> crate::config::session::SessionState {
         let folder = self.file_tree.as_ref().map(|tree| tree.root.clone());
 
-        let open_tabs: Vec<std::path::PathBuf> =
-            self.tabs.iter().map(|tab| tab.path.clone()).collect();
+        let open_tabs: Vec<std::path::PathBuf> = self
+            .tabs
+            .iter()
+            .filter(|tab| !matches!(tab.kind, TabKind::Commit { .. }))
+            .map(|tab| tab.path.clone())
+            .collect();
 
         let cursor_position = self
             .tabs
@@ -667,6 +684,7 @@ impl App {
             active_tab_index: self
                 .active_tab
                 .and_then(|idx| self.tabs.get(idx))
+                .filter(|tab| !matches!(tab.kind, TabKind::Commit { .. }))
                 .map(|tab| tab.path.clone()),
             cursor_position,
         }
@@ -775,6 +793,10 @@ impl App {
         let Some(tab) = self.tabs.get(idx) else {
             return;
         };
+
+        if matches!(tab.kind, TabKind::Commit { .. }) {
+            return;
+        }
 
         let cursor = match &tab.kind {
             TabKind::Editor { code_editor, .. } => code_editor.cursor_position(),
