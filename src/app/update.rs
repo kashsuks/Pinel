@@ -3554,8 +3554,7 @@ impl App {
 
 /// The Rich Presence details line and large image key for the active tab's
 /// file name. A commit tab's synthetic `commit:<hash>` name shows as
-/// "Viewing commit: <short hash>" with the Pinel logo, since commits have no
-/// file icon.
+/// "Viewing commit: <short hash>" with the git logo. 
 fn presence_details(file_name: Option<&str>) -> (String, &'static str) {
     match file_name {
         Some(name) => match name.strip_prefix("commit:") {
@@ -3564,7 +3563,7 @@ fn presence_details(file_name: Option<&str>) -> (String, &'static str) {
                     "Viewing commit: {}",
                     hash.chars().take(7).collect::<String>()
                 ),
-                "pinel",
+                "git",
             ),
             None => (
                 format!("Editing {name}"),
@@ -3599,7 +3598,7 @@ mod tests {
         let (details, icon) =
             presence_details(Some("commit:34c2516f4c117e9aa18733fff7198feae7945a2a"));
         assert_eq!(details, "Viewing commit: 34c2516");
-        assert_eq!(icon, "pinel");
+        assert_eq!(icon, "git");
     }
 
     #[test]
