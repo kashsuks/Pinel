@@ -433,20 +433,13 @@ impl App {
                 .map(|name| name.to_string_lossy().to_string())
                 .unwrap_or_else(|| path.to_string_lossy().to_string())
         });
-        let details = match &file_name {
-            Some(file_name) => format!("Editing {file_name}"),
-            None => "Idle".to_string(),
-        };
+        let (details, icon_key) = presence_details(file_name.as_deref());
         let state = self
             .activity_state
             .workspace_name
             .as_deref()
             .map(|name| format!("Workspace: {name}"));
 
-        let icon_key = file_name
-            .as_deref()
-            .map(crate::features::icons::file_icon_key)
-            .unwrap_or("pinel");
         let icon_text = prettify_icon_key(icon_key);
         let large_image = Some(crate::discord_rpc::LargeImage {
             key: icon_key,
@@ -3559,6 +3552,29 @@ impl App {
     }
 }
 
+/// The Rich Presence details line and large image key for the active tab's
+/// file name. A commit tab's synthetic `commit:<hash>` name shows as
+/// "Viewing commit: <short hash>" with the Pinel logo, since commits have no
+/// file icon.
+fn presence_details(file_name: Option<&str>) -> (String, &'static str) {
+    match file_name {
+        Some(name) => match name.strip_prefix("commit:") {
+            Some(hash) => (
+                format!(
+                    "Viewing commit: {}",
+                    hash.chars().take(7).collect::<String>()
+                ),
+                "pinel",
+            ),
+            None => (
+                format!("Editing {name}"),
+                crate::features::icons::file_icon_key(name),
+            ),
+        },
+        None => ("Idle".to_string(), "pinel"),
+    }
+}
+
 /// Turns an icon/asset key like "cpp-h" or "javascript" into a readable
 /// tooltip like "Cpp H" / "Javascript" for the Discord large image hover text.
 fn prettify_icon_key(key: &str) -> String {
@@ -3572,4 +3588,41 @@ fn prettify_icon_key(key: &str) -> String {
         })
         .collect::<Vec<_>>()
         .join(" ")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_presence_details_commit_tab_shows_short_hash() {
+        let (details, icon) =
+            presence_details(Some("commit:34c2516f4c117e9aa18733fff7198feae7945a2a"));
+        assert_eq!(details, "Viewing commit: 34c2516");
+        assert_eq!(icon, "pinel");
+    }
+
+    #[test]
+    fn test_presence_details_short_commit_hash_is_kept_whole() {
+        let (details, _) = presence_details(Some("commit:abc"));
+        assert_eq!(details, "Viewing commit: abc");
+    }
+
+    #[test]
+    fn test_presence_details_file_tab_is_unchanged() {
+        let (details, icon) = presence_details(Some("update.rs"));
+        assert_eq!(details, "Editing update.rs");
+        assert_eq!(icon, crate::features::icons::file_icon_key("update.rs"));
+    }
+
+    #[test]
+    fn test_presence_details_non_ascii_name_does_not_panic() {
+        let (details, _) = presence_details(Some("commit:éééééééé"));
+        assert_eq!(details, "Viewing commit: ééééééé");
+    }
+
+    #[test]
+    fn test_presence_details_no_tab_is_idle() {
+        assert_eq!(presence_details(None), ("Idle".to_string(), "pinel"));
+    }
 }
