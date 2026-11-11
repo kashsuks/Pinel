@@ -683,11 +683,11 @@ impl CodeEditor {
     /// use iced_code_editor::CodeEditor;
     ///
     /// let mut editor = CodeEditor::new("fn main() {}", "rs");
-    /// // Enabled by default.
-    /// assert!(editor.show_whitespace());
-    ///
-    /// editor.set_show_whitespace(false);
+    /// // Disabled by default.
     /// assert!(!editor.show_whitespace());
+    ///
+    /// editor.set_show_whitespace(true);
+    /// assert!(editor.show_whitespace());
     /// ```
     pub fn show_whitespace(&self) -> bool {
         self.show_whitespace

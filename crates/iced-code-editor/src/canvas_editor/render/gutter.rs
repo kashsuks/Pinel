@@ -127,7 +127,7 @@ impl CodeEditor {
 
         let line_content = self.buffer.line(visual_line.logical_line);
         let line_width = measure_text_width(line_content, ctx.full_char_width, ctx.char_width);
-        let x = ctx.gutter_width + 5.0 - ctx.horizontal_scroll_offset + line_width + 6.0;
+        let x = ctx.text_start_x() - ctx.horizontal_scroll_offset + line_width + 6.0;
         frame.fill_text(canvas::Text {
             content: "⋯".to_string(),
             position: Point::new(x, y + 2.0),

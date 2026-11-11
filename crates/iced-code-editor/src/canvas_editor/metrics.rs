@@ -16,6 +16,8 @@ pub(crate) const GUTTER_WIDTH: f32 = 45.0;
 /// Width in pixels of the fold margin (chevron column) added to the gutter when
 /// code folding is enabled.
 pub(crate) const FOLD_MARGIN_WIDTH: f32 = 14.0;
+/// Gap in pixles between the end of the gutter and the first text column
+pub(crate) const TEXT_LEFT_PADDING: f32 = 5.0;
 pub(crate) const CURSOR_BLINK_INTERVAL: std::time::Duration = std::time::Duration::from_millis(530);
 
 /// Measures the width of a single character.
@@ -466,6 +468,12 @@ impl CodeEditor {
         self.line_number_gutter_width() + self.fold_margin_width()
     }
 
+    /// Returns the x coordinate where the first text column starts, before
+    /// horizontal scroll is applied
+    pub(crate) fn text_start_x(&self) -> f32 {
+        self.gutter_width() + TEXT_LEFT_PADDING
+    }
+
     /// Returns the width of the line-number area (excluding the fold margin).
     pub(crate) fn line_number_gutter_width(&self) -> f32 {
         if self.line_numbers_enabled {
@@ -495,6 +503,17 @@ mod tests {
         assert_eq!(indent_width(""), None);
         assert_eq!(indent_width("   "), None);
         assert_eq!(indent_width("\t"), None);
+    }
+
+    #[test]
+    fn test_text_start_x_adds_padding_to_gutter() {
+        let mut editor = CodeEditor::new("", "rs");
+        let expected = editor.gutter_width() + TEXT_LEFT_PADDING;
+        assert!((editor.text_start_x() - expected).abs() < f32::EPSILON);
+
+        editor.set_line_numbers_enabled(false);
+        editor.set_folding_enabled(false);
+        assert!((editor.text_start_x() - TEXT_LEFT_PADDING).abs() < f32::EPSILON);
     }
 
     #[test]

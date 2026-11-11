@@ -15,7 +15,8 @@ use super::wrapping::VisualLine;
 use crate::canvas_editor::IndentStyle;
 use crate::canvas_editor::features::{bracket_match, color_preview, indent_guides};
 use crate::canvas_editor::{
-    CodeEditor, HighlightCache, TAB_WIDTH, measure_char_width, measure_text_width,
+    CodeEditor, HighlightCache, TAB_WIDTH, TEXT_LEFT_PADDING, measure_char_width,
+    measure_text_width,
 };
 
 /// Width in pixels of a single indentation guide line.
@@ -251,6 +252,14 @@ pub(super) struct RenderContext<'a> {
     pub(super) horizontal_scroll_offset: f32,
 }
 
+impl RenderContext<'_> {
+    /// Returns the x coordinate where the first text column starts, before
+    /// horizontal scroll is applied
+    pub(super) fn text_start_x(&self) -> f32 {
+        self.gutter_width + TEXT_LEFT_PADDING
+    }
+}
+
 impl CodeEditor {
     /// Returns the memoized syntax-highlighted spans for a logical line.
     ///
@@ -395,7 +404,7 @@ impl CodeEditor {
                 syntax_set,
             );
 
-            let mut x_offset = ctx.gutter_width + 5.0 - ctx.horizontal_scroll_offset;
+            let mut x_offset = ctx.text_start_x() - ctx.horizontal_scroll_offset;
             let mut char_pos = 0;
 
             for (color, text) in spans.iter() {
@@ -474,7 +483,7 @@ impl CodeEditor {
             } else {
                 expand_tabs(line_segment, TAB_WIDTH).into_owned()
             };
-            let base_x = ctx.gutter_width + 5.0 - ctx.horizontal_scroll_offset;
+            let base_x = ctx.text_start_x() - ctx.horizontal_scroll_offset;
             if self.show_whitespace {
                 let ws_color = self.style.whitespace_color;
                 let text_color = self.style.text_color;
@@ -545,7 +554,7 @@ impl CodeEditor {
         };
         let levels = indent_guides::guide_levels(&self.buffer, visual_line.logical_line, unit);
 
-        let base_x = ctx.gutter_width + 5.0 - ctx.horizontal_scroll_offset;
+        let base_x = ctx.text_start_x() - ctx.horizontal_scroll_offset;
         for level in 0..levels {
             let x = base_x + (level * unit) as f32 * ctx.char_width;
             frame.fill_rectangle(
@@ -608,7 +617,7 @@ impl CodeEditor {
                 visual_line.start_col,
                 literal.end_col,
                 literal.end_col,
-                ctx.gutter_width + 5.0,
+                ctx.text_start_x(),
                 ctx.full_char_width,
                 ctx.char_width,
             );
@@ -680,7 +689,7 @@ impl CodeEditor {
                 visual_line.start_col,
                 col,
                 col + 1,
-                ctx.gutter_width + 5.0,
+                ctx.text_start_x(),
                 ctx.full_char_width,
                 ctx.char_width,
             );

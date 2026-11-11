@@ -230,8 +230,7 @@ impl CodeEditor {
             let prefix_len = self.cursors.primary_position().1.saturating_sub(vl.start_col);
             let prefix_text: String =
                 line_content.chars().skip(vl.start_col).take(prefix_len).collect();
-            let cursor_x = self.gutter_width()
-                + 5.0
+            let cursor_x = self.text_start_x()
                 + crate::canvas_editor::measure_text_width(
                     &prefix_text,
                     self.full_char_width,
