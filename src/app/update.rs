@@ -2578,6 +2578,11 @@ impl App {
                 self.apply_auto_indent_to_tabs();
                 iced::Task::none()
             },
+            Message::SettingsToggleShowWhitespace => {
+                self.editor_preferences.show_whitespace = !self.editor_preferences.show_whitespace;
+                self.apply_show_whitespace_to_tabs();
+                iced::Task::none()
+            },
             Message::SettingsToggleVimMode => {
                 self.editor_preferences.vim_mode_enabled =
                     !self.editor_preferences.vim_mode_enabled;
@@ -2625,6 +2630,7 @@ impl App {
                 let _ = prefs::save_preferences(&self.editor_preferences);
                 self.apply_indent_style_to_tabs();
                 self.apply_auto_indent_to_tabs();
+                self.apply_show_whitespace_to_tabs();
                 self.apply_vim_mode_to_tabs();
                 self.notification = Some(Notification {
                     message: "Preferences saved".to_string(),

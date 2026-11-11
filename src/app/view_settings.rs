@@ -322,6 +322,37 @@ impl App {
         .spacing(16)
         .align_y(iced::Alignment::Center);
 
+        let show_whitespace_label = if self.editor_preferences.show_whitespace {
+            "Enabled"
+        } else {
+            "Disabled"
+        };
+        let show_whitespace_row = row![
+            column![
+                text("Show Whitespace").size(13).color(theme().text_muted),
+                text("Draw spaces as \u{b7} and tabs as \u{2192}")
+                    .size(11)
+                    .color(theme().text_dim),
+            ]
+            .spacing(2)
+            .width(Length::FillPortion(2)),
+            button(text(show_whitespace_label).size(12).color(theme().text_primary))
+                .on_press(Message::SettingsToggleShowWhitespace)
+                .style(|_theme, _status| button::Style {
+                    background: Some(Background::Color(theme().bg_secondary)),
+                    border: iced::Border {
+                        color: Color::from_rgba(1.0, 1.0, 1.0, 0.08),
+                        width: 1.0,
+                        radius: 4.0.into(),
+                    },
+                    text_color: theme().text_primary,
+                    ..Default::default()
+                })
+                .padding(SETTINGS_CONTROL_PADDING),
+        ]
+        .spacing(16)
+        .align_y(iced::Alignment::Center);
+
         let vim_mode_label = if self.editor_preferences.vim_mode_enabled {
             "Enabled"
         } else {
@@ -663,6 +694,13 @@ impl App {
                 }
             ),
             auto_indent_row,
+            container(Space::new().width(Length::Fill).height(Length::Fixed(1.0))).style(
+                |_theme| container::Style {
+                    background: Some(Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.03))),
+                    ..Default::default()
+                }
+            ),
+            show_whitespace_row,
             container(Space::new().width(Length::Fill).height(Length::Fixed(1.0))).style(
                 |_theme| container::Style {
                     background: Some(Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.03))),

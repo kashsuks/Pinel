@@ -656,7 +656,7 @@ impl CodeEditor {
             translations: Translations::default(),
             search_replace_enabled: true,
             line_numbers_enabled: true,
-            show_whitespace: true,
+            show_whitespace: false,
             show_indent_guides: true,
             show_color_previews: true,
             bracket_match_highlight_enabled: true,
