@@ -706,7 +706,7 @@ mod tests {
         let _ = editor.update(&Message::SelectNextOccurrence);
         let _ = editor.update(&Message::SelectNextOccurrence);
         let _ = editor.update(&Message::AltClick(iced::Point::new(
-            editor.gutter_width() + 5.0,
+            editor.text_start_x(),
             editor.line_height,
         )));
         assert_eq!(editor.cursors.len(), 1);
