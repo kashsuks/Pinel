@@ -610,6 +610,7 @@ impl App {
         editor.set_indent_style(indent_style);
         editor.set_auto_indent_enabled(self.editor_preferences.auto_indent_enabled);
         editor.set_show_whitespace(self.editor_preferences.show_whitespace);
+        editor.set_line_number_width(self.editor_preferences.line_number_width);
         editor.set_vim_enabled(self.editor_preferences.vim_mode_enabled);
 
         editor
@@ -655,6 +656,16 @@ impl App {
         for tab in &mut self.tabs {
             if let TabKind::Editor { code_editor, .. } = &mut tab.kind {
                 code_editor.set_show_whitespace(enabled);
+            }
+        }
+    }
+
+    pub(super) fn apply_line_number_width_to_tabs(&mut self) {
+        let width = self.editor_preferences.line_number_width;
+
+        for tab in &mut self.tabs {
+            if let TabKind::Editor { code_editor, .. } = &mut tab.kind {
+                code_editor.set_line_number_width(width);
             }
         }
     }

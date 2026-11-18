@@ -2631,6 +2631,7 @@ impl App {
                 self.apply_indent_style_to_tabs();
                 self.apply_auto_indent_to_tabs();
                 self.apply_show_whitespace_to_tabs();
+                self.apply_line_number_width_to_tabs();
                 self.apply_vim_mode_to_tabs();
                 self.notification = Some(Notification {
                     message: "Preferences saved".to_string(),

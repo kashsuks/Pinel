@@ -196,6 +196,8 @@ pub struct CodeEditor {
     pub(crate) search_replace_enabled: bool,
     /// Whether line numbers are displayed
     pub(crate) line_numbers_enabled: bool,
+    /// Minimum width in pixels of the line-number area; grows to fit wider numbers
+    pub(crate) line_number_width: f32,
     /// Whether to render whitespace characters visibly (spaces as `·`, tabs as `→`)
     pub(crate) show_whitespace: bool,
     /// Whether vertical indentation guides are drawn behind the text.
@@ -656,6 +658,7 @@ impl CodeEditor {
             translations: Translations::default(),
             search_replace_enabled: true,
             line_numbers_enabled: true,
+            line_number_width: GUTTER_WIDTH,
             show_whitespace: false,
             show_indent_guides: true,
             show_color_previews: true,
