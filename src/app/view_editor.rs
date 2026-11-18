@@ -898,6 +898,61 @@ impl App {
             .into()
     }
 
+    /// Builds the `project › file › symbol` row shown under the tab bar.
+    ///
+    /// Returns `None` when breadcrumbs are turned off or the active tab is not
+    /// a text editor. The symbol part appears once the language server has
+    /// sent the document outline.
+    pub(super) fn view_breadcrumbs(&self) -> Option<Element<'_, Message>> {
+        if !self.editor_preferences.show_breadcrumbs {
+            return None;
+        }
+        let tab = self.active_tab.and_then(|idx| self.tabs.get(idx))?;
+        if !matches!(tab.kind, TabKind::Editor { .. }) {
+            return None;
+        }
+
+        let root = self.file_tree.as_ref().map(|tree| tree.root.as_path());
+        let path_crumbs = crate::features::breadcrumbs::path_segments(&tab.path, root);
+        let cursor_line = u32::try_from(self.cursor_line.saturating_sub(1)).unwrap_or(u32::MAX);
+        let symbol_crumbs = self
+            .document_symbols
+            .get(&crate::features::lsp::document_uri(&tab.path))
+            .map(|symbols| iced_code_editor::symbol_path_at(symbols, cursor_line))
+            .unwrap_or_default();
+
+        let total = path_crumbs.len() + symbol_crumbs.len();
+        let mut items: Vec<Element<'_, Message>> = Vec::with_capacity(total * 2);
+        for (index, crumb) in path_crumbs.into_iter().chain(symbol_crumbs).enumerate() {
+            if index > 0 {
+                items.push(text("\u{203a}").size(12).color(theme().text_placeholder).into());
+            }
+            let color = if index + 1 == total {
+                theme().text_secondary
+            } else {
+                theme().text_dim
+            };
+            items.push(text(crumb).size(12).color(color).into());
+        }
+
+        Some(
+            container(row(items).spacing(6).align_y(iced::Alignment::Center))
+                .padding(iced::Padding {
+                    top: 3.0,
+                    right: 12.0,
+                    bottom: 3.0,
+                    left: 12.0,
+                })
+                .width(Length::Fill)
+                .clip(true)
+                .style(|_theme| container::Style {
+                    background: Some(Background::Color(theme().bg_editor)),
+                    ..container::Style::default()
+                })
+                .into(),
+        )
+    }
+
     pub(super) fn view_status_bar(&self) -> Element<'_, Message> {
         let file_info = self
             .active_tab

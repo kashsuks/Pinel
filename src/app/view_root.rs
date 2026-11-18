@@ -21,6 +21,9 @@ impl App {
             }
 
             editor_col_items.push(tab_bar);
+            if let Some(breadcrumbs) = self.view_breadcrumbs() {
+                editor_col_items.push(breadcrumbs);
+            }
             editor_col_items.push(editor_widget);
             if self.terminal_open {
                 editor_col_items.push(self.view_terminal_panel());

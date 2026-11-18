@@ -2,6 +2,7 @@
 
 pub mod activity_state;
 pub mod ai_client;
+pub mod breadcrumbs;
 pub mod chat;
 pub mod chat_providers;
 pub mod command_input;

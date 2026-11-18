@@ -631,6 +631,7 @@ impl App {
 
                         if before != after {
                             self.queue_autosave_for_active_tab();
+                            self.schedule_symbol_refresh(super::SYMBOL_REFRESH_DELAY);
                         }
                     }
                     if !matches!(event, EditorMessage::MouseHover(_)) {
@@ -1206,7 +1207,7 @@ impl App {
                         let root_hint = opened_path.parent();
                         match self.lsp.create_client(language.server_key, root_hint) {
                             Ok(client) => {
-                                let uri = format!("file://{}", opened_path.display());
+                                let uri = crate::features::lsp::document_uri(&opened_path);
                                 let document =
                                     iced_code_editor::LspDocument::new(uri, language.language_id);
                                 if let Some(tab) = self.tabs.last_mut() {
@@ -1220,6 +1221,8 @@ impl App {
                                     }
                                 }
                                 self.lsp_server_keys.insert(opened_path, language.server_key);
+                                self.symbols_empty_replies = 0;
+                                self.schedule_symbol_refresh(super::SYMBOL_REFRESH_DELAY);
                                 self.dev_log(format!(
                                     "LSP: Successfully attached {} server",
                                     language.server_key
@@ -1281,7 +1284,7 @@ impl App {
                             let root_hint = tab_path.parent();
                             match self.lsp.create_client(server_key, root_hint) {
                                 Ok(client) => {
-                                    let uri = format!("file://{}", tab_path.display());
+                                    let uri = crate::features::lsp::document_uri(&tab_path);
                                     if let Some(language) =
                                         iced_code_editor::lsp_language_for_path(&tab_path)
                                     {
@@ -1318,6 +1321,9 @@ impl App {
                             if let Some((client, document, server_key)) = lsp_client_data {
                                 code_editor.set_lsp_enabled(true);
                                 code_editor.attach_lsp(client, document);
+                                self.symbols_empty_replies = 0;
+                                self.symbols_refresh_at =
+                                    Some(Instant::now() + super::SYMBOL_REFRESH_DELAY);
                                 self.dev_log(format!(
                                     "LSP: Successfully reattached {} server",
                                     server_key
@@ -2583,6 +2589,15 @@ impl App {
                 self.apply_show_whitespace_to_tabs();
                 iced::Task::none()
             },
+            Message::SettingsToggleShowBreadcrumbs => {
+                self.editor_preferences.show_breadcrumbs =
+                    !self.editor_preferences.show_breadcrumbs;
+                if self.editor_preferences.show_breadcrumbs {
+                    self.symbols_empty_replies = 0;
+                    self.schedule_symbol_refresh(Duration::ZERO);
+                }
+                iced::Task::none()
+            },
             Message::SettingsToggleVimMode => {
                 self.editor_preferences.vim_mode_enabled =
                     !self.editor_preferences.vim_mode_enabled;
@@ -2969,6 +2984,7 @@ impl App {
             },
             Message::LspTick => {
                 if self.lsp_enabled {
+                    self.request_due_document_symbols();
                     if let Some(pending) = self.pending_hover_request.as_mut() {
                         if !pending.requested
                             && pending.started_at.elapsed() >= super::HOVER_TRIGGER_DELAY
@@ -3091,7 +3107,14 @@ impl App {
                             eprintln!("Definition: {} at {:?}", uri, range);
                         },
                         iced_code_editor::LspEvent::Progress { .. } => {},
-                        iced_code_editor::LspEvent::DocumentSymbols { .. } => {},
+                        iced_code_editor::LspEvent::DocumentSymbols { uri, symbols } => {
+                            self.dev_log(format!(
+                                "LSP: {} document symbols for {}",
+                                symbols.len(),
+                                uri
+                            ));
+                            self.receive_document_symbols(uri, symbols);
+                        },
                         iced_code_editor::LspEvent::Log {
                             server_key,
                             message,

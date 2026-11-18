@@ -106,6 +106,7 @@ pub enum Message {
     SettingsToggleUseSpaces,
     SettingsToggleAutoIndent,
     SettingsToggleShowWhitespace,
+    SettingsToggleShowBreadcrumbs,
     SettingsToggleVimMode,
     SettingsToggleDiscordRpc,
     SettingsToggleRestoreSession,
