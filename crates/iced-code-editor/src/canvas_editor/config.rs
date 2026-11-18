@@ -683,11 +683,11 @@ impl CodeEditor {
     /// use iced_code_editor::CodeEditor;
     ///
     /// let mut editor = CodeEditor::new("fn main() {}", "rs");
-    /// // Enabled by default.
-    /// assert!(editor.show_whitespace());
-    ///
-    /// editor.set_show_whitespace(false);
+    /// // Disabled by default.
     /// assert!(!editor.show_whitespace());
+    ///
+    /// editor.set_show_whitespace(true);
+    /// assert!(editor.show_whitespace());
     /// ```
     pub fn show_whitespace(&self) -> bool {
         self.show_whitespace
@@ -1284,6 +1284,49 @@ impl CodeEditor {
     /// ```
     pub fn line_numbers_enabled(&self) -> bool {
         self.line_numbers_enabled
+    }
+
+    /// Sets the minimum width in pixels of the line-number area.
+    ///
+    /// The area still widens automatically when the largest line number would
+    /// not fit. Negative and non-finite values are ignored.
+    ///
+    /// # Arguments
+    ///
+    /// * `width` - Minimum line-number area width in pixels
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use iced_code_editor::CodeEditor;
+    ///
+    /// let mut editor = CodeEditor::new("fn main() {}", "rs");
+    /// editor.set_line_number_width(32.0);
+    /// assert_eq!(editor.line_number_width(), 32.0);
+    /// ```
+    pub fn set_line_number_width(&mut self, width: f32) {
+        if !width.is_finite() || width < 0.0 {
+            return;
+        }
+        if self.line_number_width.to_bits() != width.to_bits() {
+            self.line_number_width = width;
+            self.content_cache.clear();
+            self.overlay_cache.clear();
+        }
+    }
+
+    /// Returns the configured minimum width in pixels of the line-number area.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use iced_code_editor::CodeEditor;
+    ///
+    /// let editor = CodeEditor::new("", "rs");
+    /// assert!(editor.line_number_width() > 0.0);
+    /// ```
+    pub fn line_number_width(&self) -> f32 {
+        self.line_number_width
     }
 
     /// Sets the line numbers display with builder pattern.

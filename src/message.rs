@@ -105,6 +105,8 @@ pub enum Message {
     SettingsTabSizeChanged(String),
     SettingsToggleUseSpaces,
     SettingsToggleAutoIndent,
+    SettingsToggleShowWhitespace,
+    SettingsToggleShowBreadcrumbs,
     SettingsToggleVimMode,
     SettingsToggleDiscordRpc,
     SettingsToggleRestoreSession,

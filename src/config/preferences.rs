@@ -9,6 +9,10 @@ pub struct EditorPreferences {
     pub use_spaces: bool,
     /// copy the leading whitespaces of the current line onto the new line on enter
     pub auto_indent_enabled: bool,
+    /// Render spaces as `·` and tabs as `→` in the editor (off by default).
+    pub show_whitespace: bool,
+    /// Show the `project › file › symbol` breadcrumb row under the tab bar.
+    pub show_breadcrumbs: bool,
     pub vim_mode_enabled: bool,
     pub discord_rpc_enabled: bool,
     pub restore_session_enabled: bool,
@@ -32,6 +36,8 @@ impl Default for EditorPreferences {
             tab_size: 4,
             use_spaces: true,
             auto_indent_enabled: true,
+            show_whitespace: false,
+            show_breadcrumbs: true,
             vim_mode_enabled: false,
             discord_rpc_enabled: false,
             restore_session_enabled: true,
@@ -122,6 +128,12 @@ fn parse_preferences(content: &str) -> EditorPreferences {
                 },
                 "auto_indent_enabled" => {
                     prefs.auto_indent_enabled = value == "true";
+                },
+                "show_whitespace" => {
+                    prefs.show_whitespace = value == "true";
+                },
+                "show_breadcrumbs" => {
+                    prefs.show_breadcrumbs = value == "true";
                 },
                 "vim_mode_enabled" => {
                     prefs.vim_mode_enabled = value == "true";
@@ -256,6 +268,10 @@ return {{
     tab_size = {},
     use_spaces = {},
     auto_indent_enabled = {},
+    -- Render spaces as · and tabs as → in the editor
+    show_whitespace = {},
+    -- Show the project › file › symbol row under the tab bar
+    show_breadcrumbs = {},
     vim_mode_enabled = {},
     discord_rpc_enabled = {},
     restore_session_enabled = {},
@@ -275,6 +291,8 @@ return {{
         prefs.tab_size,
         prefs.use_spaces,
         prefs.auto_indent_enabled,
+        prefs.show_whitespace,
+        prefs.show_breadcrumbs,
         prefs.vim_mode_enabled,
         prefs.discord_rpc_enabled,
         prefs.restore_session_enabled,
@@ -429,6 +447,44 @@ mod tests {
         assert_eq!(loaded.tab_size, prefs.tab_size);
         assert_eq!(loaded.use_spaces, prefs.use_spaces);
         assert_eq!(loaded.theme_name, prefs.theme_name);
+    }
+
+    #[test]
+    fn test_save_preferences_to_path_roundtrips_show_whitespace(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let dir = tempfile::tempdir()?;
+        let path = dir.path().join("preferences.lua");
+
+        assert!(!EditorPreferences::default().show_whitespace);
+
+        let prefs = EditorPreferences {
+            show_whitespace: true,
+            ..EditorPreferences::default()
+        };
+        save_preferences_to_path(&prefs, &path)?;
+        let loaded = read_preferences_from(&path).ok_or("file should parse")?;
+
+        assert!(loaded.show_whitespace);
+        Ok(())
+    }
+
+    #[test]
+    fn test_save_preferences_to_path_roundtrips_show_breadcrumbs(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let dir = tempfile::tempdir()?;
+        let path = dir.path().join("preferences.lua");
+
+        assert!(EditorPreferences::default().show_breadcrumbs);
+
+        let prefs = EditorPreferences {
+            show_breadcrumbs: false,
+            ..EditorPreferences::default()
+        };
+        save_preferences_to_path(&prefs, &path)?;
+        let loaded = read_preferences_from(&path).ok_or("file should parse")?;
+
+        assert!(!loaded.show_breadcrumbs);
+        Ok(())
     }
 
     #[test]

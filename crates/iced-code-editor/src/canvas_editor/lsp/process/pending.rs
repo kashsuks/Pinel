@@ -16,6 +16,11 @@ pub(super) enum LspRequestKind {
     Completion,
     /// Definition request — go to definition
     Definition,
+    /// Document symbol request — the outline of the document at `uri`
+    DocumentSymbols {
+        /// URI of the document the outline was requested for
+        uri: String,
+    },
 }
 
 /// A request awaiting a server response, tracked with the time it was sent.

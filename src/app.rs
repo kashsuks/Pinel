@@ -148,6 +148,13 @@ struct PendingHoverRequest {
 }
 
 const HOVER_TRIGGER_DELAY: Duration = Duration::from_secs(2);
+/// Quiet time after an edit or tab switch before the outline is re-requested.
+const SYMBOL_REFRESH_DELAY: Duration = Duration::from_millis(400);
+/// Wait before asking again when a server answers with an empty outline,
+/// which usually means it is still starting up.
+const SYMBOL_RETRY_DELAY: Duration = Duration::from_secs(2);
+/// Empty outline replies tolerated in a row before an empty outline is accepted.
+const SYMBOL_MAX_EMPTY_REPLIES: u8 = 3;
 /// How long the cursor rests on a commit before its card opens.
 const GIT_CARD_OPEN_DELAY: Duration = Duration::from_millis(300);
 /// How long the card stays after the cursor leaves the row and the card.
@@ -307,6 +314,12 @@ pub struct App {
     lsp_enabled: bool,
     lsp_server_keys: HashMap<PathBuf, &'static str>,
     pending_hover_request: Option<PendingHoverRequest>,
+    /// Outline of each open document, keyed by LSP document URI.
+    document_symbols: HashMap<String, Vec<iced_code_editor::LspSymbol>>,
+    /// When the active document's outline should next be requested.
+    symbols_refresh_at: Option<Instant>,
+    /// Empty outline replies received in a row for the active document.
+    symbols_empty_replies: u8,
 
     pending_sensitive_open: Option<PathBuf>,
 
@@ -506,6 +519,9 @@ impl Default for App {
             lsp_server_keys: HashMap::new(),
 
             pending_hover_request: None,
+            document_symbols: HashMap::new(),
+            symbols_refresh_at: None,
+            symbols_empty_replies: 0,
             pending_sensitive_open: None,
 
             tab_drag_index: None,
@@ -609,6 +625,8 @@ impl App {
         };
         editor.set_indent_style(indent_style);
         editor.set_auto_indent_enabled(self.editor_preferences.auto_indent_enabled);
+        editor.set_show_whitespace(self.editor_preferences.show_whitespace);
+        editor.set_line_number_width(self.editor_preferences.line_number_width);
         editor.set_vim_enabled(self.editor_preferences.vim_mode_enabled);
 
         editor
@@ -644,6 +662,80 @@ impl App {
         for tab in &mut self.tabs {
             if let TabKind::Editor { code_editor, .. } = &mut tab.kind {
                 code_editor.set_auto_indent_enabled(enabled);
+            }
+        }
+    }
+
+    /// Asks for the active document's outline once `delay` has passed.
+    ///
+    /// Calling again before then pushes the request back, so a burst of
+    /// keystrokes produces a single request.
+    pub(super) fn schedule_symbol_refresh(&mut self, delay: Duration) {
+        self.symbols_refresh_at = Some(Instant::now() + delay);
+    }
+
+    /// Sends the outline request scheduled by [`Self::schedule_symbol_refresh`]
+    /// once it is due. Does nothing while breadcrumbs are hidden.
+    pub(super) fn request_due_document_symbols(&mut self) {
+        let Some(due_at) = self.symbols_refresh_at else {
+            return;
+        };
+        if Instant::now() < due_at {
+            return;
+        }
+        self.symbols_refresh_at = None;
+        if !self.editor_preferences.show_breadcrumbs {
+            return;
+        }
+        if let Some(tab) = self.active_tab.and_then(|idx| self.tabs.get_mut(idx)) {
+            if let TabKind::Editor { code_editor, .. } = &mut tab.kind {
+                code_editor.lsp_request_document_symbols();
+            }
+        }
+    }
+
+    /// Stores an outline reply, retrying a few times when the active
+    /// document's server answers with nothing (common while it is indexing).
+    pub(super) fn receive_document_symbols(
+        &mut self,
+        uri: String,
+        symbols: Vec<iced_code_editor::LspSymbol>,
+    ) {
+        let is_active = self
+            .active_tab
+            .and_then(|idx| self.tabs.get(idx))
+            .is_some_and(|tab| crate::features::lsp::document_uri(&tab.path) == uri);
+
+        if symbols.is_empty() && is_active && self.symbols_empty_replies < SYMBOL_MAX_EMPTY_REPLIES
+        {
+            // Keep showing the previous outline until the retry answers.
+            self.symbols_empty_replies += 1;
+            self.schedule_symbol_refresh(SYMBOL_RETRY_DELAY);
+            return;
+        }
+
+        if !symbols.is_empty() {
+            self.symbols_empty_replies = 0;
+        }
+        self.document_symbols.insert(uri, symbols);
+    }
+
+    pub(super) fn apply_show_whitespace_to_tabs(&mut self) {
+        let enabled = self.editor_preferences.show_whitespace;
+
+        for tab in &mut self.tabs {
+            if let TabKind::Editor { code_editor, .. } = &mut tab.kind {
+                code_editor.set_show_whitespace(enabled);
+            }
+        }
+    }
+
+    pub(super) fn apply_line_number_width_to_tabs(&mut self) {
+        let width = self.editor_preferences.line_number_width;
+
+        for tab in &mut self.tabs {
+            if let TabKind::Editor { code_editor, .. } = &mut tab.kind {
+                code_editor.set_line_number_width(width);
             }
         }
     }

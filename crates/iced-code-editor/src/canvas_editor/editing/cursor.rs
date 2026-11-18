@@ -429,7 +429,7 @@ impl CodeEditor {
         let visual_line = &visual_lines[visual_line_idx];
 
         // Calculate column within the segment, accounting for horizontal scroll
-        let x_in_text = point.x - self.gutter_width() - 5.0 + self.horizontal_scroll_offset;
+        let x_in_text = point.x - self.text_start_x() + self.horizontal_scroll_offset;
 
         // Use correct width calculation for CJK support
         let line_content = self.buffer.line(visual_line.logical_line);
@@ -552,11 +552,10 @@ impl CodeEditor {
                     .skip(vl.start_col)
                     .take(pos.1.saturating_sub(vl.start_col))
                     .collect();
-                self.gutter_width()
-                    + 5.0
+                self.text_start_x()
                     + measure_text_width(&prefix, self.full_char_width, self.char_width)
             } else {
-                self.gutter_width() + 5.0
+                self.text_start_x()
             };
 
             let left_boundary = self.gutter_width() + self.char_width;
@@ -641,8 +640,7 @@ impl CodeEditor {
         let prefix_len = col.saturating_sub(visual_line.start_col);
         let prefix_text: String =
             line_content.chars().skip(visual_line.start_col).take(prefix_len).collect();
-        let x = self.gutter_width()
-            + 5.0
+        let x = self.text_start_x()
             + measure_text_width(&prefix_text, self.full_char_width, self.char_width);
         let y = visual_index as f32 * self.line_height;
         Some(iced::Point::new(x, y))
@@ -858,7 +856,7 @@ mod tests {
 
         let full_char_width = editor.full_char_width();
         let half_width = full_char_width / 2.0;
-        let padding = 5.0;
+        let padding = editor.text_start_x();
 
         // Assume each CJK character is `full_char_width` wide.
         // "你" is 0..full_char_width. "好" is full_char_width..2*full_char_width.

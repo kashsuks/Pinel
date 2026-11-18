@@ -22,8 +22,8 @@ pub use editing::history::CommandHistory;
 use features::{command_palette, folding, goto_line, search, vim};
 use metrics::{
     CACHE_WINDOW_MARGIN_MULTIPLIER, CHAR_WIDTH, CURSOR_BLINK_INTERVAL, FONT_SIZE, GUTTER_WIDTH,
-    HIGHLIGHT_LINES_PER_FRAME, LINE_HEIGHT, TAB_WIDTH, compare_floats, indent_width,
-    measure_char_width, measure_text_width,
+    HIGHLIGHT_LINES_PER_FRAME, LINE_HEIGHT, LINE_NUMBER_RIGHT_PADDING, TAB_WIDTH,
+    TEXT_LEFT_PADDING, compare_floats, indent_width, measure_char_width, measure_text_width,
 };
 
 #[cfg(target_arch = "wasm32")]
@@ -196,6 +196,8 @@ pub struct CodeEditor {
     pub(crate) search_replace_enabled: bool,
     /// Whether line numbers are displayed
     pub(crate) line_numbers_enabled: bool,
+    /// Minimum width in pixels of the line-number area; grows to fit wider numbers
+    pub(crate) line_number_width: f32,
     /// Whether to render whitespace characters visibly (spaces as `·`, tabs as `→`)
     pub(crate) show_whitespace: bool,
     /// Whether vertical indentation guides are drawn behind the text.
@@ -656,7 +658,8 @@ impl CodeEditor {
             translations: Translations::default(),
             search_replace_enabled: true,
             line_numbers_enabled: true,
-            show_whitespace: true,
+            line_number_width: GUTTER_WIDTH,
+            show_whitespace: false,
             show_indent_guides: true,
             show_color_previews: true,
             bracket_match_highlight_enabled: true,

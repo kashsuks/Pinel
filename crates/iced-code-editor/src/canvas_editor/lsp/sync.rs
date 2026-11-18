@@ -784,6 +784,51 @@ impl CodeEditor {
         })
         .is_some()
     }
+
+    /// Requests the document outline (`textDocument/documentSymbol`).
+    ///
+    /// Pending changes are flushed first so the server answers for the text
+    /// currently in the editor. The symbols arrive asynchronously through the
+    /// client's own channel.
+    ///
+    /// # Returns
+    ///
+    /// `true` if a client is attached and the request was sent, `false` otherwise
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use std::cell::RefCell;
+    /// use std::rc::Rc;
+    ///
+    /// use iced_code_editor::{CodeEditor, LspClient, LspDocument};
+    ///
+    /// struct SymbolClient(Rc<RefCell<usize>>);
+    ///
+    /// impl LspClient for SymbolClient {
+    ///     fn request_document_symbols(&mut self, _document: &LspDocument) {
+    ///         *self.0.borrow_mut() += 1;
+    ///     }
+    /// }
+    ///
+    /// let requests = Rc::new(RefCell::new(0));
+    /// let mut editor = CodeEditor::new("fn main() {}", "rs");
+    /// assert!(!editor.lsp_request_document_symbols());
+    ///
+    /// editor.attach_lsp(
+    ///     Box::new(SymbolClient(Rc::clone(&requests))),
+    ///     LspDocument::new("file:///tmp/main.rs", "rust"),
+    /// );
+    /// assert!(editor.lsp_request_document_symbols());
+    /// assert_eq!(*requests.borrow(), 1);
+    /// ```
+    pub fn lsp_request_document_symbols(&mut self) -> bool {
+        self.lsp_flush_pending_changes();
+        self.with_lsp(|client, document| {
+            client.request_document_symbols(document);
+        })
+        .is_some()
+    }
 }
 
 /// Sends `did_open` for `document` (after stamping `version = 1`) on

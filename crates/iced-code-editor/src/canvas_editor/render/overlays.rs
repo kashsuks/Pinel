@@ -67,7 +67,7 @@ impl CodeEditor {
             vl.start_col,
             cols.0,
             cols.1,
-            ctx.gutter_width + 5.0,
+            ctx.text_start_x(),
             ctx.full_char_width,
             ctx.char_width,
         );
@@ -393,7 +393,7 @@ impl CodeEditor {
                     vl.start_col,
                     self.cursors.primary_position().1,
                     self.cursors.primary_position().1,
-                    ctx.gutter_width + 5.0,
+                    ctx.text_start_x(),
                     ctx.full_char_width,
                     ctx.char_width,
                 );
@@ -558,7 +558,7 @@ impl CodeEditor {
                 vl.start_col,
                 position.1,
                 position.1,
-                ctx.gutter_width + 5.0,
+                ctx.text_start_x(),
                 ctx.full_char_width,
                 ctx.char_width,
             );
@@ -630,7 +630,7 @@ impl CodeEditor {
                             visual_line.start_col,
                             seg_start,
                             seg_end,
-                            ctx.gutter_width + 5.0 - ctx.horizontal_scroll_offset,
+                            ctx.text_start_x() - ctx.horizontal_scroll_offset,
                             ctx.full_char_width,
                             ctx.char_width,
                         );

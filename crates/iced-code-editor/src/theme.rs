@@ -36,6 +36,8 @@ pub struct Style {
     pub gutter_border: Color,
     /// Color for line numbers text
     pub line_number_color: Color,
+    /// Color for the line number of the line(s) holding a cursor
+    pub line_number_active_color: Color,
     /// Scrollbar background color
     pub scrollbar_background: Color,
     /// Scrollbar scroller (thumb) color
@@ -142,6 +144,7 @@ impl Catalog for iced::Theme {
 /// - `gutter_background`: Slightly darker/lighter than background
 /// - `gutter_border`: Border between gutter and editor
 /// - `line_number_color`: Dimmed text color for subtle line numbers
+/// - `line_number_active_color`: Full text color for the cursor's line number
 /// - `scrollbar_background`: Matches editor background
 /// - `scroller_color`: Uses secondary color for visibility
 /// - `current_line_highlight`: Subtle highlight using primary color
@@ -183,6 +186,8 @@ pub fn from_iced_theme(theme: &iced::Theme) -> Style {
         // For light themes, blend text color towards background
         blend_colors(text_color, background, 0.5)
     };
+    // The cursor's line number uses the full text color so it stands out.
+    let line_number_active_color = text_color;
 
     // Scrollbar colors: blend with background
     let scrollbar_background = background;
@@ -261,6 +266,7 @@ pub fn from_iced_theme(theme: &iced::Theme) -> Style {
         gutter_background,
         gutter_border,
         line_number_color,
+        line_number_active_color,
         scrollbar_background,
         scroller_color,
         current_line_highlight,
@@ -492,6 +498,22 @@ mod tests {
             gutter_diff > 0.0,
             "Gutter should be visually distinct from background"
         );
+    }
+
+    #[test]
+    fn test_from_iced_theme_active_line_number_stands_out() {
+        for theme in [iced::Theme::Dark, iced::Theme::Light] {
+            let style = from_iced_theme(&theme);
+            let contrast = |c: Color| {
+                (c.r - style.background.r).abs()
+                    + (c.g - style.background.g).abs()
+                    + (c.b - style.background.b).abs()
+            };
+            assert!(
+                contrast(style.line_number_active_color) > contrast(style.line_number_color),
+                "active line number should contrast more with the background than inactive ones"
+            );
+        }
     }
 
     #[test]

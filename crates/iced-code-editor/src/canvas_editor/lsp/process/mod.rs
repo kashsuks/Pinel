@@ -65,6 +65,7 @@ use std::time::Instant;
 ///         LspEvent::Completion { items } => drop(items),
 ///         LspEvent::Definition { uri, .. } => drop(uri),
 ///         LspEvent::Progress { done, .. } => drop(done),
+///         LspEvent::DocumentSymbols { symbols, .. } => drop(symbols),
 ///         LspEvent::Log { message, .. } => drop(message),
 ///     }
 /// }
@@ -101,6 +102,13 @@ pub enum LspEvent {
         percentage: Option<u32>,
         /// `true` when this is the final progress notification.
         done: bool,
+    },
+    /// Document outline received from the LSP server.
+    DocumentSymbols {
+        /// URI of the document the symbols belong to.
+        uri: String,
+        /// Top-level symbols; nested symbols are in each symbol's `children`.
+        symbols: Vec<crate::canvas_editor::lsp::LspSymbol>,
     },
     /// Log message from the LSP server's stderr.
     Log {
@@ -327,6 +335,9 @@ impl LspProcessClient {
                             "dynamicRegistration": false,
                             "willSave": false,
                             "didSave": true
+                        },
+                        "documentSymbol": {
+                            "hierarchicalDocumentSymbolSupport": true
                         }
                     },
                     "window": {
@@ -595,6 +606,33 @@ impl LspClient for LspProcessClient {
             "params": {
                 "textDocument": { "uri": document.uri },
                 "position": { "line": pos.line, "character": pos.character }
+            }
+        });
+        self.send_message(&msg);
+    }
+
+    fn request_document_symbols(&mut self, document: &LspDocument) {
+        let id = self.next_id();
+        {
+            let mut pending = self.pending_requests.lock().unwrap_or_else(|e| e.into_inner());
+            evict_expired_requests(&mut pending);
+            pending.insert(
+                id,
+                PendingRequest {
+                    kind: LspRequestKind::DocumentSymbols {
+                        uri: document.uri.clone(),
+                    },
+                    requested_at: Instant::now(),
+                },
+            );
+        }
+
+        let msg = json!({
+            "jsonrpc": "2.0",
+            "id": id,
+            "method": "textDocument/documentSymbol",
+            "params": {
+                "textDocument": { "uri": document.uri }
             }
         });
         self.send_message(&msg);
@@ -886,6 +924,29 @@ mod tests {
         match pending.get(&id).map(|p| &p.kind) {
             Some(LspRequestKind::Completion) => {},
             _ => panic!("expected a pending Completion request"),
+        }
+    }
+
+    #[test]
+    fn test_request_document_symbols_registers_pending_and_sends_request()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let (mut client, writer_rx, _events_rx) = test_client();
+        let doc = document("file:///a.rs");
+
+        client.request_document_symbols(&doc);
+
+        let value = decode_sent(&writer_rx.try_recv()?);
+        assert_eq!(value["method"], "textDocument/documentSymbol");
+        assert_eq!(value["params"]["textDocument"]["uri"], "file:///a.rs");
+        let id = value["id"].as_u64().ok_or("id missing")?;
+
+        let pending = client.pending_requests.lock().unwrap_or_else(|e| e.into_inner());
+        match pending.get(&id).map(|p| &p.kind) {
+            Some(LspRequestKind::DocumentSymbols { uri }) => {
+                assert_eq!(uri, "file:///a.rs");
+                Ok(())
+            },
+            _ => Err("expected a pending DocumentSymbols request".into()),
         }
     }
 

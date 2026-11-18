@@ -7,7 +7,7 @@ use iced::widget::canvas;
 use super::text::RenderContext;
 use super::wrapping::VisualLine;
 use crate::canvas_editor::features::folding;
-use crate::canvas_editor::{CodeEditor, measure_text_width};
+use crate::canvas_editor::{CodeEditor, LINE_NUMBER_RIGHT_PADDING, measure_text_width};
 
 impl CodeEditor {
     /// Draws line numbers and wrap indicators in the gutter area.
@@ -31,12 +31,10 @@ impl CodeEditor {
 
         if self.line_numbers_enabled {
             if visual_line.is_first_segment() {
-                // Draw line number for first segment, centered in the number area.
+                // Draw line number for first segment, right-aligned against the fold margin.
                 let line_num = visual_line.logical_line + 1;
                 let line_num_text = format!("{}", line_num);
-                let text_width =
-                    measure_text_width(&line_num_text, ctx.full_char_width, ctx.char_width);
-                let x_pos = (number_area_width - text_width) / 2.0;
+                let x_pos = self.line_number_x(ctx, &line_num_text);
                 frame.fill_text(canvas::Text {
                     content: line_num_text,
                     position: Point::new(x_pos, y + 2.0),
@@ -49,7 +47,7 @@ impl CodeEditor {
                 // Draw wrap indicator for continuation lines.
                 frame.fill_text(canvas::Text {
                     content: "↪".to_string(),
-                    position: Point::new(number_area_width - 20.0, y + 2.0),
+                    position: Point::new(self.line_number_x(ctx, "↪"), y + 2.0),
                     color: self.style.line_number_color,
                     size: ctx.font_size.into(),
                     font: ctx.font,
@@ -59,6 +57,41 @@ impl CodeEditor {
         }
 
         self.draw_fold_chevron(frame, ctx, visual_line, y, number_area_width);
+    }
+
+    /// Returns the x position at which `label` must start so that its right
+    /// edge sits [`LINE_NUMBER_RIGHT_PADDING`] pixels left of the fold margin.
+    fn line_number_x(&self, ctx: &RenderContext, label: &str) -> f32 {
+        let width = measure_text_width(label, ctx.full_char_width, ctx.char_width);
+        (self.line_number_gutter_width() - width - LINE_NUMBER_RIGHT_PADDING).max(0.0)
+    }
+
+    /// Redraws the line number of a line holding a cursor in
+    /// `line_number_active_color`, on top of the dimmed number drawn by the content layer.
+    pub(super) fn draw_active_line_number(
+        &self,
+        frame: &mut canvas::Frame,
+        ctx: &RenderContext,
+        visual_line: &VisualLine,
+        y: f32,
+    ) {
+        if !self.line_numbers_enabled || !visual_line.is_first_segment() {
+            return;
+        }
+        if !self.cursors.iter().any(|c| c.position.0 == visual_line.logical_line) {
+            return;
+        }
+
+        let label = (visual_line.logical_line + 1).to_string();
+        let x_pos = self.line_number_x(ctx, &label);
+        frame.fill_text(canvas::Text {
+            content: label,
+            position: Point::new(x_pos, y + 2.0),
+            color: self.style.line_number_active_color,
+            size: ctx.font_size.into(),
+            font: ctx.font,
+            ..canvas::Text::default()
+        });
     }
 
     /// Draws the fold chevron in the fold margin for a foldable header line.
@@ -127,7 +160,7 @@ impl CodeEditor {
 
         let line_content = self.buffer.line(visual_line.logical_line);
         let line_width = measure_text_width(line_content, ctx.full_char_width, ctx.char_width);
-        let x = ctx.gutter_width + 5.0 - ctx.horizontal_scroll_offset + line_width + 6.0;
+        let x = ctx.text_start_x() - ctx.horizontal_scroll_offset + line_width + 6.0;
         frame.fill_text(canvas::Text {
             content: "⋯".to_string(),
             position: Point::new(x, y + 2.0),

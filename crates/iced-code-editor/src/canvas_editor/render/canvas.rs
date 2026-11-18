@@ -194,6 +194,7 @@ impl canvas::Program<Message> for CodeEditor {
             {
                 let y = idx as f32 * self.line_height;
                 self.draw_current_line_highlight(frame, &ctx, visual_line, y);
+                self.draw_active_line_number(frame, &ctx, visual_line, y);
             }
 
             self.draw_search_highlights(frame, &ctx, start_idx, end_idx);

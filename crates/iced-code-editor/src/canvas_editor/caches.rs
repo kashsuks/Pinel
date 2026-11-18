@@ -257,11 +257,10 @@ impl CodeEditor {
             });
         }
 
-        let gutter = self.gutter_width();
         let max_line_width = cache.as_ref().map_or(0.0, MaxContentWidthCache::max_width);
 
         // gutter + left padding + text + right margin
-        gutter + 5.0 + max_line_width + 20.0
+        self.text_start_x() + max_line_width + 20.0
     }
 
     /// Returns wrapped "visual lines" for the current buffer and layout, with memoization.
