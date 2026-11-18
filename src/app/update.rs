@@ -3091,6 +3091,7 @@ impl App {
                             eprintln!("Definition: {} at {:?}", uri, range);
                         },
                         iced_code_editor::LspEvent::Progress { .. } => {},
+                        iced_code_editor::LspEvent::DocumentSymbols { .. } => {},
                         iced_code_editor::LspEvent::Log {
                             server_key,
                             message,

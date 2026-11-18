@@ -847,6 +847,20 @@ overlay.show_hover(text);
 overlay.set_completions(items, cursor_position);
 ```
 
+#### Document symbols
+
+Call `editor.lsp_request_document_symbols()` to ask the server for the file's
+outline. The answer arrives as `LspEvent::DocumentSymbols { uri, symbols }`;
+`symbol_path_at` turns it into the chain of symbols around a line, which is
+handy for a breadcrumb:
+
+```rust
+use iced_code_editor::symbol_path_at;
+
+// On LspEvent::DocumentSymbols { symbols, .. }
+let crumbs = symbol_path_at(&symbols, cursor_line); // e.g. ["Editor", "render"]
+```
+
 #### Supported servers
 
 Out of the box, the following servers are supported (the binary must be on `$PATH`):
