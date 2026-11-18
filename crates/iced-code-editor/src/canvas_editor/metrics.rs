@@ -16,8 +16,10 @@ pub(crate) const GUTTER_WIDTH: f32 = 45.0;
 /// Width in pixels of the fold margin (chevron column) added to the gutter when
 /// code folding is enabled.
 pub(crate) const FOLD_MARGIN_WIDTH: f32 = 14.0;
-/// Gap in pixles between the end of the gutter and the first text column
+/// Gap in pixels between the end of the gutter and the first text column.
 pub(crate) const TEXT_LEFT_PADDING: f32 = 5.0;
+/// Gap in pixels between the right edge of a line number and the fold margin
+pub(crate) const LINE_NUMBER_RIGHT_PADDING: f32 = 6.0;
 pub(crate) const CURSOR_BLINK_INTERVAL: std::time::Duration = std::time::Duration::from_millis(530);
 
 /// Measures the width of a single character.
