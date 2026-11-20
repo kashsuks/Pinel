@@ -7,6 +7,7 @@ pub mod chat;
 pub mod chat_providers;
 pub mod command_input;
 pub mod command_palette;
+pub mod definition;
 pub mod editor_buffer;
 pub mod file_tree;
 pub mod find_replace;
