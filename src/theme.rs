@@ -495,10 +495,13 @@ pub const BUILTIN_THEMES: &[&str] = &[
     "Ayu Dark",
 ];
 
+/// Returns the palette for the built-in theme `name`, falling back to Pinel
+/// Blueberry Dark for unknown names.
 pub fn builtin_theme(name: &str) -> ThemeColors {
     match name {
         "Pinel Blueberry Dark" => pinel_blueberry_dark(),
         "Pinel Blueberry Light" => pinel_blueberry_light(),
+        "Catppuccin Mocha" => catppuccin_mocha(),
         "Gruvbox Dark" => gruvbox_dark(),
         "GitHub Dark" => github_dark(),
         "Nord" => nord(),
@@ -676,6 +679,86 @@ fn pinel_blueberry_light() -> ThemeColors {
             Color::from_rgb(0.983, 0.985, 0.991),
             blue,
             Color::from_rgba(0.647, 0.690, 0.906, 0.14),
+        ),
+        syntax_theme: syn,
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Catppuccin Mocha
+// ═══════════════════════════════════════════════════════════════════════════
+
+fn catppuccin_mocha() -> ThemeColors {
+    // Catppuccin Mocha palette
+    let rosewater = Color::from_rgb(0.961, 0.878, 0.863); // #f5e0dc
+    let mauve = Color::from_rgb(0.796, 0.651, 0.969); // #cba6f7
+    let peach = Color::from_rgb(0.980, 0.702, 0.529); // #fab387
+    let yellow = Color::from_rgb(0.976, 0.886, 0.686); // #f9e2af
+    let green = Color::from_rgb(0.651, 0.890, 0.631); // #a6e3a1
+    let sky = Color::from_rgb(0.537, 0.863, 0.922); // #89dceb
+    let blue = Color::from_rgb(0.537, 0.706, 0.980); // #89b4fa
+    let lavender = Color::from_rgb(0.706, 0.745, 0.996); // #b4befe
+    let text = Color::from_rgb(0.804, 0.839, 0.957); // #cdd6f4
+    let subtext1 = Color::from_rgb(0.729, 0.761, 0.871); // #bac2de
+    let subtext0 = Color::from_rgb(0.651, 0.678, 0.784); // #a6adc8
+    let overlay2 = Color::from_rgb(0.576, 0.600, 0.698); // #9399b2
+    let overlay1 = Color::from_rgb(0.498, 0.518, 0.612); // #7f849c
+    let overlay0 = Color::from_rgb(0.424, 0.439, 0.525); // #6c7086
+    let surface1 = Color::from_rgb(0.271, 0.278, 0.353); // #45475a
+    let surface0 = Color::from_rgb(0.192, 0.196, 0.267); // #313244
+    let base = Color::from_rgb(0.118, 0.118, 0.180); // #1e1e2e
+    let mantle = Color::from_rgb(0.094, 0.094, 0.145); // #181825
+    let crust = Color::from_rgb(0.067, 0.067, 0.106); // #11111b
+
+    let syn = build_syntax_theme(
+        "Catppuccin Mocha",
+        text,
+        base,
+        rosewater,
+        surface0,
+        overlay2, // comments
+        mauve,    // keywords
+        blue,     // functions
+        yellow,   // types
+        green,    // strings
+        peach,    // numbers
+        peach,    // constants
+        text,     // variables
+        lavender, // properties
+        sky,      // operators
+        overlay2, // punctuation
+    );
+
+    ThemeColors {
+        bg_primary: mantle,
+        bg_secondary: mantle,
+        bg_editor: base,
+        bg_tab_active: surface0,
+        bg_tab_inactive: mantle,
+        bg_status_bar: mantle,
+        bg_tab_bar: crust,
+        bg_hover: surface0,
+        bg_pressed: surface1,
+        bg_drag_handle: surface0,
+        text_primary: text,
+        text_secondary: subtext1,
+        text_muted: subtext0,
+        text_dim: overlay1,
+        text_placeholder: overlay0,
+        border_subtle: surface1,
+        border_very_subtle: surface0,
+        selection: Color::from_rgba(overlay2.r, overlay2.g, overlay2.b, 0.30),
+        shadow_dark: Color::from_rgba(crust.r, crust.g, crust.b, 0.5),
+        shadow_light: Color::from_rgba(mauve.r, mauve.g, mauve.b, 0.06),
+        editor_style: editor_style(
+            base,
+            text,
+            mantle,
+            surface0,
+            overlay0,
+            base,
+            blue,
+            Color::from_rgba(surface0.r, surface0.g, surface0.b, 0.6),
         ),
         syntax_theme: syn,
     }
@@ -1145,5 +1228,28 @@ fn build_syntax_theme(
             ..ThemeSettings::default()
         },
         scopes,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_builtin_theme_catppuccin_mocha_not_fallback() {
+        let theme = builtin_theme("Catppuccin Mocha");
+        assert_eq!(theme.syntax_theme.name.as_deref(), Some("Catppuccin Mocha"));
+    }
+
+    #[test]
+    fn test_builtin_theme_every_listed_name_resolves() {
+        for name in BUILTIN_THEMES.iter().filter(|name| **name != "Pinel Blueberry Dark") {
+            let theme = builtin_theme(name);
+            assert_ne!(
+                theme.syntax_theme.name.as_deref(),
+                Some("Pinel Blueberry Dark"),
+                "built-in theme {name:?} fell back to Pinel Blueberry Dark"
+            );
+        }
     }
 }
