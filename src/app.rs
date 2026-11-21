@@ -624,7 +624,7 @@ impl App {
         editor.set_search_replace_enabled(false);
         editor.set_line_numbers_enabled(true);
         editor.set_wrap_enabled(false);
-        editor.set_font_size(13.0, true);
+        editor.set_font_size(CODE_FONT_SIZE, true);
 
         // iced-code-editor builtin indentation
         let indent_style = if self.editor_preferences.use_spaces {
