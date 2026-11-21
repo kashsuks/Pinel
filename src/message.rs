@@ -26,6 +26,8 @@ pub enum Message {
     FileClicked(PathBuf),
     /// A file finished loading: its text, or why it could not be read as text.
     FileOpened(PathBuf, Result<String, String>),
+    /// Session restore opened all its tabs; carries the path that was active when the session was saved.
+    SessionRestoreFinished(Option<PathBuf>),
     SensitiveFileOpenConfirm(bool),
     FolderToggled(PathBuf),
 

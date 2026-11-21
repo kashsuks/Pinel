@@ -1294,6 +1294,16 @@ impl App {
                 }
                 iced::Task::none()
             },
+            Message::SessionRestoreFinished(active) => {
+                self.pending_active_tab_path = None;
+                let idx = active.and_then(|path| {
+                    tab_index_for_path(self.tabs.iter().map(|t| t.path.as_path()), &path)
+                });
+                match idx {
+                    Some(idx) => self.update(Message::TabSelected(idx)),
+                    None => iced::Task::none(),
+                }
+            },
             Message::TabSelected(idx) => {
                 if idx < self.tabs.len() {
                     // Detach LSP from all tabs first
@@ -3737,6 +3747,14 @@ fn word_prefix_before(line: &str, cursor_col: usize) -> String {
     before[start..].iter().collect()
 }
 
+/// The position of the first path in `paths` equal to `target`, if any.
+fn tab_index_for_path<'a>(
+    paths: impl IntoIterator<Item = &'a Path>,
+    target: &Path,
+) -> Option<usize> {
+    paths.into_iter().position(|path| path == target)
+}
+
 /// Marks the first tab at `path` as saved after a manual save wrote
 /// `saved_content` to disk.
 ///
@@ -3894,6 +3912,30 @@ mod tests {
             App::is_media_path(Path::new("clip.mp4")),
             cfg!(feature = "video")
         );
+    }
+
+    #[test]
+    fn test_tab_index_for_path_finds_middle_tab() {
+        let paths = [Path::new("/a.rs"), Path::new("/b.rs"), Path::new("/c.rs")];
+        assert_eq!(tab_index_for_path(paths, Path::new("/b.rs")), Some(1));
+    }
+
+    #[test]
+    fn test_tab_index_for_path_missing_returns_none() {
+        let paths = [Path::new("/a.rs"), Path::new("/b.rs")];
+        assert_eq!(tab_index_for_path(paths, Path::new("/z.rs")), None);
+    }
+
+    #[test]
+    fn test_tab_index_for_path_empty_list_returns_none() {
+        let paths: [&Path; 0] = [];
+        assert_eq!(tab_index_for_path(paths, Path::new("/a.rs")), None);
+    }
+
+    #[test]
+    fn test_tab_index_for_path_duplicate_returns_first() {
+        let paths = [Path::new("/a.rs"), Path::new("/b.rs"), Path::new("/b.rs")];
+        assert_eq!(tab_index_for_path(paths, Path::new("/b.rs")), Some(1));
     }
 
     #[test]
