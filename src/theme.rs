@@ -17,7 +17,36 @@ pub const RESIZE_HIT_WIDTH: f32 = 12.0;
 pub const ICON_SIZE: f32 = 16.0;
 pub const INDENT_WIDTH: f32 = 16.0;
 pub const BORDER_RADIUS: f32 = 14.0;
-pub const BORDER_RADIUS_TAB: f32 = 10.0;
+/// Corner radius for editor tabs; shares the [`RADIUS_LG`] step of the radius scale.
+pub const BORDER_RADIUS_TAB: f32 = RADIUS_LG;
+
+// Text Size Scale
+/// Extra-small UI text: badges, hints and secondary metadata.
+pub const TEXT_XS: f32 = 11.0;
+/// Small UI text: list rows, labels and most panel content.
+pub const TEXT_SM: f32 = 12.0;
+/// Medium UI text: primary labels, inputs and body copy.
+pub const TEXT_MD: f32 = 13.0;
+/// Large UI text: prominent inputs such as the finder and palette queries.
+pub const TEXT_LG: f32 = 15.0;
+/// Font size of the code editor text.
+pub const CODE_FONT_SIZE: f32 = 13.0;
+
+// Spacing Scale (used for padding and spacing between widgets)
+/// Spacing step 1: the tightest gap between related elements.
+pub const SPACE_1: f32 = 4.0;
+/// Spacing step 2: the default gap and padding inside controls.
+pub const SPACE_2: f32 = 8.0;
+/// Spacing step 3: padding around groups and panel content.
+pub const SPACE_3: f32 = 12.0;
+/// Spacing step 4: the widest gap, between sections.
+pub const SPACE_4: f32 = 16.0;
+
+// Radius Scale
+/// Small corner radius for buttons, inputs and list rows.
+pub const RADIUS_SM: f32 = 6.0;
+/// Large corner radius for cards, popups and tabs.
+pub const RADIUS_LG: f32 = 10.0;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // PALETTE – Generic color slots.  Swap these values to re-theme the editor.
@@ -1251,5 +1280,14 @@ mod tests {
                 "built-in theme {name:?} fell back to Pinel Blueberry Dark"
             );
         }
+    }
+
+    #[test]
+    fn test_size_scale_is_ordered() {
+        let text_scale = [TEXT_XS, TEXT_SM, TEXT_MD, TEXT_LG];
+        assert!(text_scale.windows(2).all(|w| w[0] < w[1]));
+
+        let space_scale = [SPACE_1, SPACE_2, SPACE_3, SPACE_4];
+        assert!(space_scale.windows(2).all(|w| w[0] < w[1]));
     }
 }
