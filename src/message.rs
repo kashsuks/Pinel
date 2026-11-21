@@ -17,7 +17,8 @@ pub enum Message {
 
     CodeEditorContentChanged,
     FileClicked(PathBuf),
-    FileOpened(PathBuf, String),
+    /// A file finished loading: its text, or why it could not be read as text.
+    FileOpened(PathBuf, Result<String, String>),
     SensitiveFileOpenConfirm(bool),
     FolderToggled(PathBuf),
 

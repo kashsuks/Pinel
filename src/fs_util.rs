@@ -26,6 +26,13 @@ pub fn restrict_to_owner(path: &Path) {
     let _ = path;
 }
 
+/// Reads `path` as UTF-8 text, returning the error message on failure
+/// (missing file, no permission, or bytes that are not valid UTF-8) so the
+/// caller can refuse to open it instead of showing placeholder text.
+pub fn read_text_file(path: &Path) -> Result<String, String> {
+    std::fs::read_to_string(path).map_err(|e| e.to_string())
+}
+
 /// Renames `from` to `to`, failing with [`std::io::ErrorKind::AlreadyExists`]
 /// instead of replacing an existing file, folder or symlink at `to`.
 pub fn rename_no_clobber(from: &Path, to: &Path) -> std::io::Result<()> {
@@ -304,6 +311,28 @@ mod tests {
             assert_eq!(std::fs::read_to_string(&upper_b)?, "a");
         }
         assert_eq!(std::fs::read_to_string(&b)?, "b");
+        Ok(())
+    }
+
+    #[test]
+    fn test_read_text_file_rejects_invalid_utf8() -> std::io::Result<()> {
+        let dir = tempfile::tempdir()?;
+        let path = dir.path().join("binary.pdf");
+        let bytes = [0x50, 0x44, 0xFF, 0xFE];
+        std::fs::write(&path, bytes)?;
+
+        assert!(read_text_file(&path).is_err());
+        assert_eq!(std::fs::read(&path)?, bytes);
+        Ok(())
+    }
+
+    #[test]
+    fn test_read_text_file_reads_utf8() -> std::io::Result<()> {
+        let dir = tempfile::tempdir()?;
+        let path = dir.path().join("hello.txt");
+        std::fs::write(&path, "héllo\n")?;
+
+        assert_eq!(read_text_file(&path), Ok("héllo\n".to_string()));
         Ok(())
     }
 }
