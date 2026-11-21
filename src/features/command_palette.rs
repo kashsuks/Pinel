@@ -78,7 +78,8 @@ impl CommandPalette {
             },
             Command {
                 name: "Go to Definition".to_string(),
-                description: "Jump to where the synbol under the cursor is defined (F12)".to_string(),
+                description: "Jump to where the symbol under the cursor is defined (F12)"
+                    .to_string(),
             },
         ];
 

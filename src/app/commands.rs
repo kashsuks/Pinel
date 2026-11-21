@@ -85,7 +85,7 @@ impl App {
             "Render Markdown" => {
                 return iced::Task::perform(async {}, |_| Message::PreviewMarkdown);
             },
-            "Go to Defintion" => {
+            "Go to Definition" => {
                 return iced::Task::perform(async {}, |_| Message::GoToDefinition);
             },
             _ => {},

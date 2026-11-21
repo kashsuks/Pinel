@@ -482,6 +482,20 @@ impl App {
                 iced::Task::none()
             },
             Message::CodeEditorEvent(event) => {
+                if let EditorMessage::JumpClick(point) = &event {
+                    if self.lsp_enabled {
+                        if let Some(tab) = self.active_tab.and_then(|idx| self.tabs.get_mut(idx)) {
+                            if let TabKind::Editor {
+                                ref mut code_editor,
+                                ..
+                            } = tab.kind
+                            {
+                                code_editor.lsp_request_definition_at(*point);
+                            }
+                        }
+                    }
+                    return iced::Task::none();
+                }
                 if matches!(event, EditorMessage::CharacterInput(_))
                     && (self.modifier_state.command() || self.modifier_state.control())
                 {
@@ -1193,6 +1207,17 @@ impl App {
                     }
                 }
 
+                let mut definition_task = iced::Task::none();
+                let jump_is_for_this_file = self
+                    .pending_definition_jump
+                    .as_ref()
+                    .is_some_and(|(path, _)| *path == opened_path);
+                if jump_is_for_this_file {
+                    if let Some((_, position)) = self.pending_definition_jump.take() {
+                        definition_task = self.jump_to_position(self.tabs.len() - 1, position);
+                    }
+                }
+
                 self.pending_hover_request = None;
                 self.vim_refresh_cursor_style();
 
@@ -1245,6 +1270,20 @@ impl App {
                         self.lsp_enabled,
                         opened_path.is_absolute()
                     ));
+                }
+                definition_task
+            },
+            Message::GoToDefinition => {
+                if self.lsp_enabled {
+                    if let Some(tab) = self.active_tab.and_then(|idx| self.tabs.get_mut(idx)) {
+                        if let TabKind::Editor {
+                            ref mut code_editor,
+                            ..
+                        } = tab.kind
+                        {
+                            code_editor.lsp_request_definition();
+                        }
+                    }
                 }
                 iced::Task::none()
             },
@@ -3026,6 +3065,7 @@ impl App {
                 }
 
                 // Drain LSP events from the shared channel
+                let mut definition_task = iced::Task::none();
                 for event in self.lsp.drain_events() {
                     match event {
                         iced_code_editor::LspEvent::Hover { text } => {
@@ -3104,7 +3144,7 @@ impl App {
                         },
                         iced_code_editor::LspEvent::Definition { uri, range } => {
                             self.dev_log(format!("LSP: Definition at {} {:?}", uri, range));
-                            eprintln!("Definition: {} at {:?}", uri, range);
+                            definition_task = self.open_definition(&uri, range.start);
                         },
                         iced_code_editor::LspEvent::Progress { .. } => {},
                         iced_code_editor::LspEvent::DocumentSymbols { uri, symbols } => {
@@ -3124,7 +3164,7 @@ impl App {
                         },
                     }
                 }
-                iced::Task::none()
+                definition_task
             },
             Message::AutosaveTick => {
                 if !self.editor_preferences.autosave_enabled {
