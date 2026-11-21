@@ -115,6 +115,47 @@ impl Command for ReplaceTextCommand {
     }
 }
 
+/// Command that replaces the whole buffer content in one undoable step.
+///
+/// Used when a host computes the new document text itself (for example an
+/// application-level find/replace) and needs the change recorded in the
+/// undo history instead of resetting the editor.
+#[derive(Debug, Clone)]
+pub struct ReplaceContentCommand {
+    old: String,
+    new: String,
+}
+
+impl ReplaceContentCommand {
+    /// Creates a new whole-buffer replace command.
+    ///
+    /// # Arguments
+    ///
+    /// * `old` - The full buffer text before the replacement (restored on undo)
+    /// * `new` - The full buffer text after the replacement
+    pub fn new(old: String, new: String) -> Self {
+        Self { old, new }
+    }
+
+    /// Replaces the buffer with `text` and clamps `cursor` into the new bounds.
+    fn apply(buffer: &mut TextBuffer, cursor: &mut (usize, usize), text: &str) {
+        *buffer = TextBuffer::new(text);
+        let line = cursor.0.min(buffer.line_count().saturating_sub(1));
+        let col = cursor.1.min(buffer.line_len(line));
+        *cursor = (line, col);
+    }
+}
+
+impl Command for ReplaceContentCommand {
+    fn execute(&mut self, buffer: &mut TextBuffer, cursor: &mut (usize, usize)) {
+        Self::apply(buffer, cursor, &self.new);
+    }
+
+    fn undo(&mut self, buffer: &mut TextBuffer, cursor: &mut (usize, usize)) {
+        Self::apply(buffer, cursor, &self.old);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::super::edit::InsertCharCommand;

@@ -17,7 +17,7 @@ mod lines;
 
 pub use comment::ToggleCommentCommand;
 pub(crate) use comment::line_comment_token;
-pub use composite::{CompositeCommand, ReplaceTextCommand};
+pub use composite::{CompositeCommand, ReplaceContentCommand, ReplaceTextCommand};
 pub use edit::{
     DeleteCharCommand, DeleteForwardCommand, DeleteRangeCommand, InsertCharCommand,
     InsertNewlineCommand, InsertTextCommand,

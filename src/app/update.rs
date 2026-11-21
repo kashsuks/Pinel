@@ -2500,6 +2500,7 @@ impl App {
                 iced::Task::none()
             },
             Message::ReplaceOne => {
+                let mut edited = None;
                 if let Some(idx) = self.active_tab {
                     if let Some(tab) = self.tabs.get_mut(idx) {
                         if let TabKind::Editor {
@@ -2509,16 +2510,34 @@ impl App {
                         } = tab.kind
                         {
                             let mut text = code_editor.content();
+                            // Refresh the byte ranges so they match the current
+                            // text, not a stale search from before an edit.
+                            self.find_replace.find_matches(&text);
+                            if self.find_replace.current_match >= self.find_replace.matches.len() {
+                                self.find_replace.current_match =
+                                    self.find_replace.matches.len().saturating_sub(1);
+                            }
                             self.find_replace.replace_next(&mut text);
-                            let _ = code_editor.reset(&text);
+                            let task = code_editor.replace_content(&text);
                             buffer.set_text(&text);
+                            edited = Some((task, code_editor.cursor_position()));
                         }
                     }
                 }
                 self.vim_refresh_cursor_style();
-                iced::Task::none()
+                match edited {
+                    Some((task, (line, col))) => {
+                        self.cursor_line = line + 1;
+                        self.cursor_col = col + 1;
+                        self.queue_autosave_for_active_tab();
+                        self.schedule_symbol_refresh(super::SYMBOL_REFRESH_DELAY);
+                        task.map(Message::CodeEditorEvent)
+                    },
+                    None => iced::Task::none(),
+                }
             },
             Message::ReplaceAll => {
+                let mut edited = None;
                 if let Some(idx) = self.active_tab {
                     if let Some(tab) = self.tabs.get_mut(idx) {
                         if let TabKind::Editor {
@@ -2528,14 +2547,27 @@ impl App {
                         } = tab.kind
                         {
                             let mut text = code_editor.content();
+                            // Refresh the byte ranges so they match the current
+                            // text, not a stale search from before an edit.
+                            self.find_replace.find_matches(&text);
                             self.find_replace.replace_all(&mut text);
-                            let _ = code_editor.reset(&text);
+                            let task = code_editor.replace_content(&text);
                             buffer.set_text(&text);
+                            edited = Some((task, code_editor.cursor_position()));
                         }
                     }
                 }
                 self.vim_refresh_cursor_style();
-                iced::Task::none()
+                match edited {
+                    Some((task, (line, col))) => {
+                        self.cursor_line = line + 1;
+                        self.cursor_col = col + 1;
+                        self.queue_autosave_for_active_tab();
+                        self.schedule_symbol_refresh(super::SYMBOL_REFRESH_DELAY);
+                        task.map(Message::CodeEditorEvent)
+                    },
+                    None => iced::Task::none(),
+                }
             },
             Message::ToggleCaseSensitive => {
                 self.find_replace.case_sensitive = !self.find_replace.case_sensitive;
