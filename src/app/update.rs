@@ -126,6 +126,35 @@ impl App {
         )
     }
 
+    /// Whether `path` opens in a media tab rather than as text. Video only
+    /// counts when the `video` feature is on; without it a video file goes
+    /// through the text path and is refused as unreadable.
+    fn is_media_path(path: &std::path::Path) -> bool {
+        Self::is_image_path(path)
+            || (cfg!(feature = "video") && Self::is_video_path(path))
+            || Self::is_audio_path(path)
+    }
+
+    /// Gives up on opening `path`: shows `message` as a toast and drops any
+    /// tab focus, cursor restore or definition jump queued for it.
+    fn abandon_open(&mut self, path: &Path, message: String) {
+        self.notification = Some(Notification {
+            message,
+            shown_at: Instant::now(),
+        });
+        if self.pending_active_tab_path.as_deref() == Some(path) {
+            self.pending_active_tab_path = None;
+        }
+        self.pending_cursor_restores.remove(path);
+        if self
+            .pending_definition_jump
+            .as_ref()
+            .is_some_and(|(jump_path, _)| jump_path == path)
+        {
+            self.pending_definition_jump = None;
+        }
+    }
+
     fn active_tab_supports_markdown_preview(&self) -> bool {
         self.active_tab.and_then(|idx| self.tabs.get(idx)).is_some_and(|tab| {
             matches!(tab.kind, TabKind::Editor { .. }) && Self::is_markdown_path(&tab.path)
@@ -210,8 +239,12 @@ impl App {
     pub(super) fn open_path_task(path: PathBuf) -> iced::Task<Message> {
         iced::Task::perform(
             async move {
-                let content = std::fs::read_to_string(&path)
-                    .unwrap_or_else(|_| String::from("Could not read file"));
+                // media tabs never use the text, so skip reading them
+                let content = if Self::is_media_path(&path) {
+                    Ok(String::new())
+                } else {
+                    crate::fs_util::read_text_file(&path)
+                };
                 (path, content)
             },
             |(path, content)| Message::FileOpened(path, content),
@@ -1036,10 +1069,14 @@ impl App {
                     return iced::Task::none();
                 }
 
-                let effective_content = if content.is_empty() && path.exists() {
-                    std::fs::read_to_string(&path).unwrap_or_default()
-                } else {
-                    content
+                let name = path.file_name().unwrap_or_default().to_string_lossy().to_string();
+                let content = match content {
+                    Ok(content) => content,
+                    Err(err) if !Self::is_media_path(&path) => {
+                        self.abandon_open(&path, format!("Can't open {name}: {err}"));
+                        return iced::Task::none();
+                    },
+                    Err(_) => String::new(),
                 };
 
                 self.recent_files.retain(|p| p != &path);
@@ -1053,7 +1090,6 @@ impl App {
                 self.last_wakatime_entity = Some(entity);
                 self.last_wakatime_sent_at = Some(Instant::now());
 
-                let name = path.file_name().unwrap_or_default().to_string_lossy().to_string();
                 let opened_path = path.clone();
                 let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("txt").to_string();
 
@@ -1075,10 +1111,8 @@ impl App {
                         Ok(player) => TabKind::Video { player },
                         Err(message) => {
                             eprintln!("{message}");
-                            TabKind::Editor {
-                                code_editor: self.configured_code_editor("", &ext),
-                                buffer: crate::features::editor_buffer::EditorBuffer::from_text(""),
-                            }
+                            self.abandon_open(&path, format!("Can't play {name}: {message}"));
+                            return iced::Task::none();
                         },
                     }
                 } else if Self::is_audio_path(&path) {
@@ -1108,18 +1142,14 @@ impl App {
                         },
                         Err(e) => {
                             eprintln!("Audio init error: {e}");
-                            TabKind::Editor {
-                                code_editor: self.configured_code_editor("", &ext),
-                                buffer: crate::features::editor_buffer::EditorBuffer::from_text(""),
-                            }
+                            self.abandon_open(&path, format!("Can't play {name}: {e}"));
+                            return iced::Task::none();
                         },
                     }
                 } else {
                     TabKind::Editor {
-                        code_editor: { self.configured_code_editor(&effective_content, &ext) },
-                        buffer: crate::features::editor_buffer::EditorBuffer::from_text(
-                            &effective_content,
-                        ),
+                        code_editor: { self.configured_code_editor(&content, &ext) },
+                        buffer: crate::features::editor_buffer::EditorBuffer::from_text(&content),
                     }
                 };
 
@@ -1155,18 +1185,14 @@ impl App {
                         },
                         Err(e) => {
                             eprintln!("Audio init error: {e}");
-                            TabKind::Editor {
-                                code_editor: self.configured_code_editor("", &ext),
-                                buffer: crate::features::editor_buffer::EditorBuffer::from_text(""),
-                            }
+                            self.abandon_open(&path, format!("Can't play {name}: {e}"));
+                            return iced::Task::none();
                         },
                     }
                 } else {
                     TabKind::Editor {
-                        code_editor: { self.configured_code_editor(&effective_content, &ext) },
-                        buffer: crate::features::editor_buffer::EditorBuffer::from_text(
-                            &effective_content,
-                        ),
+                        code_editor: { self.configured_code_editor(&content, &ext) },
+                        buffer: crate::features::editor_buffer::EditorBuffer::from_text(&content),
                     }
                 };
 
@@ -3680,6 +3706,27 @@ fn prettify_icon_key(key: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_is_media_path_text_and_unknown_files_are_not_media() {
+        assert!(!App::is_media_path(Path::new("notes.txt")));
+        assert!(!App::is_media_path(Path::new("report.pdf")));
+        assert!(!App::is_media_path(Path::new("Makefile")));
+    }
+
+    #[test]
+    fn test_is_media_path_images_and_audio_are_media() {
+        assert!(App::is_media_path(Path::new("photo.png")));
+        assert!(App::is_media_path(Path::new("song.mp3")));
+    }
+
+    #[test]
+    fn test_is_media_path_video_depends_on_feature() {
+        assert_eq!(
+            App::is_media_path(Path::new("clip.mp4")),
+            cfg!(feature = "video")
+        );
+    }
 
     #[test]
     fn test_presence_details_commit_tab_shows_short_hash() {
