@@ -547,7 +547,7 @@ impl App {
                             {
                                 if let Some(suggestion) = self.autocomplete.get_selected().cloned()
                                 {
-                                    let prefix_len = self.autocomplete.prefix.len();
+                                    let prefix_len = self.autocomplete.prefix.chars().count();
                                     for _ in 0..prefix_len {
                                         let _ = code_editor.update(&EditorMessage::Backspace);
                                     }
@@ -557,8 +557,9 @@ impl App {
                                     }
                                     let after = code_editor.content();
                                     buffer.set_text(&after);
-                                    self.cursor_col = self.cursor_col.saturating_sub(prefix_len)
-                                        + suggestion.text.len();
+                                    let (line_idx, col_idx) = code_editor.cursor_position();
+                                    self.cursor_line = line_idx + 1;
+                                    self.cursor_col = col_idx + 1;
                                     self.autocomplete.cancel();
                                     lsp_path = Some(tab.path.clone());
                                     lsp_content = Some(after);
@@ -577,19 +578,8 @@ impl App {
                                         .lines()
                                         .nth(self.cursor_line.saturating_sub(1))
                                         .unwrap_or("");
-                                    let before_cursor =
-                                        &line[..self.cursor_col.saturating_sub(1).min(line.len())];
-
-                                    let chars: Vec<char> = before_cursor.chars().collect();
-                                    let word_start = chars
-                                        .iter()
-                                        .enumerate()
-                                        .rev()
-                                        .find(|(_, c)| !c.is_alphanumeric() && **c != '_')
-                                        .map(|(i, _)| i + 1)
-                                        .unwrap_or(0);
-
-                                    let prefix_len = before_cursor.len() - word_start;
+                                    let prefix = word_prefix_before(line, self.cursor_col);
+                                    let prefix_len = prefix.chars().count();
                                     for _ in 0..prefix_len {
                                         let _ = code_editor.update(&EditorMessage::Backspace);
                                     }
@@ -599,8 +589,9 @@ impl App {
                                     }
                                     let after = code_editor.content();
                                     buffer.set_text(&after);
-                                    self.cursor_col =
-                                        self.cursor_col.saturating_sub(prefix_len) + selected.len();
+                                    let (line_idx, col_idx) = code_editor.cursor_position();
+                                    self.cursor_line = line_idx + 1;
+                                    self.cursor_col = col_idx + 1;
                                     self.lsp_overlay = iced_code_editor::LspOverlayState::new();
                                     self.autocomplete.cancel();
                                     lsp_path = Some(tab.path.clone());
@@ -797,19 +788,8 @@ impl App {
                                             .lines()
                                             .nth(self.cursor_line.saturating_sub(1))
                                             .unwrap_or("");
-                                        let before_cursor = &line_text[..self
-                                            .cursor_col
-                                            .saturating_sub(1)
-                                            .min(line_text.len())];
-                                        let chars: Vec<char> = before_cursor.chars().collect();
-                                        let word_start = chars
-                                            .iter()
-                                            .enumerate()
-                                            .rev()
-                                            .find(|(_, c)| !c.is_alphanumeric() && **c != '_')
-                                            .map(|(i, _)| i + 1)
-                                            .unwrap_or(0);
-                                        let prefix_len = before_cursor.len() - word_start;
+                                        let prefix = word_prefix_before(line_text, self.cursor_col);
+                                        let prefix_len = prefix.chars().count();
 
                                         // Delete prefix
                                         for _ in 0..prefix_len {
@@ -822,9 +802,9 @@ impl App {
                                         }
                                         buffer.set_text(&code_editor.content());
 
-                                        self.cursor_col =
-                                            self.cursor_col.saturating_sub(prefix_len)
-                                                + completion.len();
+                                        let (line_idx, col_idx) = code_editor.cursor_position();
+                                        self.cursor_line = line_idx + 1;
+                                        self.cursor_col = col_idx + 1;
                                     }
                                 }
                             }
@@ -3099,18 +3079,7 @@ impl App {
                                                 .lines()
                                                 .nth(self.cursor_line.saturating_sub(1))
                                                 .unwrap_or("");
-                                            let before = &line[..self
-                                                .cursor_col
-                                                .saturating_sub(1)
-                                                .min(line.len())];
-                                            before
-                                                .chars()
-                                                .rev()
-                                                .take_while(|c| c.is_alphanumeric() || *c == '_')
-                                                .collect::<String>()
-                                                .chars()
-                                                .rev()
-                                                .collect::<String>()
+                                            word_prefix_before(line, self.cursor_col)
                                         } else {
                                             String::new()
                                         }
@@ -3472,7 +3441,7 @@ impl App {
                 .and_then(Autocomplete::detect_language);
             self.autocomplete.trigger(content, cursor_idx, lang.as_deref());
             // Only keep suggestions when prefix is at least 2 characters
-            if self.autocomplete.prefix.len() <= 1 {
+            if self.autocomplete.prefix.chars().count() <= 1 {
                 self.autocomplete.cancel();
             }
         }
@@ -3645,6 +3614,18 @@ fn presence_details(file_name: Option<&str>) -> (String, &'static str) {
     }
 }
 
+/// Returns the identifier-like word (alphanumeric or `_`) that ends right
+/// before the 1-based character column `cursor_col` in `line`. Works on chars,
+/// never byte offsets, so multibyte text is safe.
+fn word_prefix_before(line: &str, cursor_col: usize) -> String {
+    let before: Vec<char> = line.chars().take(cursor_col.saturating_sub(1)).collect();
+    let start = before
+        .iter()
+        .rposition(|c| !c.is_alphanumeric() && *c != '_')
+        .map_or(0, |i| i + 1);
+    before[start..].iter().collect()
+}
+
 /// Turns an icon/asset key like "cpp-h" or "javascript" into a readable
 /// tooltip like "Cpp H" / "Javascript" for the Discord large image hover text.
 fn prettify_icon_key(key: &str) -> String {
@@ -3663,6 +3644,47 @@ fn prettify_icon_key(key: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_word_prefix_before_ascii() {
+        assert_eq!(word_prefix_before("let foo", 8), "foo");
+    }
+
+    #[test]
+    fn test_word_prefix_before_non_ascii_issue_repro() {
+        assert_eq!(word_prefix_before("let café", 9), "café");
+    }
+
+    #[test]
+    fn test_word_prefix_before_mid_word_multibyte() {
+        assert_eq!(word_prefix_before("let café", 7), "ca");
+    }
+
+    #[test]
+    fn test_word_prefix_before_multibyte_before_word() {
+        assert_eq!(word_prefix_before("é = foo", 8), "foo");
+    }
+
+    #[test]
+    fn test_word_prefix_before_past_end() {
+        assert_eq!(word_prefix_before("let café", 50), "café");
+    }
+
+    #[test]
+    fn test_word_prefix_before_start_of_line() {
+        assert_eq!(word_prefix_before("let café", 1), "");
+        assert_eq!(word_prefix_before("let café", 0), "");
+    }
+
+    #[test]
+    fn test_word_prefix_before_after_separator() {
+        assert_eq!(word_prefix_before("foo.", 5), "");
+    }
+
+    #[test]
+    fn test_word_prefix_before_char_count_for_backspace() {
+        assert_eq!(word_prefix_before("let café", 9).chars().count(), 4);
+    }
 
     #[test]
     fn test_presence_details_commit_tab_shows_short_hash() {
