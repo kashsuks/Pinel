@@ -85,6 +85,9 @@ impl App {
             "Render Markdown" => {
                 return iced::Task::perform(async {}, |_| Message::PreviewMarkdown);
             },
+            "Go to Defintion" => {
+                return iced::Task::perform(async {}, |_| Message::GoToDefinition);
+            },
             _ => {},
         }
         self.vim_refresh_cursor_style();

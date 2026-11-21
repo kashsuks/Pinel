@@ -285,6 +285,7 @@ pub struct App {
 
     pending_active_tab_path: Option<std::path::PathBuf>,
     pending_cursor_restores: std::collections::HashMap<std::path::PathBuf, (usize, usize)>,
+    pending_defintion_jump: Option<(std::path::PathBuf, iced_code_editor::LspPosition),
 
     closed_tabs: VecDeque<(std::path::PathBuf, (usize, usize))>,
 
@@ -489,6 +490,7 @@ impl Default for App {
 
             pending_active_tab_path: None,
             pending_cursor_restores: std::collections::HashMap::new(),
+            pending_defintion_jump: None,
             closed_tabs: VecDeque::new(),
 
             startup_page_open: editor_preferences.first_launch,

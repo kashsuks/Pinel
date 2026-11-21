@@ -56,6 +56,8 @@ pub enum Message {
     ReopenClosedTab,
     CloseActiveTab,
 
+    GoToDefinition,
+
     SidebarResizeStart,
     SidebarResizing(f32),
     SidebarResizeEnd,

@@ -1,8 +1,12 @@
-//! helpers for turning a language server's definition reply into an
-//! editor position
+//! Helpers for turning a language server's definition reply into an
+//! editor position.
 
 use std::path::PathBuf;
 
+/// Converts a `file://` URI from a language server into a local path.
+///
+/// Percent-escapes such as `%20` are decoded. Returns `None` for other
+/// schemes (for example `jar:` or `untitled:`), which can't be opened as files.
 pub fn file_uri_to_path(uri: &str) -> Option<PathBuf> {
     let url = url::Url::parse(uri).ok()?;
     if url.scheme() != "file" {
@@ -18,7 +22,7 @@ pub fn file_uri_to_path(uri: &str) -> Option<PathBuf> {
 pub fn utf16_col_to_char_col(line: &str, utf16_col: u32) -> usize {
     let mut units: u32 = 0;
     for (index, ch) in line.chars().enumerate() {
-        if units >= uft16_col {
+        if units >= utf16_col {
             return index;
         }
         units += ch.len_utf16() as u32;
@@ -42,8 +46,8 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn test_file_uri_to_path_decodes_escapes() -> Result<(), Box<dyn Error>> {
-        let path = file_uri_to_path("file:///home/me/my%20project/lib.rs")
-            .ok_or("expected a path")?;
+        let path =
+            file_uri_to_path("file:///home/me/my%20project/lib.rs").ok_or("expected a path")?;
         assert_eq!(path, PathBuf::from("/home/me/my project/lib.rs"));
         Ok(())
     }
