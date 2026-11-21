@@ -317,6 +317,44 @@ impl App {
         iced::Task::none()
     }
 
+    /// Closes the tab at `idx`, releasing its resources and keeping
+    /// `active_tab` pointing at a valid tab. Out-of-range indices are a no-op.
+    fn close_tab(&mut self, idx: usize, remember: bool) {
+        if idx >= self.tabs.len() {
+            return;
+        }
+        let path = self.tabs[idx].path.clone();
+        if remember {
+            self.record_closed_tab(idx);
+        }
+        if let TabKind::Editor {
+            ref mut code_editor,
+            ..
+        } = self.tabs[idx].kind
+        {
+            code_editor.detach_lsp();
+        }
+        if let TabKind::Audio { ref sink, .. } = self.tabs[idx].kind {
+            if let Some(s) = sink.lock().unwrap_or_else(|e| e.into_inner()).as_ref() {
+                s.stop();
+            }
+        }
+        if self
+            .markdown_preview
+            .as_ref()
+            .is_some_and(|preview| preview.source_path == path)
+        {
+            self.markdown_preview = None;
+        }
+        self.lsp_diagnostics.remove(&path);
+        self.lsp_server_keys.remove(&path);
+        self.tabs.remove(idx);
+        self.active_tab = active_tab_after_close(self.active_tab, idx, self.tabs.len());
+        self.lsp_overlay = iced_code_editor::LspOverlayState::new();
+        self.pending_hover_request = None;
+        self.vim_refresh_cursor_style();
+    }
+
     fn create_file_tree_entry(&mut self, is_folder: bool) -> iced::Task<Message> {
         let Some(target) = self.context_menu.take() else {
             return iced::Task::none();
@@ -932,82 +970,13 @@ impl App {
                 },
             ),
             Message::TabClosed(idx) => {
-                if idx < self.tabs.len() {
-                    let path = self.tabs[idx].path.clone();
-                    self.record_closed_tab(idx);
-                    if let TabKind::Editor {
-                        ref mut code_editor,
-                        ..
-                    } = self.tabs[idx].kind
-                    {
-                        code_editor.detach_lsp();
-                    }
-                    if let TabKind::Audio { ref sink, .. } = self.tabs[idx].kind {
-                        if let Some(s) = sink.lock().unwrap_or_else(|e| e.into_inner()).as_ref() {
-                            s.stop();
-                        }
-                    }
-                    if self
-                        .markdown_preview
-                        .as_ref()
-                        .is_some_and(|preview| preview.source_path == path)
-                    {
-                        self.markdown_preview = None;
-                    }
-                    self.lsp_diagnostics.remove(&path);
-                    self.lsp_server_keys.remove(&path);
-                    self.tabs.remove(idx);
-                    if self.tabs.is_empty() {
-                        self.active_tab = None;
-                    } else if let Some(active) = self.active_tab {
-                        if active >= self.tabs.len() {
-                            self.active_tab = Some(self.tabs.len() - 1);
-                        } else if active > idx {
-                            self.active_tab = Some(active - 1);
-                        }
-                    }
-                }
-                self.lsp_overlay = iced_code_editor::LspOverlayState::new();
-                self.pending_hover_request = None;
-                self.vim_refresh_cursor_style();
+                self.close_tab(idx, true);
                 iced::Task::none()
             },
             Message::CloseActiveTab => {
                 if let Some(idx) = self.active_tab {
-                    let path = self.tabs[idx].path.clone();
-                    self.record_closed_tab(idx);
-                    if let TabKind::Editor {
-                        ref mut code_editor,
-                        ..
-                    } = self.tabs[idx].kind
-                    {
-                        code_editor.detach_lsp();
-                    }
-                    if let TabKind::Audio { ref sink, .. } = self.tabs[idx].kind {
-                        if let Some(s) = sink.lock().unwrap_or_else(|e| e.into_inner()).as_ref() {
-                            s.stop();
-                        }
-                    }
-                    if self
-                        .markdown_preview
-                        .as_ref()
-                        .is_some_and(|preview| preview.source_path == path)
-                    {
-                        self.markdown_preview = None;
-                    }
-
-                    self.lsp_diagnostics.remove(&path);
-                    self.lsp_server_keys.remove(&path);
-                    self.tabs.remove(idx);
-                    if self.tabs.is_empty() {
-                        self.active_tab = None;
-                    } else if idx >= self.tabs.len() {
-                        self.active_tab = Some(self.tabs.len() - 1);
-                    }
+                    self.close_tab(idx, true);
                 }
-                self.lsp_overlay = iced_code_editor::LspOverlayState::new();
-                self.pending_hover_request = None;
-                self.vim_refresh_cursor_style();
                 iced::Task::none()
             },
             Message::ReopenClosedTab => {
@@ -1541,7 +1510,16 @@ impl App {
             },
             Message::FileTreeDeleted(path, removed) => {
                 if removed {
-                    self.tabs.retain(|tab| !tab.path.starts_with(&path));
+                    let doomed: Vec<usize> = self
+                        .tabs
+                        .iter()
+                        .enumerate()
+                        .filter(|(_, tab)| tab.path.starts_with(&path))
+                        .map(|(i, _)| i)
+                        .collect();
+                    for i in doomed.into_iter().rev() {
+                        self.close_tab(i, false);
+                    }
                     if let Some(ref mut tree) = self.file_tree {
                         tree.refresh();
                     }
@@ -3660,6 +3638,20 @@ fn prettify_icon_key(key: &str) -> String {
         .join(" ")
 }
 
+/// The active tab index after closing the tab at `closed`, given the number
+/// of tabs `remaining` once it is removed.
+fn active_tab_after_close(active: Option<usize>, closed: usize, remaining: usize) -> Option<usize> {
+    if remaining == 0 {
+        return None;
+    }
+    match active {
+        None => None,
+        Some(a) if a >= remaining => Some(remaining - 1),
+        Some(a) if a > closed => Some(a - 1),
+        Some(a) => Some(a),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -3694,5 +3686,42 @@ mod tests {
     #[test]
     fn test_presence_details_no_tab_is_idle() {
         assert_eq!(presence_details(None), ("Idle".to_string(), "pinel"));
+    }
+
+    #[test]
+    fn test_active_tab_after_close_before_active() {
+        assert_eq!(active_tab_after_close(Some(1), 0, 1), Some(0));
+    }
+
+    #[test]
+    fn test_active_tab_after_close_after_active() {
+        assert_eq!(active_tab_after_close(Some(0), 1, 1), Some(0));
+    }
+
+    #[test]
+    fn test_active_tab_after_close_active_last() {
+        assert_eq!(active_tab_after_close(Some(2), 2, 2), Some(1));
+    }
+
+    #[test]
+    fn test_active_tab_after_close_active_middle() {
+        assert_eq!(active_tab_after_close(Some(1), 1, 2), Some(1));
+    }
+
+    #[test]
+    fn test_active_tab_after_close_only_tab() {
+        assert_eq!(active_tab_after_close(Some(0), 0, 0), None);
+    }
+
+    #[test]
+    fn test_active_tab_after_close_none_active() {
+        assert_eq!(active_tab_after_close(None, 0, 2), None);
+    }
+
+    #[test]
+    fn test_active_tab_after_close_two_deleted_before_active() {
+        let active = active_tab_after_close(Some(2), 1, 2);
+        let active = active_tab_after_close(active, 0, 1);
+        assert_eq!(active, Some(0));
     }
 }
