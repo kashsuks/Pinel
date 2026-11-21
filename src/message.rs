@@ -49,7 +49,8 @@ pub enum Message {
     SaveFile,
     SaveCurrentFileAs(PathBuf),
     CurrentFileSavedAs(PathBuf),
-    FileSaved(Result<(), String>),
+    /// A manual save finished for the tab at this path; carries the content that was written.
+    FileSaved(PathBuf, String, Result<(), String>),
 
     TabSelected(usize),
     TabClosed(usize),

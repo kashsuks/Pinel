@@ -1563,12 +1563,16 @@ impl App {
                             if path == Path::new("untitled") {
                                 return iced::Task::perform(async {}, |_| Message::SaveAs);
                             }
+                            let write_path = path.clone();
+                            let write_content = content.clone();
                             return iced::Task::perform(
                                 async move {
-                                    crate::fs_util::write_atomic(&path, content)
-                                        .map_err(|e| e.to_string())
+                                    let result =
+                                        crate::fs_util::write_atomic(&write_path, write_content)
+                                            .map_err(|e| e.to_string());
+                                    (path, content, result)
                                 },
-                                Message::FileSaved,
+                                |(path, content, result)| Message::FileSaved(path, content, result),
                             );
                         }
                     }
@@ -1586,13 +1590,14 @@ impl App {
                             let content = code_editor.content();
                             return iced::Task::perform(
                                 async move {
-                                    crate::fs_util::write_atomic(&path, content)
-                                        .map(|_| path)
-                                        .map_err(|e| e.to_string())
+                                    let result =
+                                        crate::fs_util::write_atomic(&path, content.clone())
+                                            .map_err(|e| e.to_string());
+                                    (path, content, result)
                                 },
-                                |result| match result {
-                                    Ok(path) => Message::CurrentFileSavedAs(path),
-                                    Err(err) => Message::FileSaved(Err(err)),
+                                |(path, content, result)| match result {
+                                    Ok(()) => Message::CurrentFileSavedAs(path),
+                                    Err(err) => Message::FileSaved(path, content, Err(err)),
                                 },
                             );
                         }
@@ -1633,22 +1638,12 @@ impl App {
 
                 iced::Task::none()
             },
-            Message::FileSaved(result) => {
-                if let Err(e) = result {
-                    eprintln!("Failed to save file: {}", e);
-                } else if let Some(idx) = self.active_tab {
-                    if let Some(tab) = self.tabs.get_mut(idx) {
-                        if let TabKind::Editor {
-                            ref mut code_editor,
-                            ..
-                        } = tab.kind
-                        {
-                            code_editor.mark_saved();
-                            code_editor.lsp_did_save();
-                        }
-                        tab.autosave_requested_at = None;
-                        tab.autosave_in_flight = false;
-                    }
+            Message::FileSaved(path, saved_content, result) => {
+                match result {
+                    Err(e) => eprintln!("Failed to save {}: {}", path.display(), e),
+                    Ok(()) => {
+                        mark_tab_saved(&mut self.tabs, &path, &saved_content);
+                    },
                 }
                 iced::Task::none()
             },
@@ -3621,6 +3616,30 @@ fn word_prefix_before(line: &str, cursor_col: usize) -> String {
     before[start..].iter().collect()
 }
 
+/// Marks the first tab at `path` as saved after a manual save wrote
+/// `saved_content` to disk.
+///
+/// Always clears the tab's in-flight autosave flag. The editor is only marked
+/// saved when its current content still equals `saved_content`, so edits
+/// typed while the write was in progress keep the tab modified. Returns
+/// `true` if the tab was marked saved.
+fn mark_tab_saved(tabs: &mut [Tab], path: &Path, saved_content: &str) -> bool {
+    let Some(tab) = tabs.iter_mut().find(|tab| tab.path == path) else {
+        return false;
+    };
+    tab.autosave_in_flight = false;
+    let TabKind::Editor { code_editor, .. } = &mut tab.kind else {
+        return false;
+    };
+    if code_editor.content() != saved_content {
+        return false;
+    }
+    code_editor.mark_saved();
+    code_editor.lsp_did_save();
+    tab.autosave_requested_at = None;
+    true
+}
+
 /// Turns an icon/asset key like "cpp-h" or "javascript" into a readable
 /// tooltip like "Cpp H" / "Javascript" for the Discord large image hover text.
 fn prettify_icon_key(key: &str) -> String {
@@ -3653,6 +3672,87 @@ fn active_tab_after_close(active: Option<usize>, closed: usize, remaining: usize
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn editor_tab(path: &str, content: &str) -> Tab {
+        Tab {
+            path: PathBuf::from(path),
+            name: path.to_string(),
+            kind: TabKind::Editor {
+                code_editor: iced_code_editor::CodeEditor::new(content, "txt"),
+                buffer: crate::features::editor_buffer::EditorBuffer::from_text(content),
+            },
+            autosave_requested_at: None,
+            autosave_in_flight: false,
+        }
+    }
+
+    /// Types `text` into the tab's editor so it becomes modified, and returns
+    /// the editor's new content.
+    fn modify_tab(tab: &mut Tab, text: &str) -> String {
+        match &mut tab.kind {
+            TabKind::Editor { code_editor, .. } => {
+                let _ = code_editor.update(&EditorMessage::Paste(text.to_string()));
+                code_editor.content()
+            },
+            _ => String::new(),
+        }
+    }
+
+    fn tab_is_modified(tab: &Tab) -> bool {
+        match &tab.kind {
+            TabKind::Editor { code_editor, .. } => code_editor.is_modified(),
+            _ => false,
+        }
+    }
+
+    #[test]
+    fn test_mark_tab_saved_only_marks_matching_path() {
+        let mut tabs = vec![
+            editor_tab("/tmp/a.txt", "aaa"),
+            editor_tab("/tmp/b.txt", "bbb"),
+        ];
+        let a_content = modify_tab(&mut tabs[0], "x");
+        let _ = modify_tab(&mut tabs[1], "y");
+        assert!(tab_is_modified(&tabs[0]));
+        assert!(tab_is_modified(&tabs[1]));
+
+        assert!(mark_tab_saved(
+            &mut tabs,
+            Path::new("/tmp/a.txt"),
+            &a_content
+        ));
+
+        assert!(!tab_is_modified(&tabs[0]));
+        assert!(tab_is_modified(&tabs[1]));
+    }
+
+    #[test]
+    fn test_mark_tab_saved_keeps_tab_modified_when_content_changed() {
+        let mut tabs = vec![editor_tab("/tmp/a.txt", "aaa")];
+        let saved_content = modify_tab(&mut tabs[0], "x");
+        let _ = modify_tab(&mut tabs[0], "z");
+        assert!(tab_is_modified(&tabs[0]));
+
+        assert!(!mark_tab_saved(
+            &mut tabs,
+            Path::new("/tmp/a.txt"),
+            &saved_content
+        ));
+        assert!(tab_is_modified(&tabs[0]));
+    }
+
+    #[test]
+    fn test_mark_tab_saved_unknown_path_returns_false() {
+        let mut tabs = vec![editor_tab("/tmp/a.txt", "aaa")];
+        let _ = modify_tab(&mut tabs[0], "x");
+
+        assert!(!mark_tab_saved(
+            &mut tabs,
+            Path::new("/tmp/missing.txt"),
+            "xaaa"
+        ));
+        assert!(tab_is_modified(&tabs[0]));
+    }
 
     #[test]
     fn test_word_prefix_before_ascii() {
