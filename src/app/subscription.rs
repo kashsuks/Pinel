@@ -5,8 +5,14 @@ use super::*;
 impl App {
     /// Registers global event listeners and maps them to [`Message`] values.
     pub fn subscription(&self) -> Subscription<Message> {
+        let shortcuts = if self.terminal_open && self.focused_pane == FocusPane::Terminal {
+            crate::subscriptions::keyboard::terminal_shortcuts()
+        } else {
+            crate::subscriptions::keyboard::shortcuts()
+        };
+
         let mut subs = vec![
-            crate::subscriptions::keyboard::shortcuts(),
+            shortcuts,
             crate::subscriptions::keyboard::modifier_state(),
             crate::subscriptions::mouse::sidebar_resize(),
             crate::subscriptions::mouse::cursor_tracker(),
