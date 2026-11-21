@@ -1435,17 +1435,34 @@ impl App {
             },
             Message::FileTreeRenameSubmit => {
                 if let Some((old_path, _is_dir)) = self.rename_target.take() {
-                    let new_name = self.rename_input.trim();
+                    let new_name = self.rename_input.trim().to_string();
                     if !new_name.is_empty() {
                         if let Some(parent) = old_path.parent() {
-                            let new_path = parent.join(new_name);
-                            if new_path != old_path && std::fs::rename(&old_path, &new_path).is_ok()
-                            {
-                                for tab in &mut self.tabs {
-                                    if tab.path == old_path {
-                                        tab.path = new_path.clone();
-                                        tab.name = new_name.to_string();
-                                    }
+                            let new_path = parent.join(&new_name);
+                            if new_path != old_path {
+                                match crate::fs_util::rename_no_clobber(&old_path, &new_path) {
+                                    Ok(()) => {
+                                        for tab in &mut self.tabs {
+                                            if tab.path == old_path {
+                                                tab.path = new_path.clone();
+                                                tab.name = new_name.clone();
+                                            }
+                                        }
+                                    },
+                                    Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => {
+                                        self.notification = Some(Notification {
+                                            message: format!(
+                                                "A file or folder named \"{new_name}\" already exists"
+                                            ),
+                                            shown_at: Instant::now(),
+                                        });
+                                    },
+                                    Err(err) => {
+                                        self.notification = Some(Notification {
+                                            message: format!("Rename failed: {err}"),
+                                            shown_at: Instant::now(),
+                                        });
+                                    },
                                 }
                             }
                         }
