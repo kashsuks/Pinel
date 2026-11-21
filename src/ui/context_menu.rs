@@ -2,13 +2,14 @@ use iced::widget::{button, column, container, text, Space};
 use iced::{Element, Length};
 
 use crate::message::Message;
+use crate::theme::TEXT_MD;
 use crate::ui::styles::{
     context_menu_item_style, context_menu_item_style_destructive, context_menu_panel_style,
     context_menu_seperator_style,
 };
 
 fn menu_item(label: &'static str, message: Message) -> Element<'static, Message> {
-    button(text(label).size(13))
+    button(text(label).size(TEXT_MD))
         .on_press(message)
         .style(context_menu_item_style)
         .padding(iced::Padding {
@@ -22,7 +23,7 @@ fn menu_item(label: &'static str, message: Message) -> Element<'static, Message>
 }
 
 fn menu_item_destructive(label: &'static str, message: Message) -> Element<'static, Message> {
-    button(text(label).size(13))
+    button(text(label).size(TEXT_MD))
         .on_press(message)
         .style(context_menu_item_style_destructive)
         .padding(iced::Padding {

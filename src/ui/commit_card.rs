@@ -11,7 +11,7 @@ use crate::{
         git_commit::{relative_time, CommitDetail},
     },
     message::Message,
-    theme::theme,
+    theme::{theme, SPACE_1, SPACE_2, SPACE_3, TEXT_SM, TEXT_XS},
     ui::git_graph::{pill, ref_color},
 };
 
@@ -41,14 +41,14 @@ pub fn view_commit_card<'a>(
         None => relative_time(now, commit.timestamp),
     };
     let header = row![
-        text(&commit.author).size(12).color(primary),
-        text(when).size(12).color(muted),
+        text(&commit.author).size(TEXT_SM).color(primary),
+        text(when).size(TEXT_SM).color(muted),
     ]
-    .spacing(8);
+    .spacing(SPACE_2);
 
-    let mut message = column![text(&commit.subject).size(12).color(primary)].spacing(4);
+    let mut message = column![text(&commit.subject).size(TEXT_SM).color(primary)].spacing(SPACE_1);
     if let Some(body) = detail.map(|d| d.body.as_str()).filter(|b| !b.is_empty()) {
-        message = message.push(text(body).size(11).color(muted));
+        message = message.push(text(body).size(TEXT_XS).color(muted));
     }
 
     let stats: Element<'a, Message> = match detail {
@@ -62,14 +62,14 @@ pub fn view_commit_card<'a>(
                     "s"
                 }
             ))
-            .size(11)
+            .size(TEXT_XS)
             .color(muted),
-            text(format!("{} insertions(+),", d.insertions)).size(11).color(GREEN),
-            text(format!("{} deletions(-)", d.deletions)).size(11).color(RED),
+            text(format!("{} insertions(+),", d.insertions)).size(TEXT_XS).color(GREEN),
+            text(format!("{} deletions(-)", d.deletions)).size(TEXT_XS).color(RED),
         ]
-        .spacing(4)
+        .spacing(SPACE_1)
         .into(),
-        None => text("Loading details...").size(11).color(muted).into(),
+        None => text("Loading details...").size(TEXT_XS).color(muted).into(),
     };
 
     let pills = row(commit
@@ -79,12 +79,12 @@ pub fn view_commit_card<'a>(
         .map(|r| pill(r.name.clone(), ref_color(r))))
     .spacing(6);
 
-    let mut footer = row![text(commit.short_hash()).size(11).color(muted)]
-        .spacing(12)
+    let mut footer = row![text(commit.short_hash()).size(TEXT_XS).color(muted)]
+        .spacing(SPACE_3)
         .align_y(iced::Alignment::Center);
     if let Some(url) = detail.and_then(|d| d.github_url.clone()) {
         footer = footer.push(
-            button(text("Open on GitHub").size(11).color(LINK))
+            button(text("Open on GitHub").size(TEXT_XS).color(LINK))
                 .padding(0)
                 .style(|_theme, _status| button::Style {
                     text_color: LINK,
@@ -94,8 +94,8 @@ pub fn view_commit_card<'a>(
         );
     }
 
-    let card = container(column![header, message, stats, pills, footer].spacing(8))
-        .padding(12)
+    let card = container(column![header, message, stats, pills, footer].spacing(SPACE_2))
+        .padding(SPACE_3)
         .width(Length::Fixed(CARD_WIDTH))
         .style(|_theme| container::Style {
             background: Some(Background::Color(theme().bg_secondary)),

@@ -67,7 +67,7 @@ impl App {
                     None
                 };
 
-                button(text(label).size(13).color(label_color))
+                button(text(label).size(TEXT_MD).color(label_color))
                     .on_press(Message::SettingsNavigate(key.to_string()))
                     .style(move |_theme, _status| button::Style {
                         background: bg,
@@ -76,10 +76,10 @@ impl App {
                         ..Default::default()
                     })
                     .padding(iced::Padding {
-                        top: 8.0,
-                        right: 16.0,
-                        bottom: 8.0,
-                        left: 16.0,
+                        top: SPACE_2,
+                        right: SPACE_4,
+                        bottom: SPACE_2,
+                        left: SPACE_4,
                     })
                     .width(Length::Fill)
                     .into()
@@ -98,18 +98,18 @@ impl App {
             })
             .padding(iced::Padding {
                 top: 2.0,
-                right: 8.0,
+                right: SPACE_2,
                 bottom: 2.0,
-                left: 8.0,
+                left: SPACE_2,
             });
 
         let nav_top = row![nav_header, Space::new().width(Length::Fill), close_btn]
             .align_y(iced::Alignment::Center)
             .padding(iced::Padding {
-                top: 12.0,
-                right: 12.0,
-                bottom: 8.0,
-                left: 16.0,
+                top: SPACE_3,
+                right: SPACE_3,
+                bottom: SPACE_2,
+                left: SPACE_4,
             });
 
         let separator = container(Space::new().width(Length::Fill).height(Length::Fixed(1.0)))
@@ -125,7 +125,7 @@ impl App {
             iced::Padding {
                 top: 0.0,
                 right: 0.0,
-                bottom: 8.0,
+                bottom: SPACE_2,
                 left: 0.0,
             },
         )))
@@ -180,7 +180,7 @@ impl App {
 
         let heading = text("General").size(18).color(theme().text_primary);
         let desc = text("General application settings and information.")
-            .size(12)
+            .size(TEXT_SM)
             .color(theme().text_dim);
 
         let separator = container(Space::new().width(Length::Fill).height(Length::Fixed(1.0)))
@@ -190,27 +190,33 @@ impl App {
             });
 
         let version_row = row![
-            text("Version").size(13).color(theme().text_muted).width(Length::Fixed(140.0)),
-            text("1.0.0").size(13).color(theme().text_primary),
+            text("Version")
+                .size(TEXT_MD)
+                .color(theme().text_muted)
+                .width(Length::Fixed(140.0)),
+            text("1.0.0").size(TEXT_MD).color(theme().text_primary),
         ]
-        .spacing(12)
+        .spacing(SPACE_3)
         .align_y(iced::Alignment::Center);
 
         let app_name_row = row![
             text("Application")
-                .size(13)
+                .size(TEXT_MD)
                 .color(theme().text_muted)
                 .width(Length::Fixed(140.0)),
-            text("Pinel Editor").size(13).color(theme().text_primary),
+            text("Pinel Editor").size(TEXT_MD).color(theme().text_primary),
         ]
-        .spacing(12)
+        .spacing(SPACE_3)
         .align_y(iced::Alignment::Center);
 
         let framework_row = row![
-            text("Framework").size(13).color(theme().text_muted).width(Length::Fixed(140.0)),
-            text("iced 0.14").size(13).color(theme().text_primary),
+            text("Framework")
+                .size(TEXT_MD)
+                .color(theme().text_muted)
+                .width(Length::Fixed(140.0)),
+            text("iced 0.14").size(TEXT_MD).color(theme().text_primary),
         ]
-        .spacing(12)
+        .spacing(SPACE_3)
         .align_y(iced::Alignment::Center);
 
         column![
@@ -221,7 +227,7 @@ impl App {
             version_row,
             framework_row
         ]
-        .spacing(12)
+        .spacing(SPACE_3)
         .width(Length::Fill)
         .into()
     }
@@ -233,7 +239,7 @@ impl App {
 
         let heading = text("Preferences").size(18).color(theme().text_primary);
         let desc = text("Configure editor behavior, formatting, and appearance.")
-            .size(12)
+            .size(TEXT_SM)
             .color(theme().text_dim);
 
         let separator = container(Space::new().width(Length::Fill).height(Length::Fixed(1.0)))
@@ -244,20 +250,22 @@ impl App {
 
         let tab_size_row = row![
             column![
-                text("Tab Size").size(13).color(theme().text_muted),
-                text("Number of spaces per indentation level").size(11).color(theme().text_dim),
+                text("Tab Size").size(TEXT_MD).color(theme().text_muted),
+                text("Number of spaces per indentation level")
+                    .size(TEXT_XS)
+                    .color(theme().text_dim),
             ]
             .spacing(2)
             .width(Length::FillPortion(2)),
             text_input("4", &self.editor_preferences.tab_size.to_string())
                 .on_input(Message::SettingsTabSizeChanged)
-                .size(12)
+                .size(TEXT_SM)
                 .align_x(iced::Alignment::Center)
                 .padding(SETTINGS_CONTROL_PADDING)
                 .style(settings_input_style)
                 .width(Length::Fixed(80.0)),
         ]
-        .spacing(16)
+        .spacing(SPACE_4)
         .align_y(iced::Alignment::Center);
 
         let spaces_label = if self.editor_preferences.use_spaces {
@@ -267,14 +275,14 @@ impl App {
         };
         let spaces_row = row![
             column![
-                text("Indent Using").size(13).color(theme().text_muted),
+                text("Indent Using").size(TEXT_MD).color(theme().text_muted),
                 text("Choose between spaces or tabs for indentation")
-                    .size(11)
+                    .size(TEXT_XS)
                     .color(theme().text_dim),
             ]
             .spacing(2)
             .width(Length::FillPortion(2)),
-            button(text(spaces_label).size(12).color(theme().text_primary))
+            button(text(spaces_label).size(TEXT_SM).color(theme().text_primary))
                 .on_press(Message::SettingsToggleUseSpaces)
                 .style(|_theme, _status| button::Style {
                     background: Some(Background::Color(theme().bg_secondary)),
@@ -288,7 +296,7 @@ impl App {
                 })
                 .padding(SETTINGS_CONTROL_PADDING),
         ]
-        .spacing(16)
+        .spacing(SPACE_4)
         .align_y(iced::Alignment::Center);
 
         let auto_indent_label = if self.editor_preferences.auto_indent_enabled {
@@ -298,14 +306,14 @@ impl App {
         };
         let auto_indent_row = row![
             column![
-                text("Auto-Indent").size(13).color(theme().text_muted),
+                text("Auto-Indent").size(TEXT_MD).color(theme().text_muted),
                 text("Copy the previous line's indentation on Enter")
-                    .size(11)
+                    .size(TEXT_XS)
                     .color(theme().text_dim),
             ]
             .spacing(2)
             .width(Length::FillPortion(2)),
-            button(text(auto_indent_label).size(12).color(theme().text_primary))
+            button(text(auto_indent_label).size(TEXT_SM).color(theme().text_primary))
                 .on_press(Message::SettingsToggleAutoIndent)
                 .style(|_theme, _status| button::Style {
                     background: Some(Background::Color(theme().bg_secondary)),
@@ -319,7 +327,7 @@ impl App {
                 })
                 .padding(SETTINGS_CONTROL_PADDING),
         ]
-        .spacing(16)
+        .spacing(SPACE_4)
         .align_y(iced::Alignment::Center);
 
         let show_whitespace_label = if self.editor_preferences.show_whitespace {
@@ -329,14 +337,14 @@ impl App {
         };
         let show_whitespace_row = row![
             column![
-                text("Show Whitespace").size(13).color(theme().text_muted),
+                text("Show Whitespace").size(TEXT_MD).color(theme().text_muted),
                 text("Draw spaces as \u{b7} and tabs as \u{2192}")
-                    .size(11)
+                    .size(TEXT_XS)
                     .color(theme().text_dim),
             ]
             .spacing(2)
             .width(Length::FillPortion(2)),
-            button(text(show_whitespace_label).size(12).color(theme().text_primary))
+            button(text(show_whitespace_label).size(TEXT_SM).color(theme().text_primary))
                 .on_press(Message::SettingsToggleShowWhitespace)
                 .style(|_theme, _status| button::Style {
                     background: Some(Background::Color(theme().bg_secondary)),
@@ -350,7 +358,7 @@ impl App {
                 })
                 .padding(SETTINGS_CONTROL_PADDING),
         ]
-        .spacing(16)
+        .spacing(SPACE_4)
         .align_y(iced::Alignment::Center);
 
         let show_breadcrumbs_label = if self.editor_preferences.show_breadcrumbs {
@@ -360,14 +368,14 @@ impl App {
         };
         let show_breadcrumbs_row = row![
             column![
-                text("Show Breadcrumbs").size(13).color(theme().text_muted),
+                text("Show Breadcrumbs").size(TEXT_MD).color(theme().text_muted),
                 text("Project, file and symbol path under the tab bar")
-                    .size(11)
+                    .size(TEXT_XS)
                     .color(theme().text_dim),
             ]
             .spacing(2)
             .width(Length::FillPortion(2)),
-            button(text(show_breadcrumbs_label).size(12).color(theme().text_primary))
+            button(text(show_breadcrumbs_label).size(TEXT_SM).color(theme().text_primary))
                 .on_press(Message::SettingsToggleShowBreadcrumbs)
                 .style(|_theme, _status| button::Style {
                     background: Some(Background::Color(theme().bg_secondary)),
@@ -381,7 +389,7 @@ impl App {
                 })
                 .padding(SETTINGS_CONTROL_PADDING),
         ]
-        .spacing(16)
+        .spacing(SPACE_4)
         .align_y(iced::Alignment::Center);
 
         let vim_mode_label = if self.editor_preferences.vim_mode_enabled {
@@ -391,14 +399,14 @@ impl App {
         };
         let vim_mode_row = row![
             column![
-                text("Vim Mode").size(13).color(theme().text_muted),
+                text("Vim Mode").size(TEXT_MD).color(theme().text_muted),
                 text("Start new tabs in Vim mode (toggle per-tab with Ctrl+Alt+V)")
-                    .size(11)
+                    .size(TEXT_XS)
                     .color(theme().text_dim),
             ]
             .spacing(2)
             .width(Length::FillPortion(2)),
-            button(text(vim_mode_label).size(12).color(theme().text_primary))
+            button(text(vim_mode_label).size(TEXT_SM).color(theme().text_primary))
                 .on_press(Message::SettingsToggleVimMode)
                 .style(|_theme, _status| button::Style {
                     background: Some(Background::Color(theme().bg_secondary)),
@@ -412,7 +420,7 @@ impl App {
                 })
                 .padding(SETTINGS_CONTROL_PADDING),
         ]
-        .spacing(16)
+        .spacing(SPACE_4)
         .align_y(iced::Alignment::Center);
 
         let discord_rpc_label = if self.editor_preferences.discord_rpc_enabled {
@@ -422,14 +430,14 @@ impl App {
         };
         let discord_rpc_row = row![
             column![
-                text("Discord Rich Presence").size(13).color(theme().text_muted),
+                text("Discord Rich Presence").size(TEXT_MD).color(theme().text_muted),
                 text("Show the file you're editing as your Discord status")
-                    .size(11)
+                    .size(TEXT_XS)
                     .color(theme().text_dim),
             ]
             .spacing(2)
             .width(Length::FillPortion(2)),
-            button(text(discord_rpc_label).size(12).color(theme().text_primary))
+            button(text(discord_rpc_label).size(TEXT_SM).color(theme().text_primary))
                 .on_press(Message::SettingsToggleDiscordRpc)
                 .style(|_theme, _stats| button::Style {
                     background: Some(Background::Color(theme().bg_secondary)),
@@ -443,7 +451,7 @@ impl App {
                 })
                 .padding(SETTINGS_CONTROL_PADDING),
         ]
-        .spacing(16)
+        .spacing(SPACE_4)
         .align_y(iced::Alignment::Center);
 
         let restore_session_label = if self.editor_preferences.restore_session_enabled {
@@ -453,14 +461,14 @@ impl App {
         };
         let restore_session_row = row![
             column![
-                text("Restore Last Session").size(13).color(theme().text_muted),
+                text("Restore Last Session").size(TEXT_MD).color(theme().text_muted),
                 text("Reopen the last folder, tabs, and cursor positions on launch")
-                    .size(11)
+                    .size(TEXT_XS)
                     .color(theme().text_dim),
             ]
             .spacing(2)
             .width(Length::FillPortion(2)),
-            button(text(restore_session_label).size(12).color(theme().text_primary))
+            button(text(restore_session_label).size(TEXT_SM).color(theme().text_primary))
                 .on_press(Message::SettingsToggleRestoreSession)
                 .style(|_theme, _status| button::Style {
                     background: Some(Background::Color(theme().bg_secondary)),
@@ -474,7 +482,7 @@ impl App {
                 })
                 .padding(SETTINGS_CONTROL_PADDING),
         ]
-        .spacing(16)
+        .spacing(SPACE_4)
         .align_y(iced::Alignment::Center);
 
         let autosave_label = if self.editor_preferences.autosave_enabled {
@@ -485,12 +493,12 @@ impl App {
 
         let autosave_toggle_row = row![
             column![
-                text("Autosave").size(13).color(theme().text_muted),
-                text("Automatically save modified files").size(11).color(theme().text_dim)
+                text("Autosave").size(TEXT_MD).color(theme().text_muted),
+                text("Automatically save modified files").size(TEXT_XS).color(theme().text_dim)
             ]
             .spacing(2)
             .width(Length::FillPortion(2)),
-            button(text(autosave_label).size(12).color(theme().text_primary))
+            button(text(autosave_label).size(TEXT_SM).color(theme().text_primary))
                 .on_press(Message::SettingsToggleAutosave)
                 .style(|_theme, _status| button::Style {
                     background: Some(Background::Color(theme().bg_secondary)),
@@ -504,14 +512,14 @@ impl App {
                 })
                 .padding(SETTINGS_CONTROL_PADDING),
         ]
-        .spacing(16)
+        .spacing(SPACE_4)
         .align_y(iced::Alignment::Center);
 
         let autosave_interval_row = row![
             column![
-                text("Autosave Interval").size(13).color(theme().text_muted),
+                text("Autosave Interval").size(TEXT_MD).color(theme().text_muted),
                 text("Delay in milliseconds before autosaving (30-1000)")
-                    .size(11)
+                    .size(TEXT_XS)
                     .color(theme().text_dim),
             ]
             .spacing(2)
@@ -521,13 +529,13 @@ impl App {
                 &self.editor_preferences.autosave_interval_ms.to_string()
             )
             .on_input(Message::SettingsAutosaveIntervalChanged)
-            .size(12)
+            .size(TEXT_SM)
             .align_x(iced::Alignment::Center)
             .padding(SETTINGS_CONTROL_PADDING)
             .style(settings_input_style)
             .width(Length::Fixed(100.0)),
         ]
-        .spacing(16)
+        .spacing(SPACE_4)
         .align_y(iced::Alignment::Center);
 
         let tab_drag_label = if self.editor_preferences.tab_drag_floating {
@@ -537,14 +545,14 @@ impl App {
         };
         let tab_drag_row = row![
             column![
-                text("Tab Drag Style").size(13).color(theme().text_muted),
+                text("Tab Drag Style").size(TEXT_MD).color(theme().text_muted),
                 text("Floating: ghost follows cursor  ·  Static: tabs shift live")
-                    .size(11)
+                    .size(TEXT_XS)
                     .color(theme().text_dim),
             ]
             .spacing(2)
             .width(Length::FillPortion(2)),
-            button(text(tab_drag_label).size(12).color(theme().text_primary))
+            button(text(tab_drag_label).size(TEXT_SM).color(theme().text_primary))
                 .on_press(Message::SettingsToggleTabDragFloating)
                 .style(|_theme, _status| button::Style {
                     background: Some(Background::Color(theme().bg_secondary)),
@@ -558,25 +566,27 @@ impl App {
                 })
                 .padding(SETTINGS_CONTROL_PADDING),
         ]
-        .spacing(16)
+        .spacing(SPACE_4)
         .align_y(iced::Alignment::Center);
 
         let line_number_width_row = row![
             column![
-                text("Line Number Width").size(13).color(theme().text_muted),
-                text("Gutter width in pixels (20\u{2013}120)").size(11).color(theme().text_dim),
+                text("Line Number Width").size(TEXT_MD).color(theme().text_muted),
+                text("Gutter width in pixels (20\u{2013}120)")
+                    .size(TEXT_XS)
+                    .color(theme().text_dim),
             ]
             .spacing(2)
             .width(Length::FillPortion(2)),
             text_input("40", &self.editor_preferences.line_number_width.to_string())
                 .on_input(Message::SettingsLineNumberWidthChanged)
-                .size(12)
+                .size(TEXT_SM)
                 .align_x(iced::Alignment::Center)
                 .padding(SETTINGS_CONTROL_PADDING)
                 .style(settings_input_style)
                 .width(Length::Fixed(80.0)),
         ]
-        .spacing(16)
+        .spacing(SPACE_4)
         .align_y(iced::Alignment::Center);
 
         let all_themes: Vec<&str> = {
@@ -587,7 +597,7 @@ impl App {
 
         let dropdown_trigger = button(
             row![
-                text(&self.active_theme_name).size(12).color(theme().text_primary),
+                text(&self.active_theme_name).size(TEXT_SM).color(theme().text_primary),
                 Space::new().width(Length::Fill),
                 text(if self.theme_dropdown_open {
                     "▲"
@@ -607,15 +617,15 @@ impl App {
             border: iced::Border {
                 color: Color::from_rgba(1.0, 1.0, 1.0, 0.10),
                 width: 1.0,
-                radius: 6.0.into(),
+                radius: RADIUS_SM.into(),
             },
             text_color: theme().text_primary,
             ..Default::default()
         })
         .padding(iced::Padding {
-            top: 8.0,
-            right: 12.0,
-            bottom: 8.0,
+            top: SPACE_2,
+            right: SPACE_3,
+            bottom: SPACE_2,
             left: 14.0,
         })
         .width(Length::Fixed(220.0));
@@ -644,9 +654,9 @@ impl App {
                         })
                         .size(9)
                         .color(item_color),
-                        text(*name).size(12).color(item_color),
+                        text(*name).size(TEXT_SM).color(item_color),
                     ]
-                    .spacing(8)
+                    .spacing(SPACE_2)
                     .align_y(iced::Alignment::Center),
                 )
                 .on_press(if *name == "Custom (theme.lua)" {
@@ -677,17 +687,19 @@ impl App {
 
         let theme_row = row![
             column![
-                text("Color Theme").size(13).color(theme().text_muted),
-                text("Select a color theme for the editor").size(11).color(theme().text_dim),
+                text("Color Theme").size(TEXT_MD).color(theme().text_muted),
+                text("Select a color theme for the editor")
+                    .size(TEXT_XS)
+                    .color(theme().text_dim),
             ]
             .spacing(2)
             .width(Length::FillPortion(2)),
             column(dropdown_items).spacing(0).width(Length::Fixed(220.0)),
         ]
-        .spacing(16)
+        .spacing(SPACE_4)
         .align_y(iced::Alignment::Start);
 
-        let save_btn = button(text("Save Preferences").size(12).color(theme().text_primary))
+        let save_btn = button(text("Save Preferences").size(TEXT_SM).color(theme().text_primary))
             .on_press(Message::SettingsSavePreferences)
             .style(|_theme, _status| button::Style {
                 background: Some(Background::Color(ACCENT_PURPLE.scale_alpha(0.2))),
@@ -700,9 +712,9 @@ impl App {
                 ..Default::default()
             })
             .padding(iced::Padding {
-                top: 8.0,
+                top: SPACE_2,
                 right: 20.0,
-                bottom: 8.0,
+                bottom: SPACE_2,
                 left: 20.0,
             });
 
@@ -804,7 +816,7 @@ impl App {
             Space::new().height(Length::Fixed(8.0)),
             save_btn,
         ]
-        .spacing(12)
+        .spacing(SPACE_3)
         .width(Length::Fill)
         .into()
     }
@@ -815,7 +827,7 @@ impl App {
 
         let heading = text("Developer").size(18).color(theme().text_primary);
         let desc = text("Debug logging and development tools. Logs may contain sensitive data.")
-            .size(12)
+            .size(TEXT_SM)
             .color(theme().text_dim);
 
         let separator = container(Space::new().width(Length::Fill).height(Length::Fixed(1.0)))
@@ -830,7 +842,7 @@ impl App {
             "Disabled"
         };
         let developer_mode_btn =
-            button(text(developer_mode_label).size(12).color(theme().text_primary))
+            button(text(developer_mode_label).size(TEXT_SM).color(theme().text_primary))
                 .on_press(Message::SettingsToggleDeveloperMode)
                 .style(|_theme, _status| button::Style {
                     background: Some(Background::Color(
@@ -852,16 +864,16 @@ impl App {
 
         let developer_mode_row = row![
             column![
-                text("Developer Mode").size(13).color(theme().text_muted),
+                text("Developer Mode").size(TEXT_MD).color(theme().text_muted),
                 text("Enable debug logging for LSP events and actions")
-                    .size(11)
+                    .size(TEXT_XS)
                     .color(theme().text_dim),
             ]
             .spacing(2)
             .width(Length::FillPortion(2)),
             developer_mode_btn,
         ]
-        .spacing(16)
+        .spacing(SPACE_4)
         .align_y(iced::Alignment::Center);
 
         let lsp_enabled_label = if self.lsp_enabled {
@@ -869,47 +881,48 @@ impl App {
         } else {
             "Disabled"
         };
-        let lsp_status_btn = button(text(lsp_enabled_label).size(12).color(theme().text_primary))
-            .on_press(Message::ToggleLsp)
-            .style(|_theme, _status| button::Style {
-                background: Some(Background::Color(if self.lsp_enabled {
-                    Color::from_rgba(0.2, 0.8, 0.2, 0.3)
-                } else {
-                    theme().bg_secondary
-                })),
-                border: iced::Border {
-                    color: Color::from_rgba(1.0, 1.0, 1.0, 0.08),
-                    width: 1.0,
-                    radius: 4.0.into(),
-                },
-                text_color: theme().text_primary,
-                ..Default::default()
-            })
-            .padding(SETTINGS_CONTROL_PADDING);
+        let lsp_status_btn =
+            button(text(lsp_enabled_label).size(TEXT_SM).color(theme().text_primary))
+                .on_press(Message::ToggleLsp)
+                .style(|_theme, _status| button::Style {
+                    background: Some(Background::Color(if self.lsp_enabled {
+                        Color::from_rgba(0.2, 0.8, 0.2, 0.3)
+                    } else {
+                        theme().bg_secondary
+                    })),
+                    border: iced::Border {
+                        color: Color::from_rgba(1.0, 1.0, 1.0, 0.08),
+                        width: 1.0,
+                        radius: 4.0.into(),
+                    },
+                    text_color: theme().text_primary,
+                    ..Default::default()
+                })
+                .padding(SETTINGS_CONTROL_PADDING);
 
         let lsp_row = row![
             column![
-                text("LSP Support").size(13).color(theme().text_muted),
+                text("LSP Support").size(TEXT_MD).color(theme().text_muted),
                 text("Enable Language Server Protocol for autocompletion and hover")
-                    .size(11)
+                    .size(TEXT_XS)
                     .color(theme().text_dim),
             ]
             .spacing(2)
             .width(Length::FillPortion(2)),
             lsp_status_btn,
         ]
-        .spacing(16)
+        .spacing(SPACE_4)
         .align_y(iced::Alignment::Center);
 
         // ── LSP server availability ──────────────────────────────────────────
         let server_status = crate::lsp_setup::lsp_server_status();
 
-        let server_status_heading = text("LSP Servers").size(13).color(theme().text_muted);
+        let server_status_heading = text("LSP Servers").size(TEXT_MD).color(theme().text_muted);
 
         let server_status_desc = text(
             "Language servers found on PATH. Install missing servers to enable LSP for those languages."
         )
-        .size(11)
+        .size(TEXT_XS)
         .color(theme().text_dim);
 
         let server_rows: Vec<Element<'_, Message>> = server_status
@@ -929,9 +942,9 @@ impl App {
                 };
                 row![
                     text(icon).size(10).color(icon_color).width(Length::Fixed(14.0)),
-                    text(*key).size(12).color(theme().text_muted).width(Length::Fixed(240.0)),
+                    text(*key).size(TEXT_SM).color(theme().text_muted).width(Length::Fixed(240.0)),
                     text(status_text)
-                        .size(11)
+                        .size(TEXT_XS)
                         .color(if path_opt.is_some() {
                             theme().text_dim
                         } else {
@@ -939,7 +952,7 @@ impl App {
                         })
                         .width(Length::Fill),
                 ]
-                .spacing(8)
+                .spacing(SPACE_2)
                 .align_y(iced::Alignment::Center)
                 .into()
             })
@@ -958,9 +971,9 @@ impl App {
         )
         .padding(iced::Padding {
             top: 10.0,
-            right: 12.0,
+            right: SPACE_3,
             bottom: 10.0,
-            left: 12.0,
+            left: SPACE_3,
         })
         .width(Length::Fill)
         .style(|_theme| container::Style {
@@ -968,12 +981,12 @@ impl App {
             border: iced::Border {
                 color: Color::from_rgba(1.0, 1.0, 1.0, 0.06),
                 width: 1.0,
-                radius: 6.0.into(),
+                radius: RADIUS_SM.into(),
             },
             ..Default::default()
         });
 
-        let clear_logs_btn = button(text("Clear Logs").size(12).color(theme().text_primary))
+        let clear_logs_btn = button(text("Clear Logs").size(TEXT_SM).color(theme().text_primary))
             .on_press(Message::ClearDeveloperLogs)
             .style(|_theme, _status| button::Style {
                 background: Some(Background::Color(theme().bg_secondary)),
@@ -989,9 +1002,9 @@ impl App {
 
         let log_count = self.developer_logs.len();
         let logs_header = row![
-            text("Debug Logs").size(13).color(theme().text_muted),
+            text("Debug Logs").size(TEXT_MD).color(theme().text_muted),
             Space::new().width(Length::Fill),
-            text(format!("{} entries", log_count)).size(11).color(theme().text_dim),
+            text(format!("{} entries", log_count)).size(TEXT_XS).color(theme().text_dim),
             clear_logs_btn,
         ]
         .align_y(iced::Alignment::Center);
@@ -1015,13 +1028,13 @@ impl App {
                 container(row![
                     text(time_str).size(10).color(theme().text_dim),
                     Space::new().width(Length::Fixed(8.0)),
-                    text(msg).size(11).color(theme().text_primary).width(Length::Fill),
+                    text(msg).size(TEXT_XS).color(theme().text_primary).width(Length::Fill),
                 ])
                 .padding(iced::Padding {
                     top: 2.0,
-                    right: 8.0,
+                    right: SPACE_2,
                     bottom: 2.0,
-                    left: 8.0,
+                    left: SPACE_2,
                 })
                 .style(|_theme| container::Style {
                     background: Some(Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.02))),
@@ -1034,10 +1047,10 @@ impl App {
         let logs_panel: Element<'_, Message> = if log_entries.is_empty() {
             container(
                 text("No logs yet. Enable developer mode and trigger actions to see logs.")
-                    .size(11)
+                    .size(TEXT_XS)
                     .color(theme().text_dim),
             )
-            .padding(16)
+            .padding(SPACE_4)
             .into()
         } else {
             scrollable(column(log_entries).spacing(2)).height(Length::Fixed(300.0)).into()
@@ -1073,7 +1086,7 @@ impl App {
             Space::new().height(Length::Fixed(8.0)),
             logs_panel,
         ]
-        .spacing(12)
+        .spacing(SPACE_3)
         .width(Length::Fill)
         .into()
     }
@@ -1140,7 +1153,7 @@ impl App {
                         0.08,
                     ))),
                     border: iced::Border {
-                        radius: 6.0.into(),
+                        radius: RADIUS_SM.into(),
                         ..Default::default()
                     },
                     ..Default::default()
@@ -1148,14 +1161,14 @@ impl App {
             iced::widget::button(
                 row![
                     column![
-                        text(label).size(13).color(theme().text_primary),
-                        text(sublabel).size(11).color(theme().text_dim),
+                        text(label).size(TEXT_MD).color(theme().text_primary),
+                        text(sublabel).size(TEXT_XS).color(theme().text_dim),
                     ]
                     .spacing(2)
                     .width(Length::Fill),
                     icon_container,
                 ]
-                .spacing(16)
+                .spacing(SPACE_4)
                 .align_y(iced::Alignment::Center),
             )
             .on_press(msg)
@@ -1167,9 +1180,9 @@ impl App {
             })
             .padding(iced::Padding {
                 top: 10.0,
-                right: 16.0,
+                right: SPACE_4,
                 bottom: 10.0,
-                left: 16.0,
+                left: SPACE_4,
             })
             .width(Length::Fill)
             .into()
@@ -1207,13 +1220,13 @@ impl App {
                         } else {
                             theme().text_dim
                         }),
-                        text(name).size(12).color(if is_selected {
+                        text(name).size(TEXT_SM).color(if is_selected {
                             theme().text_primary
                         } else {
                             theme().text_muted
                         }),
                     ]
-                    .spacing(8)
+                    .spacing(SPACE_2)
                     .align_y(iced::Alignment::Center),
                 )
                 .on_press(Message::StartupThemeSelected(name.to_string()))
@@ -1228,9 +1241,9 @@ impl App {
                     ..Default::default()
                 })
                 .padding(iced::Padding {
-                    top: 8.0,
+                    top: SPACE_2,
                     right: 14.0,
-                    bottom: 8.0,
+                    bottom: SPACE_2,
                     left: 14.0,
                 })
                 .width(Length::Fill)
@@ -1243,9 +1256,9 @@ impl App {
         while iter.peek().is_some() {
             let a = iter.next().unwrap();
             if let Some(b) = iter.next() {
-                theme_rows.push(row![a, b].spacing(8).into());
+                theme_rows.push(row![a, b].spacing(SPACE_2).into());
             } else {
-                theme_rows.push(row![a].spacing(8).into());
+                theme_rows.push(row![a].spacing(SPACE_2).into());
             }
         }
 
@@ -1261,9 +1274,9 @@ impl App {
                 ..Default::default()
             })
             .padding(iced::Padding {
-                top: 12.0,
+                top: SPACE_3,
                 right: 32.0,
-                bottom: 12.0,
+                bottom: SPACE_3,
                 left: 32.0,
             });
 
@@ -1271,13 +1284,15 @@ impl App {
             scrollable(
                 column![
                     text("Welcome to Pinel").size(28).color(theme().text_primary),
-                    text("A lightweight editor built with Rust.").size(13).color(theme().text_dim),
+                    text("A lightweight editor built with Rust.")
+                        .size(TEXT_MD)
+                        .color(theme().text_dim),
                     iced::widget::Space::new().height(Length::Fixed(24.0)),
                     text("Choose a theme").size(14).color(theme().text_muted),
                     iced::widget::Space::new().height(Length::Fixed(8.0)),
-                    column(theme_rows).spacing(8),
+                    column(theme_rows).spacing(SPACE_2),
                 ]
-                .spacing(8)
+                .spacing(SPACE_2)
                 .padding(iced::Padding {
                     top: 48.0,
                     right: 32.0,
@@ -1339,7 +1354,7 @@ impl App {
                         border: iced::Border {
                             color: Color::from_rgba(1.0, 1.0, 1.0, 0.08),
                             width: 1.0,
-                            radius: 10.0.into(),
+                            radius: RADIUS_LG.into(),
                         },
                         ..Default::default()
                     })
@@ -1357,7 +1372,7 @@ impl App {
                         border: iced::Border {
                             color: Color::from_rgba(1.0, 1.0, 1.0, 0.08),
                             width: 1.0,
-                            radius: 10.0.into(),
+                            radius: RADIUS_LG.into(),
                         },
                         ..Default::default()
                     })
@@ -1372,7 +1387,7 @@ impl App {
                         }
                     ),
                 ]
-                .spacing(8)
+                .spacing(SPACE_2)
                 .padding(iced::Padding {
                     top: 0.0,
                     right: 40.0,
@@ -1401,9 +1416,9 @@ impl App {
 /// control on the right of a row is the same height.
 const SETTINGS_CONTROL_PADDING: iced::Padding = iced::Padding {
     top: 6.0,
-    right: 16.0,
+    right: SPACE_4,
     bottom: 6.0,
-    left: 16.0,
+    left: SPACE_4,
 };
 
 /// A number field drawn as the same box as the settings toggle buttons, with

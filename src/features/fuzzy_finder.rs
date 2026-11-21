@@ -6,7 +6,9 @@ use std::{
 /// A single file entry produced by scanning a directory.
 #[derive(Debug, Clone)]
 pub struct FileEntry {
+    /// Absolute path of the file.
     pub path: PathBuf,
+    /// Path relative to the scanned root, shown in the finder.
     pub display_name: String,
 }
 
@@ -68,12 +70,22 @@ impl FuzzyFinder {
         self.preview_cache = None;
     }
 
-    /// Point the finder at a workspace root and index all files.
-    pub fn set_folder(&mut self, folder_path: PathBuf) {
-        self.current_folder = Some(folder_path.clone());
-        self.all_files = scan_directory(&folder_path, &folder_path);
-        self.filtered_files = self.all_files.clone();
-        self.selected_index = 0;
+    /// Point the finder at a workspace root using an already scanned file list.
+    ///
+    /// When the finder is open the current query is re-applied and the
+    /// selection clamped to the new results; otherwise the results are reset
+    /// to the full list.
+    pub fn set_folder_files(&mut self, folder_path: PathBuf, files: Vec<FileEntry>) {
+        self.current_folder = Some(folder_path);
+        self.all_files = files;
+        if self.open {
+            let selected = self.selected_index;
+            self.filter();
+            self.selected_index = selected.min(self.filtered_files.len().saturating_sub(1));
+        } else {
+            self.filtered_files = self.all_files.clone();
+            self.selected_index = 0;
+        }
     }
 
     pub fn filter(&mut self) {
@@ -148,6 +160,14 @@ impl FuzzyFinder {
     }
 }
 
+/// Recursively lists the files under `root`, skipping hidden entries and
+/// ignored directories. Symlinked directories are never followed.
+///
+/// This walks the whole workspace, so call it off the UI thread.
+pub fn scan_folder(root: &Path) -> Vec<FileEntry> {
+    scan_directory(root, root)
+}
+
 fn scan_directory(dir: &Path, root: &Path) -> Vec<FileEntry> {
     let mut files = Vec::new();
 
@@ -171,11 +191,18 @@ fn scan_directory(dir: &Path, root: &Path) -> Vec<FileEntry> {
             continue;
         }
 
-        if path.is_file() {
+        // `file_type` does not follow symlinks, so a link back up the tree
+        // cannot make this recurse forever.
+        let Ok(file_type) = entry.file_type() else {
+            continue;
+        };
+        let is_file = file_type.is_file() || (file_type.is_symlink() && path.is_file());
+
+        if is_file {
             let display_name =
                 path.strip_prefix(root).unwrap_or(&path).to_string_lossy().to_string();
             files.push(FileEntry { path, display_name });
-        } else if path.is_dir() {
+        } else if file_type.is_dir() {
             files.extend(scan_directory(&path, root));
         }
     }
@@ -228,5 +255,62 @@ fn fuzzy_match(text: &str, pattern: &str) -> i32 {
         score
     } else {
         0
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{error::Error, fs};
+
+    use super::*;
+
+    #[test]
+    fn test_scan_folder_lists_nested_files() -> Result<(), Box<dyn Error>> {
+        let dir = tempfile::tempdir()?;
+        let root = dir.path();
+        fs::create_dir_all(root.join("a").join("b"))?;
+        fs::write(root.join("a").join("b").join("c.txt"), "c")?;
+
+        let files = scan_folder(root);
+
+        assert!(files.iter().any(|f| f.path == root.join("a").join("b").join("c.txt")));
+        Ok(())
+    }
+
+    #[test]
+    fn test_scan_folder_skips_hidden_and_ignored_dirs() -> Result<(), Box<dyn Error>> {
+        let dir = tempfile::tempdir()?;
+        let root = dir.path();
+        fs::create_dir_all(root.join(".hidden"))?;
+        fs::write(root.join(".hidden").join("x"), "x")?;
+        fs::create_dir_all(root.join("node_modules"))?;
+        fs::write(root.join("node_modules").join("y"), "y")?;
+        fs::write(root.join("kept.txt"), "k")?;
+
+        let files = scan_folder(root);
+
+        assert!(files.iter().any(|f| f.path == root.join("kept.txt")));
+        assert!(!files.iter().any(|f| f.path.starts_with(root.join(".hidden"))));
+        assert!(!files.iter().any(|f| f.path.starts_with(root.join("node_modules"))));
+        Ok(())
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_scan_folder_symlink_loop_terminates() -> Result<(), Box<dyn Error>> {
+        let dir = tempfile::tempdir()?;
+        let root = dir.path();
+        fs::create_dir_all(root.join("dir"))?;
+        fs::write(root.join("dir").join("real.txt"), "r")?;
+        fs::write(root.join("top.txt"), "t")?;
+        std::os::unix::fs::symlink(root, root.join("dir").join("loop"))?;
+
+        let files = scan_folder(root);
+
+        assert!(files.iter().any(|f| f.path == root.join("top.txt")));
+        assert!(files.iter().any(|f| f.path == root.join("dir").join("real.txt")));
+        assert!(!files.iter().any(|f| f.path.starts_with(root.join("dir").join("loop"))));
+        assert_eq!(files.len(), 2);
+        Ok(())
     }
 }

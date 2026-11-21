@@ -31,6 +31,10 @@ impl App {
         (app, iced::Task::batch([update_task, startup_task]))
     }
 
+    /// Restores the last saved session: reopens its folder and its tabs.
+    ///
+    /// The tabs open one after another in their saved order, then
+    /// `Message::SessionRestoreFinished` selects the tab that was active.
     pub(super) fn restore_last_session_task(&mut self) -> iced::Task<Message> {
         if !self.editor_preferences.restore_session_enabled {
             return iced::Task::none();
@@ -40,6 +44,7 @@ impl App {
             return iced::Task::none();
         };
 
+        let active = session.active_tab_index.clone();
         self.pending_active_tab_path = session.active_tab_index;
         self.pending_cursor_restores = session.cursor_position;
 
@@ -51,11 +56,14 @@ impl App {
             }
         }
 
-        for path in session.open_tabs {
-            if path.is_file() {
-                tasks.push(Self::open_path_task(path));
-            }
-        }
+        let open_tabs = session
+            .open_tabs
+            .into_iter()
+            .filter(|path| path.is_file())
+            .fold(iced::Task::none(), |acc, path| {
+                acc.chain(Self::open_path_task(path))
+            });
+        tasks.push(open_tabs.chain(iced::Task::done(Message::SessionRestoreFinished(active))));
 
         iced::Task::batch(tasks)
     }
