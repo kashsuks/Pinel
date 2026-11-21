@@ -68,7 +68,8 @@ pub enum Message {
 
     ToggleSearch,
     SearchQueryChanged(String),
-    SearchCompleted(Vec<SearchResult>),
+    /// A workspace search finished; carries the query it ran for and its results.
+    SearchCompleted(String, Vec<SearchResult>),
     SearchResultClicked(PathBuf, usize),
 
     ToggleFileFinder,
