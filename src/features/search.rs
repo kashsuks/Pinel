@@ -57,12 +57,26 @@ pub fn search_workspace(root: &PathBuf, query: &str) -> Vec<SearchResult> {
     results
 }
 
+/// Lists every file under `root` as `(path relative to root, absolute path)`.
+///
+/// Skips hidden entries, anything gitignored and any directory named in
+/// [`crate::features::file_tree::IGNORED_DIRS`], so `node_modules` and the
+/// like are not walked even when there is no git repository. This walks the
+/// whole workspace, so call it off the UI thread.
 pub fn collect_all_files(root: &PathBuf) -> Vec<(String, PathBuf)> {
     use ignore::WalkBuilder;
 
     let mut files = Vec::new();
 
-    let walker = WalkBuilder::new(root).hidden(true).git_ignore(true).git_global(true).build();
+    let walker = WalkBuilder::new(root)
+        .hidden(true)
+        .git_ignore(true)
+        .git_global(true)
+        .filter_entry(|e| {
+            !crate::features::file_tree::IGNORED_DIRS
+                .contains(&e.file_name().to_string_lossy().as_ref())
+        })
+        .build();
 
     for entry in walker.flatten() {
         let path = entry.path();
@@ -97,4 +111,27 @@ pub fn fuzzy_find_files(
     scored.sort_by_key(|b| Reverse(b.0));
     scored.truncate(max_results);
     scored
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{error::Error, fs};
+
+    use super::*;
+
+    #[test]
+    fn test_collect_all_files_skips_node_modules() -> Result<(), Box<dyn Error>> {
+        let dir = tempfile::tempdir()?;
+        let root = dir.path().to_path_buf();
+        fs::create_dir_all(root.join("src"))?;
+        fs::write(root.join("src").join("a.rs"), "fn main() {}")?;
+        fs::create_dir_all(root.join("node_modules").join("pkg"))?;
+        fs::write(root.join("node_modules").join("pkg").join("index.js"), "")?;
+
+        let files = collect_all_files(&root);
+
+        assert!(files.iter().any(|(_, path)| path == &root.join("src").join("a.rs")));
+        assert!(!files.iter().any(|(_, path)| path.starts_with(root.join("node_modules"))));
+        Ok(())
+    }
 }

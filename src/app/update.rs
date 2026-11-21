@@ -7,6 +7,29 @@ use super::*;
 use crate::autocomplete::engine::Autocomplete;
 
 impl App {
+    /// Walks `root` for the search and fuzzy finder file lists off the UI
+    /// thread, tagging the result with a fresh generation so stale walks are
+    /// dropped.
+    fn index_workspace_task(&mut self, root: PathBuf) -> iced::Task<Message> {
+        self.workspace_index_generation = self.workspace_index_generation.wrapping_add(1);
+        let generation = self.workspace_index_generation;
+        iced::Task::perform(
+            async move {
+                let walk_root = root.clone();
+                let result = tokio::task::spawn_blocking(move || {
+                    (
+                        crate::features::search::collect_all_files(&walk_root),
+                        crate::features::fuzzy_finder::scan_folder(&walk_root),
+                    )
+                })
+                .await
+                .map_err(|e| e.to_string());
+                (generation, root, result)
+            },
+            |(generation, root, result)| Message::WorkspaceIndexed(generation, root, result),
+        )
+    }
+
     fn should_confirm_sensitive_open(path: &std::path::Path) -> bool {
         path.file_name()
             .and_then(|name| name.to_str())
@@ -1360,21 +1383,23 @@ impl App {
                 iced::Task::none()
             },
             Message::FileTreeRefresh => {
+                let mut root = None;
                 if let Some(ref mut tree) = self.file_tree {
                     tree.refresh();
-
-                    self.all_workspace_files =
-                        crate::features::search::collect_all_files(&tree.root);
-                    self.fuzzy_finder.set_folder(tree.root.clone());
 
                     if let Some(selected) = tree.selected.clone() {
                         if !selected.exists() {
                             tree.selected = None;
                         }
                     }
+                    root = Some(tree.root.clone());
                 }
 
-                iced::Task::none()
+                // Re-index off the UI thread; the old lists stay until it lands.
+                match root {
+                    Some(root) => self.index_workspace_task(root),
+                    None => iced::Task::none(),
+                }
             },
             Message::CursorPositionTracked(x, y) => {
                 self.last_cursor_position = iced::Point::new(x, y); // ensure this is global and
@@ -1573,12 +1598,26 @@ impl App {
             ),
             Message::FolderOpened(path) => {
                 self.file_tree = Some(FileTree::new(path.clone()));
-                self.all_workspace_files = crate::features::search::collect_all_files(&path);
-                self.fuzzy_finder.set_folder(path.clone());
+                self.all_workspace_files.clear();
+                self.fuzzy_finder.set_folder_files(path.clone(), Vec::new());
                 self.lsp.set_workspace_root(path.clone());
                 self.lsp_enabled = true;
                 self.chat_sessions = crate::config::chat_store::load_sessions(Some(&path));
                 self.active_chat_session = self.chat_sessions.first().map(|s| s.id.clone());
+                self.index_workspace_task(path.clone())
+            },
+            Message::WorkspaceIndexed(generation, root, result) => {
+                let current = generation == self.workspace_index_generation
+                    && self.file_tree.as_ref().is_some_and(|t| t.root == root);
+                if current {
+                    match result {
+                        Ok((files, fuzzy_files)) => {
+                            self.all_workspace_files = files;
+                            self.fuzzy_finder.set_folder_files(root, fuzzy_files);
+                        },
+                        Err(e) => eprintln!("Workspace indexing failed: {e}"),
+                    }
+                }
                 iced::Task::none()
             },
             Message::SaveFile => {

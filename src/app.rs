@@ -202,6 +202,9 @@ pub struct App {
     file_finder_selected: usize,
 
     all_workspace_files: Vec<(String, PathBuf)>,
+    /// Bumped each time a background workspace index starts; results tagged
+    /// with an older generation are stale and dropped.
+    workspace_index_generation: u64,
     recent_files: Vec<PathBuf>,
 
     file_finder_input_id: iced::widget::Id,
@@ -399,6 +402,7 @@ impl Default for App {
             file_finder_results: Vec::new(),
             file_finder_selected: 0,
             all_workspace_files: Vec::new(),
+            workspace_index_generation: 0, // no index started yet
             recent_files: Vec::new(),
             file_finder_input_id: iced::widget::Id::unique(),
             fuzzy_finder: FuzzyFinder::default(),
