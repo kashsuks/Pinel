@@ -3135,25 +3135,22 @@ impl App {
                     return iced::Task::none();
                 }
 
-                let Some(idx) = self.active_tab else {
+                let interval = Duration::from_millis(
+                    self.editor_preferences.autosave_interval_ms.clamp(30, 1000),
+                );
+                let due = due_autosave_indices(
+                    self.tabs.iter().map(|t| t.autosave_requested_at),
+                    Instant::now(),
+                    interval,
+                );
+
+                if due.is_empty() {
                     return iced::Task::none();
-                };
-
-                let should_save =
-                    self.tabs.get(idx).and_then(|tab| tab.autosave_requested_at).is_some_and(
-                        |requested_at| {
-                            requested_at.elapsed()
-                                >= Duration::from_millis(
-                                    self.editor_preferences.autosave_interval_ms.clamp(30, 1000),
-                                )
-                        },
-                    );
-
-                if should_save {
-                    return self.autosave_task_for_tab(idx);
                 }
 
-                iced::Task::none()
+                let tasks: Vec<_> =
+                    due.into_iter().map(|idx| self.autosave_task_for_tab(idx)).collect();
+                iced::Task::batch(tasks)
             },
             Message::DiscordRpcTick => {
                 if !self.editor_preferences.discord_rpc_enabled {
@@ -3621,6 +3618,24 @@ fn word_prefix_before(line: &str, cursor_col: usize) -> String {
     before[start..].iter().collect()
 }
 
+/// Positions of tabs whose autosave was requested at least `interval` before
+/// `now`. Tabs with no pending request (`None`) are never due.
+fn due_autosave_indices(
+    requested: impl IntoIterator<Item = Option<Instant>>,
+    now: Instant,
+    interval: Duration,
+) -> Vec<usize> {
+    requested
+        .into_iter()
+        .enumerate()
+        .filter_map(|(idx, requested_at)| {
+            requested_at
+                .filter(|t| now.saturating_duration_since(*t) >= interval)
+                .map(|_| idx)
+        })
+        .collect()
+}
+
 /// Turns an icon/asset key like "cpp-h" or "javascript" into a readable
 /// tooltip like "Cpp H" / "Javascript" for the Discord large image hover text.
 fn prettify_icon_key(key: &str) -> String {
@@ -3653,6 +3668,40 @@ fn active_tab_after_close(active: Option<usize>, closed: usize, remaining: usize
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_due_autosave_indices_includes_inactive_due_tab() {
+        let start = Instant::now();
+        let now = start + Duration::from_millis(600);
+        let due = due_autosave_indices([None, Some(start)], now, Duration::from_millis(500));
+        assert_eq!(due, vec![1]);
+    }
+
+    #[test]
+    fn test_due_autosave_indices_excludes_not_yet_due() {
+        let start = Instant::now();
+        let now = start + Duration::from_millis(100);
+        let due = due_autosave_indices([Some(start)], now, Duration::from_millis(500));
+        assert!(due.is_empty());
+    }
+
+    #[test]
+    fn test_due_autosave_indices_multiple_tabs() {
+        let start = Instant::now();
+        let now = start + Duration::from_millis(600);
+        let requested = [Some(start), None, Some(start + Duration::from_millis(400))];
+        let due = due_autosave_indices(requested, now, Duration::from_millis(500));
+        assert_eq!(due, vec![0]);
+    }
+
+    #[test]
+    fn test_due_autosave_indices_exactly_at_interval() {
+        let start = Instant::now();
+        let interval = Duration::from_millis(500);
+        let now = start + interval;
+        let due = due_autosave_indices([Some(start)], now, interval);
+        assert_eq!(due, vec![0]);
+    }
 
     #[test]
     fn test_word_prefix_before_ascii() {
