@@ -126,6 +126,35 @@ impl App {
         )
     }
 
+    /// Whether `path` opens in a media tab rather than as text. Video only
+    /// counts when the `video` feature is on; without it a video file goes
+    /// through the text path and is refused as unreadable.
+    fn is_media_path(path: &std::path::Path) -> bool {
+        Self::is_image_path(path)
+            || (cfg!(feature = "video") && Self::is_video_path(path))
+            || Self::is_audio_path(path)
+    }
+
+    /// Gives up on opening `path`: shows `message` as a toast and drops any
+    /// tab focus, cursor restore or definition jump queued for it.
+    fn abandon_open(&mut self, path: &Path, message: String) {
+        self.notification = Some(Notification {
+            message,
+            shown_at: Instant::now(),
+        });
+        if self.pending_active_tab_path.as_deref() == Some(path) {
+            self.pending_active_tab_path = None;
+        }
+        self.pending_cursor_restores.remove(path);
+        if self
+            .pending_definition_jump
+            .as_ref()
+            .is_some_and(|(jump_path, _)| jump_path == path)
+        {
+            self.pending_definition_jump = None;
+        }
+    }
+
     fn active_tab_supports_markdown_preview(&self) -> bool {
         self.active_tab.and_then(|idx| self.tabs.get(idx)).is_some_and(|tab| {
             matches!(tab.kind, TabKind::Editor { .. }) && Self::is_markdown_path(&tab.path)
@@ -180,6 +209,15 @@ impl App {
         )
     }
 
+    /// Writes the window size to disk if it changed since the last write.
+    fn flush_window_size(&mut self) {
+        if self.window_size_dirty {
+            self.window_size_dirty = false;
+            // a failed size save is non-fatal and the next save retries
+            let _ = prefs::save_preferences(&self.editor_preferences);
+        }
+    }
+
     /// Closes the card after a short grace period, unless the cursor comes back.
     fn schedule_git_card_hide(&mut self) -> iced::Task<Message> {
         self.git_hover_token = self.git_hover_token.wrapping_add(1);
@@ -210,8 +248,12 @@ impl App {
     pub(super) fn open_path_task(path: PathBuf) -> iced::Task<Message> {
         iced::Task::perform(
             async move {
-                let content = std::fs::read_to_string(&path)
-                    .unwrap_or_else(|_| String::from("Could not read file"));
+                // media tabs never use the text, so skip reading them
+                let content = if Self::is_media_path(&path) {
+                    Ok(String::new())
+                } else {
+                    crate::fs_util::read_text_file(&path)
+                };
                 (path, content)
             },
             |(path, content)| Message::FileOpened(path, content),
@@ -985,10 +1027,14 @@ impl App {
                     return iced::Task::none();
                 }
 
-                let effective_content = if content.is_empty() && path.exists() {
-                    std::fs::read_to_string(&path).unwrap_or_default()
-                } else {
-                    content
+                let name = path.file_name().unwrap_or_default().to_string_lossy().to_string();
+                let content = match content {
+                    Ok(content) => content,
+                    Err(err) if !Self::is_media_path(&path) => {
+                        self.abandon_open(&path, format!("Can't open {name}: {err}"));
+                        return iced::Task::none();
+                    },
+                    Err(_) => String::new(),
                 };
 
                 self.recent_files.retain(|p| p != &path);
@@ -1002,7 +1048,6 @@ impl App {
                 self.last_wakatime_entity = Some(entity);
                 self.last_wakatime_sent_at = Some(Instant::now());
 
-                let name = path.file_name().unwrap_or_default().to_string_lossy().to_string();
                 let opened_path = path.clone();
                 let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("txt").to_string();
 
@@ -1024,10 +1069,8 @@ impl App {
                         Ok(player) => TabKind::Video { player },
                         Err(message) => {
                             eprintln!("{message}");
-                            TabKind::Editor {
-                                code_editor: self.configured_code_editor("", &ext),
-                                buffer: crate::features::editor_buffer::EditorBuffer::from_text(""),
-                            }
+                            self.abandon_open(&path, format!("Can't play {name}: {message}"));
+                            return iced::Task::none();
                         },
                     }
                 } else if Self::is_audio_path(&path) {
@@ -1057,18 +1100,14 @@ impl App {
                         },
                         Err(e) => {
                             eprintln!("Audio init error: {e}");
-                            TabKind::Editor {
-                                code_editor: self.configured_code_editor("", &ext),
-                                buffer: crate::features::editor_buffer::EditorBuffer::from_text(""),
-                            }
+                            self.abandon_open(&path, format!("Can't play {name}: {e}"));
+                            return iced::Task::none();
                         },
                     }
                 } else {
                     TabKind::Editor {
-                        code_editor: { self.configured_code_editor(&effective_content, &ext) },
-                        buffer: crate::features::editor_buffer::EditorBuffer::from_text(
-                            &effective_content,
-                        ),
+                        code_editor: { self.configured_code_editor(&content, &ext) },
+                        buffer: crate::features::editor_buffer::EditorBuffer::from_text(&content),
                     }
                 };
 
@@ -1104,18 +1143,14 @@ impl App {
                         },
                         Err(e) => {
                             eprintln!("Audio init error: {e}");
-                            TabKind::Editor {
-                                code_editor: self.configured_code_editor("", &ext),
-                                buffer: crate::features::editor_buffer::EditorBuffer::from_text(""),
-                            }
+                            self.abandon_open(&path, format!("Can't play {name}: {e}"));
+                            return iced::Task::none();
                         },
                     }
                 } else {
                     TabKind::Editor {
-                        code_editor: { self.configured_code_editor(&effective_content, &ext) },
-                        buffer: crate::features::editor_buffer::EditorBuffer::from_text(
-                            &effective_content,
-                        ),
+                        code_editor: { self.configured_code_editor(&content, &ext) },
+                        buffer: crate::features::editor_buffer::EditorBuffer::from_text(&content),
                     }
                 };
 
@@ -1563,12 +1598,16 @@ impl App {
                             if path == Path::new("untitled") {
                                 return iced::Task::perform(async {}, |_| Message::SaveAs);
                             }
+                            let write_path = path.clone();
+                            let write_content = content.clone();
                             return iced::Task::perform(
                                 async move {
-                                    crate::fs_util::write_atomic(&path, content)
-                                        .map_err(|e| e.to_string())
+                                    let result =
+                                        crate::fs_util::write_atomic(&write_path, write_content)
+                                            .map_err(|e| e.to_string());
+                                    (path, content, result)
                                 },
-                                Message::FileSaved,
+                                |(path, content, result)| Message::FileSaved(path, content, result),
                             );
                         }
                     }
@@ -1586,13 +1625,14 @@ impl App {
                             let content = code_editor.content();
                             return iced::Task::perform(
                                 async move {
-                                    crate::fs_util::write_atomic(&path, content)
-                                        .map(|_| path)
-                                        .map_err(|e| e.to_string())
+                                    let result =
+                                        crate::fs_util::write_atomic(&path, content.clone())
+                                            .map_err(|e| e.to_string());
+                                    (path, content, result)
                                 },
-                                |result| match result {
-                                    Ok(path) => Message::CurrentFileSavedAs(path),
-                                    Err(err) => Message::FileSaved(Err(err)),
+                                |(path, content, result)| match result {
+                                    Ok(()) => Message::CurrentFileSavedAs(path),
+                                    Err(err) => Message::FileSaved(path, content, Err(err)),
                                 },
                             );
                         }
@@ -1633,22 +1673,12 @@ impl App {
 
                 iced::Task::none()
             },
-            Message::FileSaved(result) => {
-                if let Err(e) = result {
-                    eprintln!("Failed to save file: {}", e);
-                } else if let Some(idx) = self.active_tab {
-                    if let Some(tab) = self.tabs.get_mut(idx) {
-                        if let TabKind::Editor {
-                            ref mut code_editor,
-                            ..
-                        } = tab.kind
-                        {
-                            code_editor.mark_saved();
-                            code_editor.lsp_did_save();
-                        }
-                        tab.autosave_requested_at = None;
-                        tab.autosave_in_flight = false;
-                    }
+            Message::FileSaved(path, saved_content, result) => {
+                match result {
+                    Err(e) => eprintln!("Failed to save {}: {}", path.display(), e),
+                    Ok(()) => {
+                        mark_tab_saved(&mut self.tabs, &path, &saved_content);
+                    },
                 }
                 iced::Task::none()
             },
@@ -2505,6 +2535,7 @@ impl App {
                 iced::Task::none()
             },
             Message::ReplaceOne => {
+                let mut edited = None;
                 if let Some(idx) = self.active_tab {
                     if let Some(tab) = self.tabs.get_mut(idx) {
                         if let TabKind::Editor {
@@ -2514,16 +2545,34 @@ impl App {
                         } = tab.kind
                         {
                             let mut text = code_editor.content();
+                            // Refresh the byte ranges so they match the current
+                            // text, not a stale search from before an edit.
+                            self.find_replace.find_matches(&text);
+                            if self.find_replace.current_match >= self.find_replace.matches.len() {
+                                self.find_replace.current_match =
+                                    self.find_replace.matches.len().saturating_sub(1);
+                            }
                             self.find_replace.replace_next(&mut text);
-                            let _ = code_editor.reset(&text);
+                            let task = code_editor.replace_content(&text);
                             buffer.set_text(&text);
+                            edited = Some((task, code_editor.cursor_position()));
                         }
                     }
                 }
                 self.vim_refresh_cursor_style();
-                iced::Task::none()
+                match edited {
+                    Some((task, (line, col))) => {
+                        self.cursor_line = line + 1;
+                        self.cursor_col = col + 1;
+                        self.queue_autosave_for_active_tab();
+                        self.schedule_symbol_refresh(super::SYMBOL_REFRESH_DELAY);
+                        task.map(Message::CodeEditorEvent)
+                    },
+                    None => iced::Task::none(),
+                }
             },
             Message::ReplaceAll => {
+                let mut edited = None;
                 if let Some(idx) = self.active_tab {
                     if let Some(tab) = self.tabs.get_mut(idx) {
                         if let TabKind::Editor {
@@ -2533,14 +2582,27 @@ impl App {
                         } = tab.kind
                         {
                             let mut text = code_editor.content();
+                            // Refresh the byte ranges so they match the current
+                            // text, not a stale search from before an edit.
+                            self.find_replace.find_matches(&text);
                             self.find_replace.replace_all(&mut text);
-                            let _ = code_editor.reset(&text);
+                            let task = code_editor.replace_content(&text);
                             buffer.set_text(&text);
+                            edited = Some((task, code_editor.cursor_position()));
                         }
                     }
                 }
                 self.vim_refresh_cursor_style();
-                iced::Task::none()
+                match edited {
+                    Some((task, (line, col))) => {
+                        self.cursor_line = line + 1;
+                        self.cursor_col = col + 1;
+                        self.queue_autosave_for_active_tab();
+                        self.schedule_symbol_refresh(super::SYMBOL_REFRESH_DELAY);
+                        task.map(Message::CodeEditorEvent)
+                    },
+                    None => iced::Task::none(),
+                }
             },
             Message::ToggleCaseSensitive => {
                 self.find_replace.case_sensitive = !self.find_replace.case_sensitive;
@@ -2773,10 +2835,25 @@ impl App {
             Message::WindowResized(width, height) => {
                 self.editor_preferences.window_width = (width as f32).max(640.0);
                 self.editor_preferences.window_height = (height as f32).max(480.0);
-                let _ = prefs::save_preferences(&self.editor_preferences);
+                self.window_size_dirty = true;
+                self.window_size_save_token = self.window_size_save_token.wrapping_add(1);
+                let token = self.window_size_save_token;
+                iced::Task::perform(
+                    async move {
+                        tokio::time::sleep(WINDOW_SIZE_SAVE_DELAY).await;
+                        token
+                    },
+                    Message::WindowSizeSave,
+                )
+            },
+            Message::WindowSizeSave(token) => {
+                if token == self.window_size_save_token && self.window_size_dirty {
+                    self.flush_window_size();
+                }
                 iced::Task::none()
             },
             Message::WindowCloseRequested(id) => {
+                self.flush_window_size();
                 if self.editor_preferences.restore_session_enabled {
                     self.sync_session_state();
                 }
@@ -3632,6 +3709,30 @@ fn search_results_are_current(current_query: &str, completed_query: &str) -> boo
     current_query == completed_query
 }
 
+/// Marks the first tab at `path` as saved after a manual save wrote
+/// `saved_content` to disk.
+///
+/// Always clears the tab's in-flight autosave flag. The editor is only marked
+/// saved when its current content still equals `saved_content`, so edits
+/// typed while the write was in progress keep the tab modified. Returns
+/// `true` if the tab was marked saved.
+fn mark_tab_saved(tabs: &mut [Tab], path: &Path, saved_content: &str) -> bool {
+    let Some(tab) = tabs.iter_mut().find(|tab| tab.path == path) else {
+        return false;
+    };
+    tab.autosave_in_flight = false;
+    let TabKind::Editor { code_editor, .. } = &mut tab.kind else {
+        return false;
+    };
+    if code_editor.content() != saved_content {
+        return false;
+    }
+    code_editor.mark_saved();
+    code_editor.lsp_did_save();
+    tab.autosave_requested_at = None;
+    true
+}
+
 /// Turns an icon/asset key like "cpp-h" or "javascript" into a readable
 /// tooltip like "Cpp H" / "Javascript" for the Discord large image hover text.
 fn prettify_icon_key(key: &str) -> String {
@@ -3664,6 +3765,108 @@ fn active_tab_after_close(active: Option<usize>, closed: usize, remaining: usize
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn editor_tab(path: &str, content: &str) -> Tab {
+        Tab {
+            path: PathBuf::from(path),
+            name: path.to_string(),
+            kind: TabKind::Editor {
+                code_editor: iced_code_editor::CodeEditor::new(content, "txt"),
+                buffer: crate::features::editor_buffer::EditorBuffer::from_text(content),
+            },
+            autosave_requested_at: None,
+            autosave_in_flight: false,
+        }
+    }
+
+    /// Types `text` into the tab's editor so it becomes modified, and returns
+    /// the editor's new content.
+    fn modify_tab(tab: &mut Tab, text: &str) -> String {
+        match &mut tab.kind {
+            TabKind::Editor { code_editor, .. } => {
+                let _ = code_editor.update(&EditorMessage::Paste(text.to_string()));
+                code_editor.content()
+            },
+            _ => String::new(),
+        }
+    }
+
+    fn tab_is_modified(tab: &Tab) -> bool {
+        match &tab.kind {
+            TabKind::Editor { code_editor, .. } => code_editor.is_modified(),
+            _ => false,
+        }
+    }
+
+    #[test]
+    fn test_mark_tab_saved_only_marks_matching_path() {
+        let mut tabs = vec![
+            editor_tab("/tmp/a.txt", "aaa"),
+            editor_tab("/tmp/b.txt", "bbb"),
+        ];
+        let a_content = modify_tab(&mut tabs[0], "x");
+        let _ = modify_tab(&mut tabs[1], "y");
+        assert!(tab_is_modified(&tabs[0]));
+        assert!(tab_is_modified(&tabs[1]));
+
+        assert!(mark_tab_saved(
+            &mut tabs,
+            Path::new("/tmp/a.txt"),
+            &a_content
+        ));
+
+        assert!(!tab_is_modified(&tabs[0]));
+        assert!(tab_is_modified(&tabs[1]));
+    }
+
+    #[test]
+    fn test_mark_tab_saved_keeps_tab_modified_when_content_changed() {
+        let mut tabs = vec![editor_tab("/tmp/a.txt", "aaa")];
+        let saved_content = modify_tab(&mut tabs[0], "x");
+        let _ = modify_tab(&mut tabs[0], "z");
+        assert!(tab_is_modified(&tabs[0]));
+
+        assert!(!mark_tab_saved(
+            &mut tabs,
+            Path::new("/tmp/a.txt"),
+            &saved_content
+        ));
+        assert!(tab_is_modified(&tabs[0]));
+    }
+
+    #[test]
+    fn test_mark_tab_saved_unknown_path_returns_false() {
+        let mut tabs = vec![editor_tab("/tmp/a.txt", "aaa")];
+        let _ = modify_tab(&mut tabs[0], "x");
+
+        assert!(!mark_tab_saved(
+            &mut tabs,
+            Path::new("/tmp/missing.txt"),
+            "xaaa"
+        ));
+        assert!(tab_is_modified(&tabs[0]));
+    }
+
+    #[test]
+    fn test_is_media_path_text_and_unknown_files_are_not_media() {
+        assert!(!App::is_media_path(Path::new("notes.txt")));
+        assert!(!App::is_media_path(Path::new("report.pdf")));
+        assert!(!App::is_media_path(Path::new("Makefile")));
+    }
+
+    #[test]
+    fn test_is_media_path_images_and_audio_are_media() {
+        assert!(App::is_media_path(Path::new("photo.png")));
+        assert!(App::is_media_path(Path::new("song.mp3")));
+    }
+
+    #[test]
+    fn test_is_media_path_video_depends_on_feature() {
+        assert_eq!(
+            App::is_media_path(Path::new("clip.mp4")),
+            cfg!(feature = "video")
+        );
+    }
 
     #[test]
     fn test_search_results_are_current_matching_query() {
