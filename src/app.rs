@@ -3,8 +3,6 @@
 //! This module defines [`App`] and splits its behavior into focused submodules:
 //! event updates, subscriptions, commands, and view builders.
 
-#[cfg(feature = "unstable-comet")]
-use std::collections::VecDeque;
 use std::{
     collections::{HashMap, VecDeque},
     path::PathBuf,
