@@ -209,6 +209,15 @@ impl App {
         )
     }
 
+    /// Writes the window size to disk if it changed since the last write.
+    fn flush_window_size(&mut self) {
+        if self.window_size_dirty {
+            self.window_size_dirty = false;
+            // a failed size save is non-fatal and the next save retries
+            let _ = prefs::save_preferences(&self.editor_preferences);
+        }
+    }
+
     /// Closes the card after a short grace period, unless the cursor comes back.
     fn schedule_git_card_hide(&mut self) -> iced::Task<Message> {
         self.git_hover_token = self.git_hover_token.wrapping_add(1);
@@ -2794,10 +2803,25 @@ impl App {
             Message::WindowResized(width, height) => {
                 self.editor_preferences.window_width = (width as f32).max(640.0);
                 self.editor_preferences.window_height = (height as f32).max(480.0);
-                let _ = prefs::save_preferences(&self.editor_preferences);
+                self.window_size_dirty = true;
+                self.window_size_save_token = self.window_size_save_token.wrapping_add(1);
+                let token = self.window_size_save_token;
+                iced::Task::perform(
+                    async move {
+                        tokio::time::sleep(WINDOW_SIZE_SAVE_DELAY).await;
+                        token
+                    },
+                    Message::WindowSizeSave,
+                )
+            },
+            Message::WindowSizeSave(token) => {
+                if token == self.window_size_save_token && self.window_size_dirty {
+                    self.flush_window_size();
+                }
                 iced::Task::none()
             },
             Message::WindowCloseRequested(id) => {
+                self.flush_window_size();
                 if self.editor_preferences.restore_session_enabled {
                     self.sync_session_state();
                 }

@@ -127,6 +127,8 @@ pub enum Message {
     CommandInputChanged(String),
     CommandInputSubmit,
     WindowResized(u32, u32),
+    /// The window size save delay ran out. The number says which resize it was for.
+    WindowSizeSave(u64),
     WindowCloseRequested(iced::window::Id),
 
     NewFile,
