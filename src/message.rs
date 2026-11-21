@@ -18,6 +18,8 @@ pub enum Message {
     CodeEditorContentChanged,
     FileClicked(PathBuf),
     FileOpened(PathBuf, String),
+    /// Session restore opened all its tabs; carries the path that was active when the session was saved.
+    SessionRestoreFinished(Option<PathBuf>),
     SensitiveFileOpenConfirm(bool),
     FolderToggled(PathBuf),
 
