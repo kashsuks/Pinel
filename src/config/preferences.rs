@@ -1,4 +1,7 @@
-use std::{fs, io::Write, path::PathBuf};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
 
 use super::theme_manager::{get_config_dir, load_theme, ThemeColors};
 
@@ -244,10 +247,7 @@ fn legacy_is_newer_than_primary(legacy: Option<&PathBuf>, primary: &PathBuf) -> 
     }
 }
 
-fn save_preferences_to_path(
-    prefs: &EditorPreferences,
-    path: &PathBuf,
-) -> Result<(), std::io::Error> {
+fn save_preferences_to_path(prefs: &EditorPreferences, path: &Path) -> Result<(), std::io::Error> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
     }
@@ -305,9 +305,7 @@ return {{
         prefs.tab_drag_floating,
         developer_mode_config,
     );
-    let mut file = fs::File::create(path)?;
-    file.write_all(content.as_bytes())?;
-    Ok(())
+    crate::fs_util::write_atomic(path, content)
 }
 
 #[cfg(test)]
@@ -492,5 +490,56 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("nope.lua");
         assert!(read_preferences_from(&path).is_none());
+    }
+
+    #[test]
+    fn test_save_preferences_to_path_leaves_no_temp_files() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let dir = tempfile::tempdir()?;
+        let path = dir.path().join("preferences.lua");
+
+        save_preferences_to_path(&EditorPreferences::default(), &path)?;
+        save_preferences_to_path(&EditorPreferences::default(), &path)?;
+
+        let mut names = Vec::new();
+        for entry in fs::read_dir(dir.path())? {
+            names.push(entry?.file_name());
+        }
+        assert_eq!(names, vec![std::ffi::OsString::from("preferences.lua")]);
+        Ok(())
+    }
+
+    #[test]
+    fn test_save_preferences_to_path_replaces_existing_content(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let dir = tempfile::tempdir()?;
+        let path = dir.path().join("preferences.lua");
+        let garbage = "GARBAGE ".repeat(10_000);
+        fs::write(&path, &garbage)?;
+
+        let prefs = EditorPreferences::default();
+        save_preferences_to_path(&prefs, &path)?;
+
+        let content = fs::read_to_string(&path)?;
+        assert!(!content.contains("GARBAGE"));
+        assert!(content.len() < garbage.len());
+        let loaded = read_preferences_from(&path).ok_or("file should parse")?;
+        assert_eq!(loaded.window_width, prefs.window_width);
+        assert_eq!(loaded.window_height, prefs.window_height);
+        assert_eq!(loaded.theme_name, prefs.theme_name);
+        Ok(())
+    }
+
+    #[test]
+    fn test_save_preferences_to_path_creates_parent_dir() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let dir = tempfile::tempdir()?;
+        let path = dir.path().join("nested").join("config").join("preferences.lua");
+
+        save_preferences_to_path(&EditorPreferences::default(), &path)?;
+
+        assert!(path.is_file());
+        read_preferences_from(&path).ok_or("file should parse")?;
+        Ok(())
     }
 }

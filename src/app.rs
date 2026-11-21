@@ -157,6 +157,8 @@ const SYMBOL_MAX_EMPTY_REPLIES: u8 = 3;
 const GIT_CARD_OPEN_DELAY: Duration = Duration::from_millis(300);
 /// How long the card stays after the cursor leaves the row and the card.
 const GIT_CARD_CLOSE_DELAY: Duration = Duration::from_millis(150);
+/// How long the window size must stay still before it is written to disk.
+const WINDOW_SIZE_SAVE_DELAY: Duration = Duration::from_millis(500);
 const DOUBLE_CLICK: Duration = Duration::from_millis(400);
 
 /// The commit card shown beside the git graph.
@@ -246,6 +248,10 @@ pub struct App {
     git_card_hovered: bool,
     /// Bumped on every hover change, so a stale open or close timer is ignored.
     git_hover_token: u64,
+    /// Bumped on every resize, so only the last resize's save timer writes.
+    window_size_save_token: u64,
+    /// The window size changed and has not been written to disk yet.
+    window_size_dirty: bool,
     preview_tab_pressed_at: Option<Instant>,
 
     chat_sessions: Vec<crate::features::chat::ChatSession>,
@@ -458,6 +464,8 @@ impl Default for App {
             git_card: None,
             git_card_hovered: false,
             git_hover_token: 0,
+            window_size_save_token: 0,
+            window_size_dirty: false,
             preview_tab_pressed_at: None,
 
             chat_sessions: crate::config::chat_store::load_sessions(None),
