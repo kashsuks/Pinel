@@ -285,6 +285,8 @@ pub struct App {
 
     pending_active_tab_path: Option<std::path::PathBuf>,
     pending_cursor_restores: std::collections::HashMap<std::path::PathBuf, (usize, usize)>,
+    /// Definition target waiting for its file to finish opening.
+    pending_definition_jump: Option<(std::path::PathBuf, iced_code_editor::LspPosition)>,
 
     closed_tabs: VecDeque<(std::path::PathBuf, (usize, usize))>,
 
@@ -489,6 +491,7 @@ impl Default for App {
 
             pending_active_tab_path: None,
             pending_cursor_restores: std::collections::HashMap::new(),
+            pending_definition_jump: None,
             closed_tabs: VecDeque::new(),
 
             startup_page_open: editor_preferences.first_launch,
@@ -718,6 +721,73 @@ impl App {
             self.symbols_empty_replies = 0;
         }
         self.document_symbols.insert(uri, symbols);
+    }
+
+    /// Opens the file a definition reply points at and moves the cursor there.
+    ///
+    /// If the file is already open, its tab is focused and the cursor moves
+    /// straight away. Otherwise the file is opened and the jump waits in
+    /// `pending_definition_jump` until `FileOpened` arrives.
+    pub(super) fn open_definition(
+        &mut self,
+        uri: &str,
+        position: iced_code_editor::LspPosition,
+    ) -> iced::Task<Message> {
+        let Some(path) = crate::features::definition::file_uri_to_path(uri) else {
+            self.dev_log(format!("LSP: can't open definition at {uri}"));
+            return iced::Task::none();
+        };
+
+        if let Some(idx) = self.tabs.iter().position(|tab| tab.path == path) {
+            // Selecting the tab that is already active would restart its
+            // language server (#114), so only switch when it's a different tab.
+            let select = if self.active_tab == Some(idx) {
+                iced::Task::none()
+            } else {
+                self.update(Message::TabSelected(idx))
+            };
+            return iced::Task::batch([select, self.jump_to_position(idx, position)]);
+        }
+
+        self.pending_definition_jump = Some((path.clone(), position));
+        self.update(Message::FileClicked(path))
+    }
+
+    /// Moves the cursor of the tab at `idx` to an LSP `position` and scrolls
+    /// it into view.
+    ///
+    /// The column is converted from UTF-16 code units to characters first.
+    pub(super) fn jump_to_position(
+        &mut self,
+        idx: usize,
+        position: iced_code_editor::LspPosition,
+    ) -> iced::Task<Message> {
+        let Some(tab) = self.tabs.get_mut(idx) else {
+            return iced::Task::none();
+        };
+        let TabKind::Editor {
+            ref mut code_editor,
+            ref buffer,
+        } = tab.kind
+        else {
+            return iced::Task::none();
+        };
+
+        let line = position.line as usize;
+        let line_text = if line < buffer.line_count() {
+            buffer.line(line)
+        } else {
+            String::new()
+        };
+
+        let col =
+            crate::features::definition::utf16_col_to_char_col(&line_text, position.character);
+
+        let task = code_editor.set_cursor(line, col);
+        let (line, col) = code_editor.cursor_position();
+        self.cursor_line = line + 1;
+        self.cursor_col = col + 1;
+        task.map(Message::CodeEditorEvent)
     }
 
     pub(super) fn apply_show_whitespace_to_tabs(&mut self) {

@@ -65,6 +65,9 @@ pub fn shortcuts() -> Subscription<Message> {
                 if let Key::Named(iced::keyboard::key::Named::Escape) = key {
                     return Some(Message::EscapePressed);
                 }
+                if let Key::Named(iced::keyboard::key::Named::F12) = key {
+                    return Some(Message::GoToDefinition);
+                }
             }
 
             None

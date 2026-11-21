@@ -56,6 +56,9 @@ pub enum Message {
     ReopenClosedTab,
     CloseActiveTab,
 
+    /// Ask the language server where the symbol under the cursor is defined.
+    GoToDefinition,
+
     SidebarResizeStart,
     SidebarResizing(f32),
     SidebarResizeEnd,
