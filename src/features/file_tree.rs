@@ -86,7 +86,10 @@ impl FileTree {
     }
 }
 
-const IGNORED_DIRS: &[&str] = &[".git", "node_modules", "target", ".DS_Store", "__pycache__"];
+/// Directory and file names that workspace walks skip, even when they are not
+/// gitignored.
+pub(crate) const IGNORED_DIRS: &[&str] =
+    &[".git", "node_modules", "target", ".DS_Store", "__pycache__"];
 
 #[derive(Debug, Clone)]
 pub struct ContextMenuTarget {

@@ -8,6 +8,13 @@ use iced_term::Event as TerminalEvent;
 /// Other instances of Message types.
 use crate::features::search::SearchResult;
 
+/// The two file lists a background workspace index produces: the search
+/// list (relative display path, absolute path) and the fuzzy finder entries.
+pub type WorkspaceIndex = (
+    Vec<(String, PathBuf)>,
+    Vec<crate::features::fuzzy_finder::FileEntry>,
+);
+
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
 pub enum Message {
@@ -45,6 +52,10 @@ pub enum Message {
     OpenFolderDialog,
     OpenFileOrFolder,
     FolderOpened(PathBuf),
+    /// A background workspace index finished: the generation it was started
+    /// with, the root it walked, and either the search file list and the
+    /// fuzzy finder entries or the error from the indexing task.
+    WorkspaceIndexed(u64, PathBuf, Result<WorkspaceIndex, String>),
 
     SaveFile,
     SaveCurrentFileAs(PathBuf),
