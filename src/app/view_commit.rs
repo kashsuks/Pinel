@@ -15,7 +15,7 @@ use crate::{
         git_diff::{DiffLine, FileDiff, FileStatus, LineKind},
     },
     message::Message,
-    theme::theme,
+    theme::{theme, RADIUS_SM, SPACE_1, SPACE_2, SPACE_3, SPACE_4, TEXT_MD, TEXT_SM, TEXT_XS},
     ui::{
         commit_card::{GREEN, RED},
         git_graph::{pill, ref_color},
@@ -37,10 +37,10 @@ impl App {
         let commit = self.git_history.iter().find(|c| c.hash == hash);
         let muted = theme().text_muted;
 
-        let mut page = column![view_header(hash, detail, commit)].spacing(16).padding(20);
+        let mut page = column![view_header(hash, detail, commit)].spacing(SPACE_4).padding(20);
         match diff {
-            None => page = page.push(text("Loading diff...").size(12).color(muted)),
-            Some([]) => page = page.push(text("No file changes").size(12).color(muted)),
+            None => page = page.push(text("Loading diff...").size(TEXT_SM).color(muted)),
+            Some([]) => page = page.push(text("No file changes").size(TEXT_SM).color(muted)),
             Some(files) => {
                 for (idx, file) in files.iter().enumerate() {
                     page = page.push(view_file_diff(idx, file, collapsed.contains(&idx)));
@@ -54,7 +54,7 @@ impl App {
 
 /// a plain text button in the link colour
 fn link<'a>(label: &str, on_press: Message) -> Element<'a, Message> {
-    button(text(label.to_string()).size(12).color(BLUE))
+    button(text(label.to_string()).size(TEXT_SM).color(BLUE))
         .padding(0)
         .style(|_theme, _status| button::Style {
             text_color: BLUE,
@@ -75,23 +75,23 @@ fn view_header<'a>(
         .or(commit.map(|c| c.subject.as_str()))
         .unwrap_or_default();
 
-    let mut header = column![text(subject).size(20).color(primary)].spacing(8);
+    let mut header = column![text(subject).size(20).color(primary)].spacing(SPACE_2);
 
     if let Some(body) = detail.map(|d| d.body.as_str()).filter(|b| !b.is_empty()) {
-        header = header.push(text(body).size(13).color(muted));
+        header = header.push(text(body).size(TEXT_MD).color(muted));
     }
 
     match detail {
         Some(d) => {
             header = header
-                .push(text(format!("{} <{}>", d.author, d.email)).size(12).color(primary))
+                .push(text(format!("{} <{}>", d.author, d.email)).size(TEXT_SM).color(primary))
                 .push(
                     text(format!(
                         "{} ({})",
                         relative_time(unix_now(), d.timestamp),
                         d.date
                     ))
-                    .size(12)
+                    .size(TEXT_SM)
                     .color(muted),
                 )
                 .push(
@@ -105,22 +105,22 @@ fn view_header<'a>(
                                 "s"
                             }
                         ))
-                        .size(12)
+                        .size(TEXT_SM)
                         .color(muted),
-                        text(format!("{} insertions(+),", d.insertions)).size(12).color(GREEN),
-                        text(format!("{} deletions(-)", d.deletions)).size(12).color(RED),
+                        text(format!("{} insertions(+),", d.insertions)).size(TEXT_SM).color(GREEN),
+                        text(format!("{} deletions(-)", d.deletions)).size(TEXT_SM).color(RED),
                     ]
-                    .spacing(4),
+                    .spacing(SPACE_1),
                 );
         },
-        None => header = header.push(text("Loading details...").size(12).color(muted)),
+        None => header = header.push(text("Loading details...").size(TEXT_SM).color(muted)),
     }
 
     let mut hash_row = row![
-        text(hash).size(12).color(muted).font(iced::Font::MONOSPACE),
+        text(hash).size(TEXT_SM).color(muted).font(iced::Font::MONOSPACE),
         link("Copy", Message::CopyText(hash.to_string())),
     ]
-    .spacing(12)
+    .spacing(SPACE_3)
     .align_y(iced::Alignment::Center);
     if let Some(url) = detail.and_then(|d| d.github_url.clone()) {
         hash_row = hash_row.push(link("Open on GitHub", Message::OpenUrl(url)));
@@ -129,8 +129,8 @@ fn view_header<'a>(
 
     if let Some(commit) = commit {
         if !commit.parents.is_empty() {
-            let mut parents = row![text("Parents").size(12).color(muted)]
-                .spacing(8)
+            let mut parents = row![text("Parents").size(TEXT_SM).color(muted)]
+                .spacing(SPACE_2)
                 .align_y(iced::Alignment::Center);
             for parent in &commit.parents {
                 parents = parents.push(link(
@@ -171,19 +171,19 @@ fn view_file_diff<'a>(idx: usize, file: &'a FileDiff, folded: bool) -> Element<'
             } else {
                 "▾"
             })
-            .size(12)
+            .size(TEXT_SM)
             .color(muted),
-            text(letter).size(12).color(color),
-            text(title).size(12).color(primary),
+            text(letter).size(TEXT_SM).color(color),
+            text(title).size(TEXT_SM).color(primary),
             Space::new().width(Length::Fill),
-            text(format!("+{}", file.added)).size(11).color(GREEN),
-            text(format!("-{}", file.removed)).size(11).color(RED),
+            text(format!("+{}", file.added)).size(TEXT_XS).color(GREEN),
+            text(format!("-{}", file.removed)).size(TEXT_XS).color(RED),
         ]
-        .spacing(8)
+        .spacing(SPACE_2)
         .align_y(iced::Alignment::Center),
     )
     .width(Length::Fill)
-    .padding(8)
+    .padding(SPACE_2)
     .on_press(Message::ToggleCommitFile(idx))
     .style(|_theme, status| button::Style {
         background: Some(Background::Color(
@@ -195,7 +195,7 @@ fn view_file_diff<'a>(idx: usize, file: &'a FileDiff, folded: bool) -> Element<'
         )),
         text_color: theme().text_primary,
         border: Border {
-            radius: 6.0.into(),
+            radius: RADIUS_SM.into(),
             ..Border::default()
         },
         ..button::Style::default()
@@ -204,18 +204,18 @@ fn view_file_diff<'a>(idx: usize, file: &'a FileDiff, folded: bool) -> Element<'
     let mut section = column![header].spacing(2);
     if !folded {
         if file.binary {
-            section = section.push(text("Binary file not shown").size(12).color(muted));
+            section = section.push(text("Binary file not shown").size(TEXT_SM).color(muted));
         }
         for hunk in &file.hunks {
-            section =
-                section.push(text(&hunk.header).size(11).color(BLUE).font(iced::Font::MONOSPACE));
+            section = section
+                .push(text(&hunk.header).size(TEXT_XS).color(BLUE).font(iced::Font::MONOSPACE));
 
             section = section.push(column(hunk.lines.iter().map(view_diff_line)).spacing(0));
         }
         if file.hidden_lines > 0 {
             section = section.push(
                 text(format!("{} more lines not shown", file.hidden_lines))
-                    .size(11)
+                    .size(TEXT_XS)
                     .color(muted),
             );
         }
@@ -232,7 +232,7 @@ fn view_diff_line<'a>(line: &'a DiffLine) -> Element<'a, Message> {
     };
     let number = |n: Option<usize>| {
         text(n.map(|n| n.to_string()).unwrap_or_default())
-            .size(11)
+            .size(TEXT_XS)
             .color(theme().text_dim)
             .font(iced::Font::MONOSPACE)
             .width(Length::Fixed(44.0))
@@ -243,12 +243,12 @@ fn view_diff_line<'a>(line: &'a DiffLine) -> Element<'a, Message> {
             number(line.old_line),
             number(line.new_line),
             text(format!("{sign}{}", line.text))
-                .size(12)
+                .size(TEXT_SM)
                 .color(theme().text_primary)
                 .font(iced::Font::MONOSPACE)
                 .wrapping(iced::widget::text::Wrapping::None),
         ]
-        .spacing(8),
+        .spacing(SPACE_2),
     )
     .width(Length::Fill)
     .style(move |_theme| container::Style {

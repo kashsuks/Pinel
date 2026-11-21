@@ -52,7 +52,7 @@ impl App {
                             border: iced::Border {
                                 color: iced::Color::from_rgba(1.0, 1.0, 1.0, 0.08),
                                 width: 1.0,
-                                radius: 6.0.into(),
+                                radius: RADIUS_SM.into(),
                             },
                             ..Default::default()
                         })
@@ -73,7 +73,7 @@ impl App {
 
                 let is_preview = matches!(tab.kind, TabKind::Commit { preview: true, .. });
 
-                let title = text(&tab.name).size(12).color(tab_text_color);
+                let title = text(&tab.name).size(TEXT_SM).color(tab_text_color);
                 let title = if is_preview {
                     title.font(iced::Font {
                         style: iced::font::Style::Italic,
@@ -96,7 +96,7 @@ impl App {
                             .on_press(Message::TabClosed(real_idx))
                             .padding(2),
                     ]
-                    .spacing(8)
+                    .spacing(SPACE_2)
                     .align_y(iced::Alignment::Center),
                 )
                 .style(move |_theme, status| iced::widget::button::Style {
@@ -111,7 +111,7 @@ impl App {
                     border: iced::Border {
                         color: iced::Color::TRANSPARENT,
                         width: 0.0,
-                        radius: 6.0.into()
+                        radius: RADIUS_SM.into()
                     },
                     shadow: iced::Shadow::default(),
                     snap: false,
@@ -119,9 +119,9 @@ impl App {
                 .on_press(on_press)
                 .padding(iced::Padding {
                     top: 5.0,
-                    right: 12.0,
+                    right: SPACE_3,
                     bottom: 5.0,
-                    left: 12.0,
+                    left: SPACE_3,
                 });
 
                 mouse_area(
@@ -134,7 +134,7 @@ impl App {
                                 border: iced::Border {
                                     color: iced::Color::from_rgba(1.0, 1.0, 1.0, 0.15),
                                     width: 1.0,
-                                    radius: 6.0.into(),
+                                    radius: RADIUS_SM.into(),
                                 },
                                 ..Default::default()
                             }
@@ -182,7 +182,7 @@ impl App {
                     border: iced::Border {
                         color: iced::Color::from_rgba(1.0, 1.0, 1.0, 0.08),
                         width: 1.0,
-                        radius: 10.0.into(),
+                        radius: RADIUS_LG.into(),
                     },
                     ..Default::default()
                 }),
@@ -207,7 +207,7 @@ impl App {
             .id(self.search_input_id.clone())
             .on_input(Message::SearchQueryChanged)
             .style(search_input_style)
-            .size(13)
+            .size(TEXT_MD)
             .padding(10)
             .width(Length::Fill);
 
@@ -218,7 +218,7 @@ impl App {
 
             for result in &self.search_results {
                 result_items.push(
-                    container(text(&result.file_name).size(11).color(theme().text_secondary))
+                    container(text(&result.file_name).size(TEXT_XS).color(theme().text_secondary))
                         .padding(iced::Padding {
                             top: 6.0,
                             right: 6.0,
@@ -234,14 +234,14 @@ impl App {
                     let line_num = m.line_number;
 
                     result_items.push(
-                        button(text(line_text).size(11).color(theme().text_muted))
+                        button(text(line_text).size(TEXT_XS).color(theme().text_muted))
                             .style(tree_button_style)
                             .on_press(Message::SearchResultClicked(path, line_num))
                             .padding(iced::Padding {
                                 top: 3.0,
                                 right: 6.0,
                                 bottom: 3.0,
-                                left: 12.0,
+                                left: SPACE_3,
                             })
                             .width(Length::Fill)
                             .into(),
@@ -259,7 +259,7 @@ impl App {
                             top: 1.0,
                             right: 6.0,
                             bottom: 2.0,
-                            left: 12.0,
+                            left: SPACE_3,
                         })
                         .into(),
                     );
@@ -286,27 +286,27 @@ impl App {
                         .size(18)
                         .color(theme().text_muted),
                     row![
-                        button(text("Yes").size(13))
+                        button(text("Yes").size(TEXT_MD))
                             .on_press(Message::SensitiveFileOpenConfirm(true))
                             .padding(iced::Padding {
-                                top: 8.0,
-                                right: 16.0,
-                                bottom: 8.0,
-                                left: 16.0,
+                                top: SPACE_2,
+                                right: SPACE_4,
+                                bottom: SPACE_2,
+                                left: SPACE_4,
                             }),
-                        button(text("No").size(13))
+                        button(text("No").size(TEXT_MD))
                             .on_press(Message::SensitiveFileOpenConfirm(false))
                             .padding(iced::Padding {
-                                top: 8.0,
-                                right: 16.0,
-                                bottom: 8.0,
-                                left: 16.0,
+                                top: SPACE_2,
+                                right: SPACE_4,
+                                bottom: SPACE_2,
+                                left: SPACE_4,
                             }),
                     ]
-                    .spacing(12)
+                    .spacing(SPACE_3)
                     .align_y(iced::Alignment::Center),
                 ]
-                .spacing(16)
+                .spacing(SPACE_4)
                 .align_x(iced::Alignment::Center),
             )
             .center_x(Length::Fill)
@@ -398,11 +398,13 @@ impl App {
                                     container(
                                         row![
                                             container(
-                                                text(suggestion.kind.icon()).size(11).color(ic)
+                                                text(suggestion.kind.icon())
+                                                    .size(TEXT_XS)
+                                                    .color(ic)
                                             )
                                             .width(Length::Fixed(20.0))
                                             .center_x(Length::Fixed(20.0)),
-                                            text(&suggestion.text).size(12).color(label_color),
+                                            text(&suggestion.text).size(TEXT_SM).color(label_color),
                                             iced::widget::Space::new().width(Length::Fill),
                                             text(format!("{:?}", suggestion.kind).to_lowercase())
                                                 .size(10)
@@ -412,10 +414,10 @@ impl App {
                                         .align_y(iced::Alignment::Center),
                                     )
                                     .padding(iced::Padding {
-                                        top: 4.0,
+                                        top: SPACE_1,
                                         right: 10.0,
-                                        bottom: 4.0,
-                                        left: 8.0,
+                                        bottom: SPACE_1,
+                                        left: SPACE_2,
                                     })
                                     .width(Length::Fill)
                                     .style(move |_theme| container::Style {
@@ -447,10 +449,10 @@ impl App {
                                         .align_y(iced::Alignment::Center),
                                     )
                                     .padding(iced::Padding {
-                                        top: 4.0,
-                                        right: 8.0,
-                                        bottom: 4.0,
-                                        left: 8.0,
+                                        top: SPACE_1,
+                                        right: SPACE_2,
+                                        bottom: SPACE_1,
+                                        left: SPACE_2,
                                     })
                                     .width(Length::Fill)
                                     .style(move |_theme| {
@@ -472,7 +474,7 @@ impl App {
                             );
 
                             let panel = container(column(items).spacing(1))
-                                .padding(4)
+                                .padding(SPACE_1)
                                 .max_width(320.0)
                                 .style(move |_theme| container::Style {
                                     background: Some(iced::Background::Color(bg_modal)),
@@ -539,7 +541,7 @@ impl App {
                             let preview_panel = container(
                                 scrollable(
                                     container(MarkWidget::new(&preview.state))
-                                        .padding(16)
+                                        .padding(SPACE_4)
                                         .width(Length::Fill),
                                 )
                                 .height(Length::Fill),
@@ -643,7 +645,7 @@ impl App {
                                             border: iced::Border {
                                                 color: iced::Color::TRANSPARENT,
                                                 width: 0.0,
-                                                radius: 6.0.into(),
+                                                radius: RADIUS_SM.into(),
                                             },
                                             text_color: theme().text_primary,
                                             ..Default::default()
@@ -651,9 +653,9 @@ impl App {
                                         .padding(
                                             iced::Padding {
                                                 top: 6.0,
-                                                right: 12.0,
+                                                right: SPACE_3,
                                                 bottom: 6.0,
-                                                left: 12.0,
+                                                left: SPACE_3,
                                             }
                                         ),
                                         text(format!(
@@ -661,17 +663,17 @@ impl App {
                                             player.position().as_secs_f64(),
                                             player.duration().as_secs_f64()
                                         ))
-                                        .size(12)
+                                        .size(TEXT_SM)
                                         .color(theme().text_muted),
                                     ]
-                                    .spacing(12)
+                                    .spacing(SPACE_3)
                                     .align_y(iced::Alignment::Center),
                                 )
                                 .padding(iced::Padding {
-                                    top: 8.0,
-                                    right: 12.0,
-                                    bottom: 8.0,
-                                    left: 12.0,
+                                    top: SPACE_2,
+                                    right: SPACE_3,
+                                    bottom: SPACE_2,
+                                    left: SPACE_3,
                                 })
                                 .width(Length::Fill)
                                 .style(|_theme| container::Style {
@@ -810,15 +812,17 @@ impl App {
                                 // Time display
                                 row![
                                     text(fmt_time(*position_secs))
-                                        .size(12)
+                                        .size(TEXT_SM)
                                         .color(theme().text_muted),
                                     iced::widget::Space::new().width(Length::Fill),
-                                    text(fmt_time(*duration_secs)).size(12).color(theme().text_dim),
+                                    text(fmt_time(*duration_secs))
+                                        .size(TEXT_SM)
+                                        .color(theme().text_dim),
                                 ]
                                 .width(Length::Fill),
                                 // Controls
                                 row![play_pause_btn, stop_btn]
-                                    .spacing(12)
+                                    .spacing(SPACE_3)
                                     .align_y(iced::Alignment::Center),
                             ]
                             .spacing(20)
@@ -848,9 +852,9 @@ impl App {
         if let Some(term) = &self.terminal_pane {
             let header = container(
                 row![
-                    text("Terminal").size(12).color(theme().text_muted),
+                    text("Terminal").size(TEXT_SM).color(theme().text_muted),
                     iced::widget::Space::new().width(Length::Fill),
-                    button(text("x").size(12).color(theme().text_dim))
+                    button(text("x").size(TEXT_SM).color(theme().text_dim))
                         .style(tab_close_button_style)
                         .on_press(Message::ToggleTerminal),
                 ]
@@ -858,7 +862,7 @@ impl App {
             )
             .padding(iced::Padding {
                 top: 6.0,
-                right: 8.0,
+                right: SPACE_2,
                 bottom: 6.0,
                 left: 10.0,
             })
@@ -891,7 +895,7 @@ impl App {
                 .into();
         }
 
-        container(text("Embedded terminal unavailable").size(12).color(theme().text_dim))
+        container(text("Embedded terminal unavailable").size(TEXT_SM).color(theme().text_dim))
             .padding(10)
             .width(Length::Fill)
             .height(height)
@@ -925,23 +929,23 @@ impl App {
         let mut items: Vec<Element<'_, Message>> = Vec::with_capacity(total * 2);
         for (index, crumb) in path_crumbs.into_iter().chain(symbol_crumbs).enumerate() {
             if index > 0 {
-                items.push(text("\u{203a}").size(12).color(theme().text_placeholder).into());
+                items.push(text("\u{203a}").size(TEXT_SM).color(theme().text_placeholder).into());
             }
             let color = if index + 1 == total {
                 theme().text_secondary
             } else {
                 theme().text_dim
             };
-            items.push(text(crumb).size(12).color(color).into());
+            items.push(text(crumb).size(TEXT_SM).color(color).into());
         }
 
         Some(
             container(row(items).spacing(6).align_y(iced::Alignment::Center))
                 .padding(iced::Padding {
                     top: 3.0,
-                    right: 12.0,
+                    right: SPACE_3,
                     bottom: 3.0,
-                    left: 12.0,
+                    left: SPACE_3,
                 })
                 .width(Length::Fill)
                 .clip(true)
@@ -960,8 +964,8 @@ impl App {
             .map(|tab| tab.name.clone())
             .unwrap_or_default();
 
-        let left = row![text(file_info).size(12).color(theme().text_dim),]
-            .spacing(8)
+        let left = row![text(file_info).size(TEXT_SM).color(theme().text_dim),]
+            .spacing(SPACE_2)
             .align_y(iced::Alignment::Center);
 
         let current_line_diag = self
@@ -975,11 +979,11 @@ impl App {
 
         let right = row![
             text(format!("Ln {}, Col {}", self.cursor_line, self.cursor_col))
-                .size(12)
+                .size(TEXT_SM)
                 .color(theme().text_placeholder),
-            text(current_line_diag).size(12).color(theme().text_secondary),
+            text(current_line_diag).size(TEXT_SM).color(theme().text_secondary),
         ]
-        .spacing(8)
+        .spacing(SPACE_2)
         .align_y(iced::Alignment::Center);
 
         container(
@@ -988,9 +992,9 @@ impl App {
         )
         .padding(iced::Padding {
             top: 6.0,
-            right: 16.0,
+            right: SPACE_4,
             bottom: 7.0,
-            left: 16.0,
+            left: SPACE_4,
         })
         .width(Length::Fill)
         .style(status_bar_style)
@@ -1008,10 +1012,10 @@ impl App {
             column![
                 text(folder_name).size(24).color(theme().text_muted),
                 text("Select a file from the sidebar to begin editing")
-                    .size(13)
+                    .size(TEXT_MD)
                     .color(theme().text_placeholder),
             ]
-            .spacing(12)
+            .spacing(SPACE_3)
             .align_x(iced::Alignment::Center),
         )
         .center_x(Length::Fill)
