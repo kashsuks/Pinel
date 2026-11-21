@@ -143,15 +143,15 @@ pub fn view_git_panel<'a>(
         items.push(
             container(
                 column![
-                    text("No changes").size(13).color(theme().text_muted),
-                    text("Working tree is clean").size(11).color(theme().text_placeholder),
+                    text("No changes").size(TEXT_MD).color(theme().text_muted),
+                    text("Working tree is clean").size(TEXT_XS).color(theme().text_placeholder),
                 ]
-                .spacing(4)
+                .spacing(SPACE_1)
                 .align_x(iced::Alignment::Center),
             )
             .width(Length::Fill)
             .center_x(Length::Fill)
-            .padding(16)
+            .padding(SPACE_4)
             .into(),
         );
     }
@@ -213,7 +213,7 @@ pub fn view_git_panel<'a>(
         top: 14.0,
         right: 2.0,
         bottom: 2.0,
-        left: 4.0,
+        left: SPACE_1,
     })
     .style(sidebar_container_style)
     .into()
@@ -227,21 +227,21 @@ fn change_row<'a>(
     let kind = kind?;
     let mut line = row![
         text(kind.letter())
-            .size(11)
+            .size(TEXT_XS)
             .color(change_color(kind))
             .width(Length::Fixed(16.0)),
         text(change.display_name())
-            .size(12)
+            .size(TEXT_SM)
             .wrapping(iced::widget::text::Wrapping::None),
     ]
-    .spacing(4)
+    .spacing(SPACE_1)
     .align_y(iced::Alignment::Center);
 
     let dir = change.parent_dir();
     if !dir.is_empty() {
         line = line.push(
             text(dir)
-                .size(11)
+                .size(TEXT_XS)
                 .color(theme().text_placeholder)
                 .wrapping(iced::widget::text::Wrapping::None),
         );
@@ -251,9 +251,9 @@ fn change_row<'a>(
         container(line)
             .padding(iced::Padding {
                 top: 0.0,
-                right: 4.0,
+                right: SPACE_1,
                 bottom: 0.0,
-                left: 8.0,
+                left: SPACE_2,
             })
             .width(Length::Fill)
             .height(Length::Fixed(ROW_HEIGHT))
@@ -265,27 +265,31 @@ fn change_row<'a>(
 
 /// The row that expands the capped changed-file list.
 fn show_more_row<'a>(hidden: usize) -> Element<'a, Message> {
-    button(text(format!("Show {hidden} more\u{2026}")).size(12).color(theme().text_muted))
-        .on_press(Message::GitShowAllChanges)
-        .style(tree_button_style)
-        .padding(iced::Padding {
-            top: 0.0,
-            right: 4.0,
-            bottom: 0.0,
-            left: 8.0,
-        })
-        .width(Length::Fill)
-        .height(Length::Fixed(ROW_HEIGHT))
-        .into()
+    button(
+        text(format!("Show {hidden} more\u{2026}"))
+            .size(TEXT_SM)
+            .color(theme().text_muted),
+    )
+    .on_press(Message::GitShowAllChanges)
+    .style(tree_button_style)
+    .padding(iced::Padding {
+        top: 0.0,
+        right: SPACE_1,
+        bottom: 0.0,
+        left: SPACE_2,
+    })
+    .width(Length::Fill)
+    .height(Length::Fixed(ROW_HEIGHT))
+    .into()
 }
 
 fn section_header<'a>(label: String) -> Element<'a, Message> {
-    container(text(label).size(11).color(theme().text_muted))
+    container(text(label).size(TEXT_XS).color(theme().text_muted))
         .padding(iced::Padding {
             top: 0.0,
-            right: 4.0,
+            right: SPACE_1,
             bottom: 0.0,
-            left: 4.0,
+            left: SPACE_1,
         })
         .width(Length::Fill)
         .height(Length::Fixed(ROW_HEIGHT))
@@ -338,7 +342,7 @@ pub fn view_sidebar<'a>(
             top: 14.0,
             right: 2.0,
             bottom: 2.0,
-            left: 4.0,
+            left: SPACE_1,
         })
         .style(sidebar_container_style);
 
@@ -380,7 +384,7 @@ fn view_file_tree<'a>(
         rename_input,
         rename_input_id,
     );
-    column(items).spacing(4).into()
+    column(items).spacing(SPACE_1).into()
 }
 
 fn view_empty_sidebar<'a>() -> Element<'a, Message> {
@@ -392,10 +396,10 @@ fn view_empty_sidebar<'a>() -> Element<'a, Message> {
 
     container(
         column![
-            text("No folder open").size(13).color(theme().text_muted),
-            text(shortcut_hint).size(11).color(theme().text_placeholder),
+            text("No folder open").size(TEXT_MD).color(theme().text_muted),
+            text(shortcut_hint).size(TEXT_XS).color(theme().text_placeholder),
         ]
-        .spacing(4)
+        .spacing(SPACE_1)
         .align_x(iced::Alignment::Center),
     )
     .width(Length::Fill)
@@ -441,7 +445,7 @@ fn render_entries<'a>(
                         row![
                             container(text("")).width(Length::Fixed(indent_width)),
                             icon,
-                            text(name).size(13),
+                            text(name).size(TEXT_MD),
                         ]
                         .spacing(6)
                         .align_y(iced::Alignment::Center),
@@ -492,7 +496,7 @@ fn render_entries<'a>(
                         row![
                             container(text("")).width(Length::Fixed(indent_width)),
                             icon,
-                            text(name).size(13),
+                            text(name).size(TEXT_MD),
                         ]
                         .spacing(6)
                         .align_y(iced::Alignment::Center),
@@ -528,12 +532,12 @@ fn render_rename_row<'a>(
         .id(rename_input_id)
         .on_input(Message::FileTreeRenameInputChanged)
         .on_submit(Message::FileTreeRenameSubmit)
-        .size(13)
+        .size(TEXT_MD)
         .padding(iced::Padding {
             top: 2.0,
-            right: 4.0,
+            right: SPACE_1,
             bottom: 2.0,
-            left: 4.0,
+            left: SPACE_1,
         })
         .style(rename_input_style)
         .width(Length::Fill);

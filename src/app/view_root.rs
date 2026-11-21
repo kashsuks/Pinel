@@ -87,7 +87,7 @@ impl App {
                         .style(move |_t| container::Style {
                             background: Some(Background::Color(bg)),
                             border: iced::Border {
-                                radius: 6.0.into(),
+                                radius: RADIUS_SM.into(),
                                 ..Default::default()
                             },
                             ..Default::default()
@@ -102,7 +102,7 @@ impl App {
                         _ => iced::Color::TRANSPARENT,
                     })),
                     border: iced::Border {
-                        radius: 6.0.into(),
+                        radius: RADIUS_SM.into(),
                         ..Default::default()
                     },
                     text_color: icon_color,
@@ -143,7 +143,7 @@ impl App {
                         .style(move |_t| container::Style {
                             background: Some(Background::Color(bg)),
                             border: iced::Border {
-                                radius: 6.0.into(),
+                                radius: RADIUS_SM.into(),
                                 ..Default::default()
                             },
                             ..Default::default()
@@ -158,7 +158,7 @@ impl App {
                         _ => iced::Color::TRANSPARENT,
                     })),
                     border: iced::Border {
-                        radius: 6.0.into(),
+                        radius: RADIUS_SM.into(),
                         ..Default::default()
                     },
                     text_color: icon_color,
@@ -176,12 +176,12 @@ impl App {
                 iced::widget::Space::new().height(Length::Fill),
                 make_bottom_icon(ICON_SETTINGS, Message::ToggleSettings, self.settings_open),
             ]
-            .spacing(4)
+            .spacing(SPACE_1)
             .padding(iced::Padding {
-                top: 8.0,
-                right: 4.0,
-                bottom: 4.0,
-                left: 4.0,
+                top: SPACE_2,
+                right: SPACE_1,
+                bottom: SPACE_1,
+                left: SPACE_1,
             }),
         )
         .width(Length::Fixed(48.0))

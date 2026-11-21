@@ -15,7 +15,7 @@ use crate::{
         git_graph::{GraphRow, Segment},
     },
     message::Message,
-    theme::theme,
+    theme::{theme, TEXT_SM},
 };
 
 /// height of one commit row, shared with the text beside the graph
@@ -129,6 +129,7 @@ impl<Message> canvas::Program<Message> for RowProgram<'_> {
 }
 
 /// rough width of one character at the subject's text size
+// Calibrated for subject text at TEXT_SM; re-tune if that size changes.
 const SUBJECT_CHAR_WIDTH: f32 = 6.4;
 /// rough width of one character at the pill's text size
 const PILL_CHAR_WIDTH: f32 = 5.6;
@@ -310,7 +311,7 @@ pub fn view_commit_row<'a>(
     let budget = subject_budget(panel_width, lanes, &commit.refs);
     let line = line.push(
         text(truncate_subject(&commit.subject, budget))
-            .size(12)
+            .size(TEXT_SM)
             .color(color)
             .wrapping(iced::widget::text::Wrapping::None),
     );

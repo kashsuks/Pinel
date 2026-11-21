@@ -215,7 +215,7 @@ pub fn chat_message_bubble_style(_theme: &Theme) -> container::Style {
         border: Border {
             color: Color::TRANSPARENT,
             width: 0.0,
-            radius: 6.0.into(),
+            radius: RADIUS_SM.into(),
         },
         ..Default::default()
     }
