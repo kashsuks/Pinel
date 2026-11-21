@@ -17,7 +17,8 @@ pub enum Message {
 
     CodeEditorContentChanged,
     FileClicked(PathBuf),
-    FileOpened(PathBuf, String),
+    /// A file finished loading: its text, or why it could not be read as text.
+    FileOpened(PathBuf, Result<String, String>),
     /// Session restore opened all its tabs; carries the path that was active when the session was saved.
     SessionRestoreFinished(Option<PathBuf>),
     SensitiveFileOpenConfirm(bool),
@@ -51,7 +52,8 @@ pub enum Message {
     SaveFile,
     SaveCurrentFileAs(PathBuf),
     CurrentFileSavedAs(PathBuf),
-    FileSaved(Result<(), String>),
+    /// A manual save finished for the tab at this path; carries the content that was written.
+    FileSaved(PathBuf, String, Result<(), String>),
 
     TabSelected(usize),
     TabClosed(usize),
@@ -128,6 +130,8 @@ pub enum Message {
     CommandInputChanged(String),
     CommandInputSubmit,
     WindowResized(u32, u32),
+    /// The window size save delay ran out. The number says which resize it was for.
+    WindowSizeSave(u64),
     WindowCloseRequested(iced::window::Id),
 
     NewFile,
