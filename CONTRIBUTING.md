@@ -1,5 +1,11 @@
 # Contributing to Pinel
 
+All contributions are welcome! If you've encountered a bug, please use the [issues tab](https://github.com/kashsuks/Pinel/issues) and use the bug report issue template.
+
+## Findings PRs to work on
+
+Any PR that doesn't have an assignee is up for grabs! If you're looking for simple work to get started, take a look at any of the PRs that are tagged as beginner friendly or easy issues.
+
 ## Running Tests
 
 ```bash
