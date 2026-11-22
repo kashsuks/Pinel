@@ -66,6 +66,7 @@ use std::time::Instant;
 ///         LspEvent::Definition { uri, .. } => drop(uri),
 ///         LspEvent::Progress { done, .. } => drop(done),
 ///         LspEvent::DocumentSymbols { symbols, .. } => drop(symbols),
+///         LspEvent::Diagnostics { diagnostics, .. } => drop(diagnostics),
 ///         LspEvent::Log { message, .. } => drop(message),
 ///     }
 /// }
@@ -110,6 +111,13 @@ pub enum LspEvent {
         /// Top-level symbols; nested symbols are in each symbol's `children`.
         symbols: Vec<crate::canvas_editor::lsp::LspSymbol>,
     },
+    /// The latest diagnostics published for a document. An empty list clears them.
+    Diagnostics {
+        /// URI of the file being diagnosed.
+        uri: String,
+        /// Full replacement for the previous diagnostics for this URI.
+        diagnostics: Vec<LspDiagnostic>,
+    },
     /// Log message from the LSP server's stderr.
     Log {
         /// Key of the server that sent this message.
@@ -117,6 +125,16 @@ pub enum LspEvent {
         /// The log line.
         message: String,
     },
+}
+
+/// A diagnostic published by a language server.
+pub struct LspDiagnostic {
+    /// Zero-based start line.
+    pub line: usize,
+    /// LSP severity from 1 (error) through 4 (hint), when provided.
+    pub severity: Option<u64>,
+    /// Human-readable description of the problem.
+    pub message: String,
 }
 
 // =============================================================================

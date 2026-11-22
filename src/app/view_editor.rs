@@ -979,14 +979,21 @@ impl App {
             .map(|tab| tab.path.clone())
             .and_then(|path| self.lsp_diagnostics.get(&path))
             .and_then(|items| items.iter().find(|d| d.line == self.cursor_line))
-            .map(|d| d.message.clone())
+            .and_then(|d| d.message.lines().next())
             .unwrap_or_default();
 
         let right = row![
             text(format!("Ln {}, Col {}", self.cursor_line, self.cursor_col))
                 .size(TEXT_SM)
                 .color(theme().text_placeholder),
-            text(current_line_diag).size(TEXT_SM).color(theme().text_secondary),
+            container(
+                text(current_line_diag)
+                    .size(TEXT_SM)
+                    .color(theme().text_secondary)
+                    .wrapping(iced::widget::text::Wrapping::None),
+            )
+            .max_width(360)
+            .clip(true),
         ]
         .spacing(SPACE_2)
         .align_y(iced::Alignment::Center);

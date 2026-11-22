@@ -3271,6 +3271,9 @@ impl App {
                             definition_task = self.open_definition(&uri, range.start);
                         },
                         iced_code_editor::LspEvent::Progress { .. } => {},
+                        iced_code_editor::LspEvent::Diagnostics { uri, diagnostics } => {
+                            self.receive_diagnostics(&uri, diagnostics);
+                        },
                         iced_code_editor::LspEvent::DocumentSymbols { uri, symbols } => {
                             self.dev_log(format!(
                                 "LSP: {} document symbols for {}",
@@ -3551,6 +3554,44 @@ impl App {
                 }
                 iced::Task::none()
             },
+        }
+    }
+
+    fn receive_diagnostics(
+        &mut self,
+        uri: &str,
+        diagnostics: Vec<iced_code_editor::LspDiagnostic>,
+    ) {
+        use crate::features::lsp::InlineDiagnostic;
+        use lsp_types::DiagnosticSeverity;
+
+        let Some(path) = url::Url::parse(uri).ok().and_then(|url| url.to_file_path().ok()) else {
+            return;
+        };
+        if !self.tabs.iter().any(|tab| tab.path == path) {
+            return;
+        }
+        let items: Vec<_> = diagnostics
+            .into_iter()
+            .filter_map(|item| {
+                let severity = match item.severity {
+                    None | Some(1) => DiagnosticSeverity::ERROR,
+                    Some(2) => DiagnosticSeverity::WARNING,
+                    Some(3) => DiagnosticSeverity::INFORMATION,
+                    Some(4) => DiagnosticSeverity::HINT,
+                    _ => return None,
+                };
+                Some(InlineDiagnostic {
+                    line: item.line.saturating_add(1),
+                    severity,
+                    message: item.message,
+                })
+            })
+            .collect();
+        if items.is_empty() {
+            self.lsp_diagnostics.remove(&path);
+        } else {
+            self.lsp_diagnostics.insert(path, items);
         }
     }
 
