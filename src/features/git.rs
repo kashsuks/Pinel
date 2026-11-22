@@ -241,6 +241,94 @@ pub async fn load_status_async(root: Option<PathBuf>) -> Vec<FileChange> {
         .unwrap_or_default()
 }
 
+/// What `git symbolic-ref --short -q HEAD` reported about `HEAD`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum HeadRef {
+    /// `HEAD` points at this branch. The branch may have no commits yet.
+    Branch(String),
+    /// `HEAD` points straight at a commit.
+    Detached,
+    /// Not a repository, git failed, or it printed nothing usable.
+    Unavailable,
+}
+
+/// Interprets the exit code and stdout of `git symbolic-ref --short -q HEAD`.
+///
+/// Exit code 0 means `HEAD` is a branch, named on stdout; this holds even for
+/// a branch with no commits yet. 1 means `HEAD` is detached. Anything else,
+/// such as 128 outside a repository, or no exit code at all because git was
+/// killed by a signal, means there is nothing to show.
+fn parse_symbolic_ref(exit_code: Option<i32>, stdout: &[u8]) -> HeadRef {
+    match exit_code {
+        Some(0) => {
+            let name = String::from_utf8_lossy(stdout).trim().to_string();
+            if name.is_empty() {
+                HeadRef::Unavailable
+            } else {
+                HeadRef::Branch(name)
+            }
+        },
+        Some(1) => HeadRef::Detached,
+        _ => HeadRef::Unavailable,
+    }
+}
+
+/// Reads the abbreviated hash printed by `git rev-parse --short HEAD`.
+///
+/// Returns `None` when the command failed or printed nothing.
+fn parse_short_hash(success: bool, stdout: &[u8]) -> Option<String> {
+    if !success {
+        return None;
+    }
+    let hash = String::from_utf8_lossy(stdout).trim().to_string();
+    (!hash.is_empty()).then_some(hash)
+}
+
+/// A git command run in `root` without taking optional locks, so a
+/// background read never makes the user's own git commands fail.
+fn git_command_in(root: &Path) -> std::process::Command {
+    let mut cmd = std::process::Command::new("git");
+    cmd.arg("--no-optional-locks").current_dir(root);
+    cmd
+}
+
+/// The `git symbolic-ref` invocation behind [`load_branch`].
+fn symbolic_ref_command(root: &Path) -> std::process::Command {
+    let mut cmd = git_command_in(root);
+    cmd.args(["symbolic-ref", "--short", "-q", "HEAD"]);
+    cmd
+}
+
+/// The `git rev-parse` invocation [`load_branch`] uses for a detached `HEAD`.
+fn short_head_command(root: &Path) -> std::process::Command {
+    let mut cmd = git_command_in(root);
+    cmd.args(["rev-parse", "--short", "HEAD"]);
+    cmd
+}
+
+/// Returns the label for the repository's `HEAD` at `root`: the branch name,
+/// or the short commit hash when `HEAD` is detached.
+///
+/// Reads only `HEAD`, separately from [`load_status`], so it stays cheap
+/// enough to run every few seconds. Returns `None` when `root` is not in a
+/// repository or git is missing.
+pub fn load_branch(root: &Path) -> Option<String> {
+    let output = symbolic_ref_command(root).output().ok()?;
+    match parse_symbolic_ref(output.status.code(), &output.stdout) {
+        HeadRef::Branch(name) => Some(name),
+        HeadRef::Detached => {
+            let output = short_head_command(root).output().ok()?;
+            parse_short_hash(output.status.success(), &output.stdout)
+        },
+        HeadRef::Unavailable => None,
+    }
+}
+
+/// Runs [`load_branch`] off the UI thread.
+pub async fn load_branch_async(root: PathBuf) -> Option<String> {
+    tokio::task::spawn_blocking(move || load_branch(&root)).await.ok().flatten()
+}
+
 /// How many commits each page of history holds.
 ///
 /// Several screens of a tall sidebar, so the first page fills the view and
@@ -748,6 +836,101 @@ mod tests {
         let commits = load_history(Some(&dir), 0, 10);
         std::fs::remove_dir_all(&dir)?;
         assert!(commits.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn test_parse_symbolic_ref_branch_name() -> Result<(), Box<dyn std::error::Error>> {
+        assert_eq!(
+            parse_symbolic_ref(Some(0), b"main\n"),
+            HeadRef::Branch("main".to_string())
+        );
+        assert_eq!(
+            parse_symbolic_ref(Some(0), b"feature/status-bar\n"),
+            HeadRef::Branch("feature/status-bar".to_string())
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_parse_symbolic_ref_detached_head() -> Result<(), Box<dyn std::error::Error>> {
+        assert_eq!(parse_symbolic_ref(Some(1), b""), HeadRef::Detached);
+        Ok(())
+    }
+
+    #[test]
+    fn test_parse_symbolic_ref_not_a_repository() -> Result<(), Box<dyn std::error::Error>> {
+        assert_eq!(parse_symbolic_ref(Some(128), b""), HeadRef::Unavailable);
+        // killed by a signal: no exit code at all
+        assert_eq!(parse_symbolic_ref(None, b"main\n"), HeadRef::Unavailable);
+        Ok(())
+    }
+
+    #[test]
+    fn test_parse_symbolic_ref_empty_output() -> Result<(), Box<dyn std::error::Error>> {
+        assert_eq!(parse_symbolic_ref(Some(0), b""), HeadRef::Unavailable);
+        assert_eq!(parse_symbolic_ref(Some(0), b" \n"), HeadRef::Unavailable);
+        Ok(())
+    }
+
+    #[test]
+    fn test_parse_short_hash_trims_output() -> Result<(), Box<dyn std::error::Error>> {
+        assert_eq!(
+            parse_short_hash(true, b"d1ba278\n"),
+            Some("d1ba278".to_string())
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_parse_short_hash_failure_or_empty() -> Result<(), Box<dyn std::error::Error>> {
+        assert_eq!(parse_short_hash(false, b"d1ba278\n"), None);
+        assert_eq!(parse_short_hash(true, b"\n"), None);
+        Ok(())
+    }
+
+    #[test]
+    fn test_symbolic_ref_command_avoids_the_index_lock() -> Result<(), Box<dyn std::error::Error>> {
+        let root = Path::new("/some/repo");
+        for cmd in [symbolic_ref_command(root), short_head_command(root)] {
+            let args: Vec<_> = cmd.get_args().collect();
+            assert_eq!(
+                args.first(),
+                Some(&std::ffi::OsStr::new("--no-optional-locks"))
+            );
+            assert_eq!(cmd.get_current_dir(), Some(root));
+        }
+        Ok(())
+    }
+
+    /// Whether a `git` binary can run here. Tests that need real git return
+    /// early without one.
+    fn git_available() -> bool {
+        std::process::Command::new("git")
+            .arg("--version")
+            .output()
+            .is_ok_and(|out| out.status.success())
+    }
+
+    #[test]
+    fn test_load_branch_unborn_branch_in_new_repository() -> Result<(), Box<dyn std::error::Error>>
+    {
+        if !git_available() {
+            return Ok(());
+        }
+        let dir = tempfile::tempdir()?;
+        let status = std::process::Command::new("git")
+            .args(["init", "-q", "-b", "main"])
+            .current_dir(dir.path())
+            // a git hook running the tests would point git at its own repository
+            .env_remove("GIT_DIR")
+            .env_remove("GIT_WORK_TREE")
+            .status()?;
+        if !status.success() {
+            return Err("`git init -b main` failed".into());
+        }
+
+        assert_eq!(load_branch(dir.path()), Some("main".to_string()));
         Ok(())
     }
 }

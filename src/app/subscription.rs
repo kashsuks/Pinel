@@ -39,6 +39,11 @@ impl App {
             subs.push(iced::time::every(Duration::from_secs(15)).map(|_| Message::DiscordRpcTick));
         }
 
+        if self.file_tree.is_some() {
+            // Picks up a branch switched outside Pinel, such as in a terminal
+            subs.push(iced::time::every(Duration::from_secs(5)).map(|_| Message::GitBranchTick));
+        }
+
         if self.editor_preferences.restore_session_enabled {
             // No external rate limit driving this one
             subs.push(iced::time::every(Duration::from_secs(10)).map(|_| Message::SessionSyncTick));

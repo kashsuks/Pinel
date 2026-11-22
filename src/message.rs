@@ -187,6 +187,13 @@ pub enum Message {
 
     RefreshGitStatus,
     GitStatusLoaded(Vec<crate::features::git::FileChange>),
+    /// Re-reads the open folder's git branch for the status bar. Sent every
+    /// few seconds while a folder is open.
+    GitBranchTick,
+    /// A background branch read finished: the generation it was started
+    /// with, the folder it read, and the branch name (or short hash when
+    /// `HEAD` is detached), `None` outside a repository.
+    GitBranchLoaded(u64, PathBuf, Option<String>),
     /// Re-reads the commit history behind the git panel's graph.
     RefreshGitHistory,
     /// Loads the page of commits older than the ones the panel holds.
