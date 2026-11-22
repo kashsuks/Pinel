@@ -966,7 +966,9 @@ impl App {
     /// indentation, language and language server. Only the branch shows
     /// unless a text editor tab is active.
     pub(super) fn view_status_bar(&self) -> Element<'_, Message> {
-        let muted = theme().text_muted;
+        // One step brighter than the muted grey used for hints elsewhere, so
+        // the bar is easy to read on both dark and light themes.
+        let item_color = theme().text_secondary;
         let mut left: Vec<Element<'_, Message>> = Vec::new();
         let mut right: Vec<Element<'_, Message>> = Vec::new();
         let mut current_line_message = String::new();
@@ -990,14 +992,14 @@ impl App {
 
         if let Some(branch) = &self.git_branch {
             let branch = truncate_subject(branch, STATUS_BRANCH_MAX_CHARS);
-            left.push(status_text(format!("\u{2387} {branch}"), muted).into());
+            left.push(status_text(format!("\u{2387} {branch}"), item_color).into());
         }
 
         if let Some((tab, code_editor)) = active_editor {
             let diagnostics = self.lsp_diagnostics.get(&tab.path).map(Vec::as_slice).unwrap_or(&[]);
             let (errors, warnings) = diagnostic_counts(diagnostics);
             if let Some(summary) = diagnostic_summary(errors, warnings) {
-                left.push(status_text(summary, muted).into());
+                left.push(status_text(summary, item_color).into());
             }
 
             // Read from the editor itself: the app's own copy of the cursor
@@ -1010,23 +1012,25 @@ impl App {
 
             if let Some(keys) = code_editor.vim_pending_keys().filter(|keys| !keys.is_empty()) {
                 let keys = truncate_subject(&keys, STATUS_PENDING_KEYS_MAX_CHARS);
-                right.push(status_text(keys, muted).font(MONO_FONT).into());
+                right.push(status_text(keys, item_color).font(MONO_FONT).into());
             }
-            right.push(status_text(format!("Ln {line}, Col {col}"), muted).into());
-            right.push(status_text(indentation_label(code_editor.indent_style()), muted).into());
+            right.push(status_text(format!("Ln {line}, Col {col}"), item_color).into());
+            right.push(
+                status_text(indentation_label(code_editor.indent_style()), item_color).into(),
+            );
             if let Some(language) = language_display_name(&tab.path) {
-                right.push(status_text(language, muted).into());
+                right.push(status_text(language, item_color).into());
             }
             if self.lsp_enabled {
                 if let Some(server) = self.lsp_server_keys.get(&tab.path) {
-                    right.push(status_text(*server, muted).into());
+                    right.push(status_text(*server, item_color).into());
                 }
             }
         }
 
         // The only `Fill` item, so when the bar runs out of room this is the
         // first thing squeezed away; the bar's clip hides anything past that.
-        let message = container(status_text(current_line_message, theme().text_secondary))
+        let message = container(status_text(current_line_message, theme().text_primary))
             .width(Length::Fill)
             .align_x(iced::alignment::Horizontal::Right)
             .clip(true);
@@ -1070,25 +1074,36 @@ impl App {
     }
 }
 
-/// Fixed height of the status bar: the 6px top and 7px bottom padding it has
-/// always had around one line of `TEXT_SM` text, which iced lays out at its
-/// default line height of 1.3 times the font size (12 × 1.3 = 15.6px). 28.6px
-/// in all, so the bar looks as it did and cannot grow with its contents.
-const STATUS_BAR_HEIGHT: f32 = 6.0 + TEXT_SM * 1.3 + 7.0;
+/// Size of the status bar's text: the 13px body size, so the bar reads at a
+/// glance rather than at the 12px used for other secondary text.
+const STATUS_TEXT_SIZE: f32 = TEXT_MD;
 
-// The Vim mode pill is one `TEXT_XS` line with no vertical padding, so it has
-// to fit inside the bar without making it taller.
-const _: () = assert!(TEXT_XS * 1.3 < STATUS_BAR_HEIGHT);
+/// Size of the Vim mode pill's label, one step below the bar's text so the
+/// pill sits inside the bar with room around it.
+const VIM_PILL_TEXT_SIZE: f32 = TEXT_SM;
+
+/// Vertical padding inside the Vim mode pill, above and below its label.
+const VIM_PILL_PADDING_Y: f32 = 2.0;
+
+/// Fixed height of the status bar: `SPACE_2` above and below one line of
+/// [`STATUS_TEXT_SIZE`] text, which iced lays out at its default line height
+/// of 1.3 times the font size (13 × 1.3 = 16.9px). 32.9px in all, and the bar
+/// cannot grow with its contents.
+const STATUS_BAR_HEIGHT: f32 = SPACE_2 + STATUS_TEXT_SIZE * 1.3 + SPACE_2;
+
+// The Vim mode pill is one label line plus its padding, so it has to fit
+// inside the bar without making it taller.
+const _: () = assert!(VIM_PILL_TEXT_SIZE * 1.3 + 2.0 * VIM_PILL_PADDING_Y < STATUS_BAR_HEIGHT);
 
 /// Fira Code's advance width as a fraction of the font size: every glyph is
 /// 1200 units wide on a 1950-unit em, in both the regular and the bold cut.
 const FIRA_CODE_ADVANCE_EM: f32 = 1200.0 / 1950.0;
 
 /// Width of the Vim mode pill: the longest label, `VISUAL LINE` (11
-/// characters), in Fira Code at `TEXT_XS` (about 74.5px), plus `SPACE_2` on
-/// each side, about 90.5px. Every mode uses this width, so switching modes
-/// never moves the items after the pill.
-const VIM_PILL_WIDTH: f32 = 11.0 * FIRA_CODE_ADVANCE_EM * TEXT_XS + 2.0 * SPACE_2;
+/// characters), in Fira Code at [`VIM_PILL_TEXT_SIZE`] (about 81.2px), plus
+/// `SPACE_2` on each side, about 97.2px. Every mode uses this width, so
+/// switching modes never moves the items after the pill.
+const VIM_PILL_WIDTH: f32 = 11.0 * FIRA_CODE_ADVANCE_EM * VIM_PILL_TEXT_SIZE + 2.0 * SPACE_2;
 
 /// Text on the Vim mode pill. The accent colours behind it are pastel on
 /// every theme, so one dark colour (Catppuccin base) reads on all of them.
@@ -1116,13 +1131,13 @@ const STATUS_DIAGNOSTIC_MAX_CHARS: usize = 80;
 /// short. Counts can be typed with any number of digits.
 const STATUS_PENDING_KEYS_MAX_CHARS: usize = 16;
 
-/// One item of status bar text: `TEXT_SM`, kept to a single line.
+/// One item of status bar text: [`STATUS_TEXT_SIZE`], kept to a single line.
 fn status_text<'a>(
     content: impl iced::widget::text::IntoFragment<'a>,
     color: Color,
 ) -> iced::widget::Text<'a> {
     text(content)
-        .size(TEXT_SM)
+        .size(STATUS_TEXT_SIZE)
         .color(color)
         .wrapping(iced::widget::text::Wrapping::None)
 }
@@ -1133,12 +1148,12 @@ fn vim_mode_pill<'a>(mode: iced_code_editor::VimMode) -> Element<'a, Message> {
     let background = vim_mode_color(mode);
     container(
         text(vim_mode_label(mode))
-            .size(TEXT_XS)
+            .size(VIM_PILL_TEXT_SIZE)
             .font(MONO_BOLD_FONT)
             .color(VIM_PILL_TEXT)
             .wrapping(iced::widget::text::Wrapping::None),
     )
-    .padding(0)
+    .padding([VIM_PILL_PADDING_Y, 0.0])
     .center_x(Length::Fixed(VIM_PILL_WIDTH))
     .clip(true)
     .style(move |_theme| container::Style {
@@ -1284,7 +1299,7 @@ mod tests {
     fn test_vim_mode_label_fits_pill_width() -> Result<(), Box<dyn std::error::Error>> {
         for mode in ALL_MODES {
             let label = vim_mode_label(mode);
-            let width = label.chars().count() as f32 * FIRA_CODE_ADVANCE_EM * TEXT_XS;
+            let width = label.chars().count() as f32 * FIRA_CODE_ADVANCE_EM * VIM_PILL_TEXT_SIZE;
             assert!(
                 width + 2.0 * SPACE_2 <= VIM_PILL_WIDTH + f32::EPSILON,
                 "{label} needs {width}px"
@@ -1410,9 +1425,9 @@ mod tests {
     }
 
     #[test]
-    fn test_status_bar_height_matches_old_padding() -> Result<(), Box<dyn std::error::Error>> {
-        // 6px + one 12px line at iced's 1.3 line height + 7px
-        assert!((STATUS_BAR_HEIGHT - 28.6).abs() < 0.01);
+    fn test_status_bar_height_is_one_line_plus_padding() -> Result<(), Box<dyn std::error::Error>> {
+        // 8px + one 13px line at iced's 1.3 line height + 8px
+        assert!((STATUS_BAR_HEIGHT - 32.9).abs() < 0.01);
         Ok(())
     }
 }
