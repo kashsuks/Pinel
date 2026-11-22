@@ -1,7 +1,7 @@
 use std::{str::FromStr, sync::RwLock};
 
 use iced::Color;
-use iced_code_editor::theme::Style as CodeEditorStyle;
+use iced_code_editor::{theme::Style as CodeEditorStyle, CodeEditor};
 use once_cell::sync::Lazy;
 use syntect::highlighting::{
     Color as SynColor, FontStyle, ScopeSelectors, StyleModifier, Theme as SynTheme, ThemeItem,
@@ -23,14 +23,30 @@ pub const BORDER_RADIUS_TAB: f32 = RADIUS_LG;
 // Text Size Scale
 /// Extra-small UI text: badges, hints and secondary metadata.
 pub const TEXT_XS: f32 = 11.0;
-/// Small UI text: list rows, labels and most panel content.
+/// Small UI text: secondary text such as the status bar, breadcrumbs,
+/// metadata (hashes, dates, counts), hints, and loading or empty states.
 pub const TEXT_SM: f32 = 12.0;
 /// Medium UI text: primary labels, inputs and body copy.
 pub const TEXT_MD: f32 = 13.0;
 /// Large UI text: prominent inputs such as the finder and palette queries.
 pub const TEXT_LG: f32 = 15.0;
-/// Font size of the code editor text.
-pub const CODE_FONT_SIZE: f32 = 13.0;
+/// Font size of the code editor text, in pixels.
+///
+/// Applied together with [`CODE_LINE_HEIGHT`] by [`apply_code_metrics`].
+pub const CODE_FONT_SIZE: f32 = 14.0;
+/// Line height of the code editor text, in pixels. Set as a fixed value
+/// rather than scaled from [`CODE_FONT_SIZE`].
+pub const CODE_LINE_HEIGHT: f32 = 22.0;
+
+/// Applies [`CODE_FONT_SIZE`] and [`CODE_LINE_HEIGHT`] to `editor`.
+///
+/// The font size is set first: it recomputes the character width, and with
+/// auto-adjust off it leaves the line height alone, so the fixed line height
+/// set afterwards is the one that sticks.
+pub fn apply_code_metrics(editor: &mut CodeEditor) {
+    editor.set_font_size(CODE_FONT_SIZE, false);
+    editor.set_line_height(CODE_LINE_HEIGHT);
+}
 
 // Spacing Scale (used for padding and spacing between widgets)
 /// Spacing step 1: the tightest gap between related elements.
@@ -1289,5 +1305,18 @@ mod tests {
 
         let space_scale = [SPACE_1, SPACE_2, SPACE_3, SPACE_4];
         assert!(space_scale.windows(2).all(|w| w[0] < w[1]));
+    }
+
+    #[test]
+    fn test_apply_code_metrics_sets_font_and_line_height() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let mut editor = CodeEditor::new("fn main() {}", "rs");
+        apply_code_metrics(&mut editor);
+
+        assert!((editor.font_size() - CODE_FONT_SIZE).abs() < f32::EPSILON);
+        assert!((editor.line_height() - CODE_LINE_HEIGHT).abs() < f32::EPSILON);
+        // Keep at least the 20/14 ratio the editor used to derive on its own.
+        assert!(editor.line_height() >= editor.font_size() * 1.4);
+        Ok(())
     }
 }

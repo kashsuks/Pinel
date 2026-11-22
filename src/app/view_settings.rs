@@ -259,7 +259,7 @@ impl App {
             .width(Length::FillPortion(2)),
             text_input("4", &self.editor_preferences.tab_size.to_string())
                 .on_input(Message::SettingsTabSizeChanged)
-                .size(TEXT_SM)
+                .size(TEXT_MD)
                 .align_x(iced::Alignment::Center)
                 .padding(SETTINGS_CONTROL_PADDING)
                 .style(settings_input_style)
@@ -282,7 +282,7 @@ impl App {
             ]
             .spacing(2)
             .width(Length::FillPortion(2)),
-            button(text(spaces_label).size(TEXT_SM).color(theme().text_primary))
+            button(text(spaces_label).size(TEXT_MD).color(theme().text_primary))
                 .on_press(Message::SettingsToggleUseSpaces)
                 .style(|_theme, _status| button::Style {
                     background: Some(Background::Color(theme().bg_secondary)),
@@ -313,7 +313,7 @@ impl App {
             ]
             .spacing(2)
             .width(Length::FillPortion(2)),
-            button(text(auto_indent_label).size(TEXT_SM).color(theme().text_primary))
+            button(text(auto_indent_label).size(TEXT_MD).color(theme().text_primary))
                 .on_press(Message::SettingsToggleAutoIndent)
                 .style(|_theme, _status| button::Style {
                     background: Some(Background::Color(theme().bg_secondary)),
@@ -344,7 +344,7 @@ impl App {
             ]
             .spacing(2)
             .width(Length::FillPortion(2)),
-            button(text(show_whitespace_label).size(TEXT_SM).color(theme().text_primary))
+            button(text(show_whitespace_label).size(TEXT_MD).color(theme().text_primary))
                 .on_press(Message::SettingsToggleShowWhitespace)
                 .style(|_theme, _status| button::Style {
                     background: Some(Background::Color(theme().bg_secondary)),
@@ -375,7 +375,7 @@ impl App {
             ]
             .spacing(2)
             .width(Length::FillPortion(2)),
-            button(text(show_breadcrumbs_label).size(TEXT_SM).color(theme().text_primary))
+            button(text(show_breadcrumbs_label).size(TEXT_MD).color(theme().text_primary))
                 .on_press(Message::SettingsToggleShowBreadcrumbs)
                 .style(|_theme, _status| button::Style {
                     background: Some(Background::Color(theme().bg_secondary)),
@@ -406,7 +406,7 @@ impl App {
             ]
             .spacing(2)
             .width(Length::FillPortion(2)),
-            button(text(vim_mode_label).size(TEXT_SM).color(theme().text_primary))
+            button(text(vim_mode_label).size(TEXT_MD).color(theme().text_primary))
                 .on_press(Message::SettingsToggleVimMode)
                 .style(|_theme, _status| button::Style {
                     background: Some(Background::Color(theme().bg_secondary)),
@@ -437,7 +437,7 @@ impl App {
             ]
             .spacing(2)
             .width(Length::FillPortion(2)),
-            button(text(discord_rpc_label).size(TEXT_SM).color(theme().text_primary))
+            button(text(discord_rpc_label).size(TEXT_MD).color(theme().text_primary))
                 .on_press(Message::SettingsToggleDiscordRpc)
                 .style(|_theme, _stats| button::Style {
                     background: Some(Background::Color(theme().bg_secondary)),
@@ -468,7 +468,7 @@ impl App {
             ]
             .spacing(2)
             .width(Length::FillPortion(2)),
-            button(text(restore_session_label).size(TEXT_SM).color(theme().text_primary))
+            button(text(restore_session_label).size(TEXT_MD).color(theme().text_primary))
                 .on_press(Message::SettingsToggleRestoreSession)
                 .style(|_theme, _status| button::Style {
                     background: Some(Background::Color(theme().bg_secondary)),
@@ -498,7 +498,7 @@ impl App {
             ]
             .spacing(2)
             .width(Length::FillPortion(2)),
-            button(text(autosave_label).size(TEXT_SM).color(theme().text_primary))
+            button(text(autosave_label).size(TEXT_MD).color(theme().text_primary))
                 .on_press(Message::SettingsToggleAutosave)
                 .style(|_theme, _status| button::Style {
                     background: Some(Background::Color(theme().bg_secondary)),
@@ -529,7 +529,7 @@ impl App {
                 &self.editor_preferences.autosave_interval_ms.to_string()
             )
             .on_input(Message::SettingsAutosaveIntervalChanged)
-            .size(TEXT_SM)
+            .size(TEXT_MD)
             .align_x(iced::Alignment::Center)
             .padding(SETTINGS_CONTROL_PADDING)
             .style(settings_input_style)
@@ -552,7 +552,7 @@ impl App {
             ]
             .spacing(2)
             .width(Length::FillPortion(2)),
-            button(text(tab_drag_label).size(TEXT_SM).color(theme().text_primary))
+            button(text(tab_drag_label).size(TEXT_MD).color(theme().text_primary))
                 .on_press(Message::SettingsToggleTabDragFloating)
                 .style(|_theme, _status| button::Style {
                     background: Some(Background::Color(theme().bg_secondary)),
@@ -580,7 +580,7 @@ impl App {
             .width(Length::FillPortion(2)),
             text_input("40", &self.editor_preferences.line_number_width.to_string())
                 .on_input(Message::SettingsLineNumberWidthChanged)
-                .size(TEXT_SM)
+                .size(TEXT_MD)
                 .align_x(iced::Alignment::Center)
                 .padding(SETTINGS_CONTROL_PADDING)
                 .style(settings_input_style)
@@ -597,7 +597,7 @@ impl App {
 
         let dropdown_trigger = button(
             row![
-                text(&self.active_theme_name).size(TEXT_SM).color(theme().text_primary),
+                text(&self.active_theme_name).size(TEXT_MD).color(theme().text_primary),
                 Space::new().width(Length::Fill),
                 text(if self.theme_dropdown_open {
                     "▲"
@@ -654,7 +654,7 @@ impl App {
                         })
                         .size(9)
                         .color(item_color),
-                        text(*name).size(TEXT_SM).color(item_color),
+                        text(*name).size(TEXT_MD).color(item_color),
                     ]
                     .spacing(SPACE_2)
                     .align_y(iced::Alignment::Center),
@@ -699,7 +699,7 @@ impl App {
         .spacing(SPACE_4)
         .align_y(iced::Alignment::Start);
 
-        let save_btn = button(text("Save Preferences").size(TEXT_SM).color(theme().text_primary))
+        let save_btn = button(text("Save Preferences").size(TEXT_MD).color(theme().text_primary))
             .on_press(Message::SettingsSavePreferences)
             .style(|_theme, _status| button::Style {
                 background: Some(Background::Color(ACCENT_PURPLE.scale_alpha(0.2))),
@@ -842,7 +842,7 @@ impl App {
             "Disabled"
         };
         let developer_mode_btn =
-            button(text(developer_mode_label).size(TEXT_SM).color(theme().text_primary))
+            button(text(developer_mode_label).size(TEXT_MD).color(theme().text_primary))
                 .on_press(Message::SettingsToggleDeveloperMode)
                 .style(|_theme, _status| button::Style {
                     background: Some(Background::Color(
@@ -882,7 +882,7 @@ impl App {
             "Disabled"
         };
         let lsp_status_btn =
-            button(text(lsp_enabled_label).size(TEXT_SM).color(theme().text_primary))
+            button(text(lsp_enabled_label).size(TEXT_MD).color(theme().text_primary))
                 .on_press(Message::ToggleLsp)
                 .style(|_theme, _status| button::Style {
                     background: Some(Background::Color(if self.lsp_enabled {
@@ -986,7 +986,7 @@ impl App {
             ..Default::default()
         });
 
-        let clear_logs_btn = button(text("Clear Logs").size(TEXT_SM).color(theme().text_primary))
+        let clear_logs_btn = button(text("Clear Logs").size(TEXT_MD).color(theme().text_primary))
             .on_press(Message::ClearDeveloperLogs)
             .style(|_theme, _status| button::Style {
                 background: Some(Background::Color(theme().bg_secondary)),
@@ -1220,7 +1220,7 @@ impl App {
                         } else {
                             theme().text_dim
                         }),
-                        text(name).size(TEXT_SM).color(if is_selected {
+                        text(name).size(TEXT_MD).color(if is_selected {
                             theme().text_primary
                         } else {
                             theme().text_muted

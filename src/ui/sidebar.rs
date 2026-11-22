@@ -231,7 +231,7 @@ fn change_row<'a>(
             .color(change_color(kind))
             .width(Length::Fixed(16.0)),
         text(change.display_name())
-            .size(TEXT_SM)
+            .size(TEXT_MD)
             .wrapping(iced::widget::text::Wrapping::None),
     ]
     .spacing(SPACE_1)
