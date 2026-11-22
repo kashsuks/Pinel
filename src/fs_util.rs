@@ -1,7 +1,7 @@
 //! small filesystem helpers shared across the app
 
 use std::io::Write;
-use std::path::Path;
+use std::path::{Component, Path, PathBuf};
 
 pub fn write_atomic(path: &Path, contents: impl AsRef<[u8]>) -> std::io::Result<()> {
     write_atomic_inner(path, contents.as_ref(), false)
@@ -31,6 +31,53 @@ pub fn restrict_to_owner(path: &Path) {
 /// caller can refuse to open it instead of showing placeholder text.
 pub fn read_text_file(path: &Path) -> Result<String, String> {
     std::fs::read_to_string(path).map_err(|e| e.to_string())
+}
+
+/// Makes `path` absolute by joining it onto `cwd` when it is relative, then
+/// folds `.` and `..` lexically, for absolute input too. `cwd` is expected to
+/// be absolute, such as the result of [`std::env::current_dir`].
+///
+/// `..` removes the previous normal component and never climbs above the
+/// root or a Windows drive prefix. Because nothing is read from disk, a `..`
+/// after a symlink gives the folder holding the link, not the parent of its
+/// target. [`std::fs::canonicalize`] isn't used because it fails for paths
+/// that don't exist yet.
+///
+/// Windows verbatim paths (`\\?\…`) are returned unfolded, since `..` is a
+/// literal name there. A Windows drive-relative path such as `D:foo` replaces
+/// `cwd` when joined, so it stays relative.
+pub fn absolute_path(path: &Path, cwd: &Path) -> PathBuf {
+    let joined = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        cwd.join(path)
+    };
+
+    let is_verbatim = matches!(
+        joined.components().next(),
+        Some(Component::Prefix(prefix)) if prefix.kind().is_verbatim()
+    );
+    if is_verbatim {
+        return joined;
+    }
+
+    let mut parts: Vec<Component> = Vec::new();
+    for component in joined.components() {
+        match component {
+            Component::CurDir => {},
+            Component::ParentDir => match parts.last() {
+                Some(Component::Normal(_)) => {
+                    parts.pop();
+                },
+                Some(Component::RootDir) => {},
+                // Nothing to remove (a relative or drive-relative path), so
+                // keep the `..` rather than change what the path points at.
+                _ => parts.push(component),
+            },
+            _ => parts.push(component),
+        }
+    }
+    parts.into_iter().collect()
 }
 
 /// Renames `from` to `to`, failing with [`std::io::ErrorKind::AlreadyExists`]
@@ -333,6 +380,55 @@ mod tests {
         std::fs::write(&path, "héllo\n")?;
 
         assert_eq!(read_text_file(&path), Ok("héllo\n".to_string()));
+        Ok(())
+    }
+
+    #[test]
+    fn test_absolute_path_joins_relative_to_cwd() -> Result<(), Box<dyn std::error::Error>> {
+        let path = absolute_path(Path::new("My Projects/main.rs"), Path::new("/home/me"));
+
+        assert_eq!(path, PathBuf::from("/home/me/My Projects/main.rs"));
+        Ok(())
+    }
+
+    #[test]
+    fn test_absolute_path_dot_is_cwd() -> Result<(), Box<dyn std::error::Error>> {
+        let path = absolute_path(Path::new("."), Path::new("/home/me/code"));
+
+        assert_eq!(path, PathBuf::from("/home/me/code"));
+        Ok(())
+    }
+
+    #[test]
+    fn test_absolute_path_parent_dir() -> Result<(), Box<dyn std::error::Error>> {
+        let cwd = Path::new("/home/me/code");
+
+        let sibling = absolute_path(Path::new("../My Projects/./main.rs"), cwd);
+        let past_root = absolute_path(Path::new("../../../../etc"), cwd);
+
+        assert_eq!(sibling, PathBuf::from("/home/me/My Projects/main.rs"));
+        assert_eq!(past_root, PathBuf::from("/etc"));
+        Ok(())
+    }
+
+    #[test]
+    fn test_absolute_path_folds_absolute_input() -> Result<(), Box<dyn std::error::Error>> {
+        let base = std::env::temp_dir();
+        let messy = base.join("a").join(".").join("b").join("..").join("c");
+
+        let path = absolute_path(&messy, Path::new("/unused"));
+
+        assert_eq!(path, base.join("a").join("c"));
+        Ok(())
+    }
+
+    #[test]
+    fn test_absolute_path_keeps_normalized_absolute() -> Result<(), Box<dyn std::error::Error>> {
+        let normalized = std::env::temp_dir().join("My Projects").join("main.rs");
+
+        let path = absolute_path(&normalized, Path::new("/unused"));
+
+        assert_eq!(path, normalized);
         Ok(())
     }
 }
