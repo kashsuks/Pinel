@@ -325,9 +325,20 @@ fn parse_hover_text(result: &serde_json::Value) -> Option<String> {
     hover_text_from_contents(contents)
 }
 
-/// Recursively extracts hover text from various content formats.
+/// Separator placed between the parts of an array hover response: a markdown
+/// rule, so the signature and the documentation render as separate sections.
+const HOVER_PART_SEPARATOR: &str = "\n\n---\n\n";
+
+/// Recursively extracts markdown hover text from the shapes `contents` takes.
 ///
-/// Handles strings, arrays, and objects with a `"value"` field.
+/// - A string (a legacy `MarkedString`) is already markdown and is returned
+///   as is.
+/// - An object with a string `language` and `value` (a legacy `MarkedString`
+///   carrying code) becomes a fenced code block tagged with that language, so
+///   it renders as highlighted code instead of prose.
+/// - Any other object with a `value`, such as `MarkupContent`
+///   (`{ kind, value }`), returns its value unchanged.
+/// - An array joins its parts with a markdown rule between them.
 fn hover_text_from_contents(value: &serde_json::Value) -> Option<String> {
     match value {
         serde_json::Value::String(text) => Some(text.clone()),
@@ -336,11 +347,18 @@ fn hover_text_from_contents(value: &serde_json::Value) -> Option<String> {
             if parts.is_empty() {
                 None
             } else {
-                Some(parts.join("\n"))
+                Some(parts.join(HOVER_PART_SEPARATOR))
             }
         },
         serde_json::Value::Object(map) => {
-            map.get("value").and_then(|v| v.as_str()).map(String::from)
+            let text = map.get("value").and_then(|v| v.as_str())?;
+            match map.get("language").and_then(|l| l.as_str()) {
+                Some(language) => Some(format!(
+                    "```{language}\n{}\n```",
+                    text.trim_end_matches('\n')
+                )),
+                None => Some(text.to_string()),
+            }
         },
         _ => None,
     }
@@ -877,6 +895,50 @@ mod tests {
         assert!(
             rx.try_recv().is_err(),
             "unknown methods must not send a reply"
+        );
+    }
+
+    // -------------------------------------------------------------------------
+    // hover_text_from_contents
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_hover_text_from_contents_marked_string_is_fenced() {
+        let contents = serde_json::json!({ "language": "rust", "value": "fn main()\n" });
+        assert_eq!(
+            hover_text_from_contents(&contents),
+            Some("```rust\nfn main()\n```".to_string())
+        );
+    }
+
+    #[test]
+    fn test_hover_text_from_contents_array_has_divider() {
+        let contents = serde_json::json!([
+            { "language": "python", "value": "def greet(name: str) -> str" },
+            "Returns a greeting."
+        ]);
+        assert_eq!(
+            hover_text_from_contents(&contents),
+            Some(
+                "```python\ndef greet(name: str) -> str\n```\n\n---\n\nReturns a greeting."
+                    .to_string()
+            )
+        );
+    }
+
+    #[test]
+    fn test_hover_text_from_contents_markup_content_unchanged() {
+        let markdown = "```rust\nfn main()\n```\n\n---\n\nThe entry point.";
+        let contents = serde_json::json!({ "kind": "markdown", "value": markdown });
+        assert_eq!(
+            hover_text_from_contents(&contents),
+            Some(markdown.to_string())
+        );
+
+        let contents = serde_json::json!({ "kind": "plaintext", "value": "fn main()" });
+        assert_eq!(
+            hover_text_from_contents(&contents),
+            Some("fn main()".to_string())
         );
     }
 

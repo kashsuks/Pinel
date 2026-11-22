@@ -334,8 +334,8 @@ impl App {
                                 &self.lsp_overlay,
                                 code_editor,
                                 &iced::Theme::CatppuccinMocha,
-                                13.0,
-                                20.0,
+                                code_editor.font_size(),
+                                code_editor.line_height(),
                                 Message::LspOverlay,
                             )
                         } else {
