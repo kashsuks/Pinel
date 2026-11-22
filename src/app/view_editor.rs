@@ -540,9 +540,14 @@ impl App {
 
                             let preview_panel = container(
                                 scrollable(
-                                    container(MarkWidget::new(&preview.state))
-                                        .padding(SPACE_4)
-                                        .width(Length::Fill),
+                                    container(MarkWidget::new(&preview.state).style(
+                                        frostmark::Style {
+                                            text_color: Some(theme().text_primary),
+                                            ..Default::default()
+                                        },
+                                    ))
+                                    .padding(SPACE_4)
+                                    .width(Length::Fill),
                                 )
                                 .height(Length::Fill),
                             )
