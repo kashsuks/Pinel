@@ -186,7 +186,12 @@ pub enum Message {
     StartupToggleRunOnStartup,
 
     RefreshGitStatus,
-    GitStatusLoaded(Vec<crate::features::git::FileChange>),
+    /// Status query scope, repository root, and paths relative to that root.
+    GitStatusLoaded(
+        Option<PathBuf>,
+        Option<PathBuf>,
+        Vec<crate::features::git::FileChange>,
+    ),
     /// Re-reads the commit history behind the git panel's graph.
     RefreshGitHistory,
     /// Loads the page of commits older than the ones the panel holds.

@@ -231,6 +231,7 @@ pub struct App {
 
     active_panel: ActivePanel,
     git_changes: Vec<crate::features::git::FileChange>,
+    git_tab_changes: HashMap<PathBuf, crate::features::git::ChangeKind>,
     git_history: Vec<crate::features::git::Commit>,
     git_graph: Vec<crate::features::git_graph::GraphRow>,
     git_graph_builder: crate::features::git_graph::GraphBuilder,
@@ -450,6 +451,7 @@ impl Default for App {
 
             active_panel: ActivePanel::Files,
             git_changes: Vec::new(),
+            git_tab_changes: HashMap::new(),
             git_history: Vec::new(),
             git_graph: Vec::new(),
             git_graph_builder: crate::features::git_graph::GraphBuilder::default(),

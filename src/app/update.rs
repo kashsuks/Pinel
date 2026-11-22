@@ -7,6 +7,14 @@ use super::*;
 use crate::autocomplete::engine::Autocomplete;
 
 impl App {
+    /// The directory used to refresh status for the workspace or the active standalone file.
+    pub(super) fn git_status_directory(&self) -> Option<&Path> {
+        self.file_tree.as_ref().map(|tree| tree.root.as_path()).or_else(|| {
+            let tab = self.active_tab.and_then(|index| self.tabs.get(index))?;
+            tab.path.is_absolute().then_some(tab.path.as_path())?.parent()
+        })
+    }
+
     /// Walks `root` for the search and fuzzy finder file lists off the UI
     /// thread, tagging the result with a fresh generation so stale walks are
     /// dropped.
@@ -1406,10 +1414,16 @@ impl App {
                 }
 
                 // Re-index off the UI thread; the old lists stay until it lands.
-                match root {
+                let index_task = match root {
                     Some(root) => self.index_workspace_task(root),
                     None => iced::Task::none(),
-                }
+                };
+                let git_task = if self.git_status_directory().is_some() {
+                    self.update_message(Message::RefreshGitStatus)
+                } else {
+                    iced::Task::none()
+                };
+                iced::Task::batch([index_task, git_task])
             },
             Message::CursorPositionTracked(x, y) => {
                 self.last_cursor_position = iced::Point::new(x, y); // ensure this is global and
@@ -1608,13 +1622,18 @@ impl App {
             ),
             Message::FolderOpened(path) => {
                 self.file_tree = Some(FileTree::new(path.clone()));
+                self.git_changes.clear();
+                self.git_tab_changes.clear();
                 self.all_workspace_files.clear();
                 self.fuzzy_finder.set_folder_files(path.clone(), Vec::new());
                 self.lsp.set_workspace_root(path.clone());
                 self.lsp_enabled = true;
                 self.chat_sessions = crate::config::chat_store::load_sessions(Some(&path));
                 self.active_chat_session = self.chat_sessions.first().map(|s| s.id.clone());
-                self.index_workspace_task(path.clone())
+                iced::Task::batch([
+                    self.index_workspace_task(path),
+                    self.update_message(Message::RefreshGitStatus),
+                ])
             },
             Message::WorkspaceIndexed(generation, root, result) => {
                 let current = generation == self.workspace_index_generation
@@ -1777,14 +1796,24 @@ impl App {
                 if !self.git_status_guard.try_start() {
                     return iced::Task::none();
                 }
-                let root = self.file_tree.as_ref().map(|t| t.root.clone());
+                let scope = self.git_status_directory().map(Path::to_path_buf);
                 iced::Task::perform(
-                    crate::features::git::load_status_async(root),
-                    Message::GitStatusLoaded,
+                    crate::features::git::load_status_async(scope.clone()),
+                    move |(repo, changes)| Message::GitStatusLoaded(scope.clone(), repo, changes),
                 )
             },
-            Message::GitStatusLoaded(changes) => {
+            Message::GitStatusLoaded(scope, repo, changes) => {
                 self.git_status_guard.finish();
+                if scope.as_deref() != self.git_status_directory() {
+                    return self.update_message(Message::RefreshGitStatus);
+                }
+                self.git_tab_changes.clear();
+                if let Some(repo) = repo {
+                    self.git_tab_changes.extend(changes.iter().filter_map(|change| {
+                        let kind = change.unstaged_kind().or_else(|| change.staged_kind())?;
+                        Some((repo.join(&change.path), kind))
+                    }));
+                }
                 self.git_changes = changes;
                 iced::Task::none()
             },
@@ -3516,6 +3545,9 @@ impl App {
             Message::ActiveFileChanged => {
                 if self.editor_preferences.discord_rpc_enabled {
                     self.sync_discord_presence();
+                }
+                if self.file_tree.is_none() && self.git_status_directory().is_some() {
+                    return self.update_message(Message::RefreshGitStatus);
                 }
                 iced::Task::none()
             },
