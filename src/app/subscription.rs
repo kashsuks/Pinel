@@ -26,6 +26,9 @@ impl App {
 
         if !self.tabs.is_empty() && self.git_status_directory().is_some() {
             subs.push(iced::time::every(Duration::from_secs(3)).map(|_| Message::RefreshGitStatus));
+        } else if self.file_tree.is_some() {
+            // Picks up a branch switched outside Pinel, such as in a terminal
+            subs.push(iced::time::every(Duration::from_secs(5)).map(|_| Message::GitBranchTick));
         }
 
         if self.editor_preferences.autosave_enabled {

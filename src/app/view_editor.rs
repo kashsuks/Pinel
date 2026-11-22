@@ -2,6 +2,7 @@ use frostmark::MarkWidget;
 use iced::widget::column;
 
 use super::*;
+use crate::{features::lsp::diagnostic_counts, ui::git_graph::truncate_subject};
 
 impl App {
     pub(super) fn view_search_panel(&self) -> Element<'_, Message> {
@@ -206,7 +207,7 @@ impl App {
                                             )
                                             .width(Length::Fixed(20.0))
                                             .center_x(Length::Fixed(20.0)),
-                                            text(&suggestion.text).size(TEXT_SM).color(label_color),
+                                            text(&suggestion.text).size(TEXT_MD).color(label_color),
                                             iced::widget::Space::new().width(Length::Fill),
                                             text(format!("{:?}", suggestion.kind).to_lowercase())
                                                 .size(10)
@@ -302,7 +303,7 @@ impl App {
                                 .cursor_screen_position()
                                 .unwrap_or(iced::Point::new(48.0, 20.0));
                             let x = cursor_pos.x.clamp(0.0, 500.0);
-                            let y = (cursor_pos.y + 20.0).clamp(0.0, 560.0);
+                            let y = (cursor_pos.y + code_editor.line_height()).clamp(0.0, 560.0);
 
                             let positioned_panel = container(panel)
                                 .padding(iced::Padding {
@@ -764,53 +765,96 @@ impl App {
         )
     }
 
+    /// Builds the bar along the bottom of the window.
+    ///
+    /// Left: the Vim mode pill, or the open Vim command line in its place;
+    /// the git branch; and the active file's error and warning count. Right:
+    /// the current line's diagnostic, pending Vim keys, the cursor position,
+    /// indentation, language and language server. Only the branch shows
+    /// unless a text editor tab is active.
     pub(super) fn view_status_bar(&self) -> Element<'_, Message> {
-        let file_info = self
-            .active_tab
-            .and_then(|idx| self.tabs.get(idx))
-            .map(|tab| tab.name.clone())
-            .unwrap_or_default();
+        // One step brighter than the muted grey used for hints elsewhere, so
+        // the bar is easy to read on both dark and light themes.
+        let item_color = theme().text_secondary;
+        let mut left: Vec<Element<'_, Message>> = Vec::new();
+        let mut right: Vec<Element<'_, Message>> = Vec::new();
+        let mut current_line_message = String::new();
 
-        let left = row![text(file_info).size(TEXT_SM).color(theme().text_dim),]
-            .spacing(SPACE_2)
-            .align_y(iced::Alignment::Center);
+        let active_editor =
+            self.active_tab
+                .and_then(|idx| self.tabs.get(idx))
+                .and_then(|tab| match &tab.kind {
+                    TabKind::Editor { code_editor, .. } => Some((tab, code_editor)),
+                    _ => None,
+                });
 
-        let current_line_diag = self
-            .active_tab
-            .and_then(|idx| self.tabs.get(idx))
-            .map(|tab| tab.path.clone())
-            .and_then(|path| self.lsp_diagnostics.get(&path))
-            .and_then(|items| items.iter().find(|d| d.line == self.cursor_line))
-            .and_then(|d| d.message.lines().next())
-            .unwrap_or_default();
+        if let Some((_, code_editor)) = active_editor {
+            if let Some(command_line) = code_editor.vim_command_line() {
+                let command_line = truncate_subject(&command_line, STATUS_COMMAND_LINE_MAX_CHARS);
+                left.push(status_text(command_line, theme().text_primary).font(MONO_FONT).into());
+            } else if let Some(mode) = code_editor.vim_mode() {
+                left.push(vim_mode_pill(mode));
+            }
+        }
 
-        let right = row![
-            text(format!("Ln {}, Col {}", self.cursor_line, self.cursor_col))
-                .size(TEXT_SM)
-                .color(theme().text_placeholder),
-            container(
-                text(current_line_diag)
-                    .size(TEXT_SM)
-                    .color(theme().text_secondary)
-                    .wrapping(iced::widget::text::Wrapping::None),
-            )
-            .max_width(360)
-            .clip(true),
-        ]
-        .spacing(SPACE_2)
-        .align_y(iced::Alignment::Center);
+        if let Some(branch) = &self.git_branch {
+            let branch = truncate_subject(branch, STATUS_BRANCH_MAX_CHARS);
+            left.push(status_text(format!("\u{2387} {branch}"), item_color).into());
+        }
+
+        if let Some((tab, code_editor)) = active_editor {
+            let diagnostics = self.lsp_diagnostics.get(&tab.path).map(Vec::as_slice).unwrap_or(&[]);
+            let (errors, warnings) = diagnostic_counts(diagnostics);
+            if let Some(summary) = diagnostic_summary(errors, warnings) {
+                left.push(status_text(summary, item_color).into());
+            }
+
+            // Read from the editor itself: the app's own copy of the cursor
+            // does not follow Vim motions.
+            let (line, col) = code_editor.cursor_position();
+            let (line, col) = (line + 1, col + 1);
+            if let Some(diagnostic) = diagnostics.iter().find(|d| d.line == line) {
+                current_line_message = diagnostic_preview(&diagnostic.message);
+            }
+
+            if let Some(keys) = code_editor.vim_pending_keys().filter(|keys| !keys.is_empty()) {
+                let keys = truncate_subject(&keys, STATUS_PENDING_KEYS_MAX_CHARS);
+                right.push(status_text(keys, item_color).font(MONO_FONT).into());
+            }
+            right.push(status_text(format!("Ln {line}, Col {col}"), item_color).into());
+            right.push(
+                status_text(indentation_label(code_editor.indent_style()), item_color).into(),
+            );
+            if let Some(language) = language_display_name(&tab.path) {
+                right.push(status_text(language, item_color).into());
+            }
+            if self.lsp_enabled {
+                if let Some(server) = self.lsp_server_keys.get(&tab.path) {
+                    right.push(status_text(*server, item_color).into());
+                }
+            }
+        }
+
+        // The only `Fill` item, so when the bar runs out of room this is the
+        // first thing squeezed away; the bar's clip hides anything past that.
+        let message = container(status_text(current_line_message, theme().text_primary))
+            .width(Length::Fill)
+            .align_x(iced::alignment::Horizontal::Right)
+            .clip(true);
 
         container(
-            row![left, iced::widget::Space::new().width(Length::Fill), right,]
-                .align_y(iced::Alignment::Center),
+            row![
+                row(left).spacing(SPACE_3).align_y(iced::Alignment::Center),
+                message,
+                row(right).spacing(SPACE_3).align_y(iced::Alignment::Center),
+            ]
+            .spacing(SPACE_3)
+            .align_y(iced::Alignment::Center),
         )
-        .padding(iced::Padding {
-            top: 6.0,
-            right: SPACE_4,
-            bottom: 7.0,
-            left: SPACE_4,
-        })
+        .padding([0.0, SPACE_4])
         .width(Length::Fill)
+        .center_y(Length::Fixed(STATUS_BAR_HEIGHT))
+        .clip(true)
         .style(status_bar_style)
         .into()
     }
@@ -834,5 +878,370 @@ impl App {
         )
         .center_x(Length::Fill)
         .center_y(Length::Fill)
+    }
+}
+
+/// Size of the status bar's text: the 13px body size, so the bar reads at a
+/// glance rather than at the 12px used for other secondary text.
+const STATUS_TEXT_SIZE: f32 = TEXT_MD;
+
+/// Size of the Vim mode pill's label, one step below the bar's text so the
+/// pill sits inside the bar with room around it.
+const VIM_PILL_TEXT_SIZE: f32 = TEXT_SM;
+
+/// Vertical padding inside the Vim mode pill, above and below its label.
+const VIM_PILL_PADDING_Y: f32 = 2.0;
+
+/// How far the pill's label is moved down from the middle of the pill.
+///
+/// iced's line box keeps room for descenders under the baseline, and the
+/// labels are all capitals, which have none, so the letters sit high in the
+/// box. Measured on screen at [`VIM_PILL_TEXT_SIZE`] (12px), the capitals
+/// were 2px above the pill's centre; re-measure if that size changes.
+const VIM_PILL_LABEL_NUDGE: f32 = 2.0;
+
+// The nudge comes out of the bottom padding, which must not go negative.
+const _: () = assert!(VIM_PILL_LABEL_NUDGE <= VIM_PILL_PADDING_Y);
+
+/// Fixed height of the status bar: `SPACE_2` above and below one line of
+/// [`STATUS_TEXT_SIZE`] text, which iced lays out at its default line height
+/// of 1.3 times the font size (13 × 1.3 = 16.9px). 32.9px in all, and the bar
+/// cannot grow with its contents.
+const STATUS_BAR_HEIGHT: f32 = SPACE_2 + STATUS_TEXT_SIZE * 1.3 + SPACE_2;
+
+// The Vim mode pill is one label line plus its padding, so it has to fit
+// inside the bar without making it taller.
+const _: () = assert!(VIM_PILL_TEXT_SIZE * 1.3 + 2.0 * VIM_PILL_PADDING_Y < STATUS_BAR_HEIGHT);
+
+/// Fira Code's advance width as a fraction of the font size: every glyph is
+/// 1200 units wide on a 1950-unit em, in both the regular and the bold cut.
+const FIRA_CODE_ADVANCE_EM: f32 = 1200.0 / 1950.0;
+
+/// Width of the Vim mode pill: the longest label, `VISUAL LINE` (11
+/// characters), in Fira Code at [`VIM_PILL_TEXT_SIZE`] (about 81.2px), plus
+/// `SPACE_2` on each side, about 97.2px. Every mode uses this width, so
+/// switching modes never moves the items after the pill.
+const VIM_PILL_WIDTH: f32 = 11.0 * FIRA_CODE_ADVANCE_EM * VIM_PILL_TEXT_SIZE + 2.0 * SPACE_2;
+
+/// Text on the Vim mode pill. The accent colours behind it are pastel on
+/// every theme, so one dark colour (Catppuccin base) reads on all of them.
+const VIM_PILL_TEXT: Color = BG_BASE;
+
+/// Fira Code, for the status bar's Vim command line and pending keys.
+const MONO_FONT: iced::Font = iced::Font {
+    family: iced::font::Family::Name("Fira Code"),
+    ..iced::Font::DEFAULT
+};
+
+/// Bold Fira Code, for the Vim mode pill.
+const MONO_BOLD_FONT: iced::Font = iced::Font {
+    weight: iced::font::Weight::Bold,
+    ..MONO_FONT
+};
+
+/// Longest branch name the status bar shows before cutting it short.
+const STATUS_BRANCH_MAX_CHARS: usize = 32;
+/// Longest Vim command line the status bar shows before cutting it short.
+const STATUS_COMMAND_LINE_MAX_CHARS: usize = 80;
+/// Longest diagnostic message the status bar shows before cutting it short.
+const STATUS_DIAGNOSTIC_MAX_CHARS: usize = 80;
+/// Longest run of pending Vim keys the status bar shows before cutting it
+/// short. Counts can be typed with any number of digits.
+const STATUS_PENDING_KEYS_MAX_CHARS: usize = 16;
+
+/// One item of status bar text: [`STATUS_TEXT_SIZE`], kept to a single line.
+fn status_text<'a>(
+    content: impl iced::widget::text::IntoFragment<'a>,
+    color: Color,
+) -> iced::widget::Text<'a> {
+    text(content)
+        .size(STATUS_TEXT_SIZE)
+        .color(color)
+        .wrapping(iced::widget::text::Wrapping::None)
+}
+
+/// The Vim mode pill: the mode's label, centred in a fixed-width capsule of
+/// the mode's colour.
+fn vim_mode_pill<'a>(mode: iced_code_editor::VimMode) -> Element<'a, Message> {
+    let background = vim_mode_color(mode);
+    container(
+        text(vim_mode_label(mode))
+            .size(VIM_PILL_TEXT_SIZE)
+            .font(MONO_BOLD_FONT)
+            .color(VIM_PILL_TEXT)
+            .wrapping(iced::widget::text::Wrapping::None),
+    )
+    // Same total height as even padding, with the label moved down so the
+    // capitals sit in the middle of the pill.
+    .padding(iced::Padding {
+        top: VIM_PILL_PADDING_Y + VIM_PILL_LABEL_NUDGE,
+        right: 0.0,
+        bottom: VIM_PILL_PADDING_Y - VIM_PILL_LABEL_NUDGE,
+        left: 0.0,
+    })
+    .center_x(Length::Fixed(VIM_PILL_WIDTH))
+    .clip(true)
+    .style(move |_theme| container::Style {
+        background: Some(Background::Color(background)),
+        border: iced::Border {
+            radius: RADIUS_SM.into(),
+            ..iced::Border::default()
+        },
+        ..container::Style::default()
+    })
+    .into()
+}
+
+/// The label on the Vim mode pill, matching the editor's own status line.
+fn vim_mode_label(mode: iced_code_editor::VimMode) -> &'static str {
+    match mode {
+        iced_code_editor::VimMode::Normal => "NORMAL",
+        iced_code_editor::VimMode::Insert => "INSERT",
+        iced_code_editor::VimMode::Visual => "VISUAL",
+        iced_code_editor::VimMode::VisualLine => "VISUAL LINE",
+    }
+}
+
+/// The colour of the Vim mode pill: blue for Normal, green for Insert and
+/// purple for both Visual modes.
+fn vim_mode_color(mode: iced_code_editor::VimMode) -> Color {
+    match mode {
+        iced_code_editor::VimMode::Normal => ACCENT_BLUE,
+        iced_code_editor::VimMode::Insert => ACCENT_GREEN,
+        iced_code_editor::VimMode::Visual | iced_code_editor::VimMode::VisualLine => ACCENT_PURPLE,
+    }
+}
+
+/// The indentation the editor inserts, as the status bar shows it.
+fn indentation_label(style: iced_code_editor::IndentStyle) -> String {
+    match style {
+        iced_code_editor::IndentStyle::Spaces(width) => format!("Spaces: {width}"),
+        iced_code_editor::IndentStyle::Tab => "Tabs".to_string(),
+    }
+}
+
+/// The name of a file's language, from its extension in any letter case.
+///
+/// `None` for extensions not listed here and for files without one; the
+/// status bar then shows nothing rather than a bare extension.
+fn language_display_name(path: &std::path::Path) -> Option<&'static str> {
+    let extension = path.extension()?.to_str()?.to_ascii_lowercase();
+    let name = match extension.as_str() {
+        "rs" => "Rust",
+        "py" => "Python",
+        "ts" | "tsx" => "TypeScript",
+        "js" | "jsx" | "mjs" | "cjs" => "JavaScript",
+        "go" => "Go",
+        "lua" => "Lua",
+        "md" => "Markdown",
+        "toml" => "TOML",
+        "json" => "JSON",
+        "yaml" | "yml" => "YAML",
+        "sh" | "bash" | "zsh" => "Shell",
+        "c" | "h" => "C",
+        "cpp" | "cc" | "hpp" => "C++",
+        "html" => "HTML",
+        "css" => "CSS",
+        _ => return None,
+    };
+    Some(name)
+}
+
+/// The part of a diagnostic message the status bar shows: its first line,
+/// cut to [`STATUS_DIAGNOSTIC_MAX_CHARS`].
+fn diagnostic_preview(message: &str) -> String {
+    truncate_subject(
+        message.lines().next().unwrap_or(""),
+        STATUS_DIAGNOSTIC_MAX_CHARS,
+    )
+}
+
+/// The error and warning count as the status bar shows it, such as
+/// `2 errors, 1 warning`. `None` when there are neither.
+fn diagnostic_summary(errors: usize, warnings: usize) -> Option<String> {
+    let plural = |count: usize, noun: &str| {
+        if count == 1 {
+            format!("1 {noun}")
+        } else {
+            format!("{count} {noun}s")
+        }
+    };
+    match (errors, warnings) {
+        (0, 0) => None,
+        (errors, 0) => Some(plural(errors, "error")),
+        (0, warnings) => Some(plural(warnings, "warning")),
+        (errors, warnings) => Some(format!(
+            "{}, {}",
+            plural(errors, "error"),
+            plural(warnings, "warning")
+        )),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::features::lsp::InlineDiagnostic;
+    use iced_code_editor::{IndentStyle, VimMode};
+    use std::path::Path;
+
+    const ALL_MODES: [VimMode; 4] = [
+        VimMode::Normal,
+        VimMode::Insert,
+        VimMode::Visual,
+        VimMode::VisualLine,
+    ];
+
+    fn diagnostic(severity: lsp_types::DiagnosticSeverity) -> InlineDiagnostic {
+        InlineDiagnostic {
+            line: 1,
+            severity,
+            message: String::new(),
+        }
+    }
+
+    #[test]
+    fn test_vim_mode_label_matches_editor_labels() -> Result<(), Box<dyn std::error::Error>> {
+        assert_eq!(vim_mode_label(VimMode::Normal), "NORMAL");
+        assert_eq!(vim_mode_label(VimMode::Insert), "INSERT");
+        assert_eq!(vim_mode_label(VimMode::Visual), "VISUAL");
+        assert_eq!(vim_mode_label(VimMode::VisualLine), "VISUAL LINE");
+        Ok(())
+    }
+
+    #[test]
+    fn test_vim_mode_label_fits_pill_width() -> Result<(), Box<dyn std::error::Error>> {
+        for mode in ALL_MODES {
+            let label = vim_mode_label(mode);
+            let width = label.chars().count() as f32 * FIRA_CODE_ADVANCE_EM * VIM_PILL_TEXT_SIZE;
+            assert!(
+                width + 2.0 * SPACE_2 <= VIM_PILL_WIDTH + f32::EPSILON,
+                "{label} needs {width}px"
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_vim_mode_color_visual_modes_share_purple() -> Result<(), Box<dyn std::error::Error>> {
+        assert_eq!(vim_mode_color(VimMode::Normal), ACCENT_BLUE);
+        assert_eq!(vim_mode_color(VimMode::Insert), ACCENT_GREEN);
+        assert_eq!(vim_mode_color(VimMode::Visual), ACCENT_PURPLE);
+        assert_eq!(vim_mode_color(VimMode::VisualLine), ACCENT_PURPLE);
+        Ok(())
+    }
+
+    #[test]
+    fn test_indentation_label_spaces_and_tabs() -> Result<(), Box<dyn std::error::Error>> {
+        assert_eq!(indentation_label(IndentStyle::Spaces(4)), "Spaces: 4");
+        assert_eq!(indentation_label(IndentStyle::Spaces(2)), "Spaces: 2");
+        assert_eq!(indentation_label(IndentStyle::Tab), "Tabs");
+        Ok(())
+    }
+
+    #[test]
+    fn test_language_display_name_known_extensions() -> Result<(), Box<dyn std::error::Error>> {
+        assert_eq!(
+            language_display_name(Path::new("src/main.rs")),
+            Some("Rust")
+        );
+        assert_eq!(
+            language_display_name(Path::new("app.tsx")),
+            Some("TypeScript")
+        );
+        assert_eq!(
+            language_display_name(Path::new("index.mjs")),
+            Some("JavaScript")
+        );
+        assert_eq!(language_display_name(Path::new("ci.yml")), Some("YAML"));
+        assert_eq!(language_display_name(Path::new("lib.h")), Some("C"));
+        assert_eq!(language_display_name(Path::new("lib.hpp")), Some("C++"));
+        Ok(())
+    }
+
+    #[test]
+    fn test_language_display_name_ignores_case() -> Result<(), Box<dyn std::error::Error>> {
+        assert_eq!(
+            language_display_name(Path::new("README.MD")),
+            Some("Markdown")
+        );
+        assert_eq!(language_display_name(Path::new("Main.Rs")), Some("Rust"));
+        Ok(())
+    }
+
+    #[test]
+    fn test_language_display_name_unknown_extension() -> Result<(), Box<dyn std::error::Error>> {
+        assert_eq!(language_display_name(Path::new("photo.xyz")), None);
+        Ok(())
+    }
+
+    #[test]
+    fn test_language_display_name_no_extension() -> Result<(), Box<dyn std::error::Error>> {
+        assert_eq!(language_display_name(Path::new("Makefile")), None);
+        // a leading dot names the file; it is not an extension
+        assert_eq!(language_display_name(Path::new(".bashrc")), None);
+        assert_eq!(language_display_name(Path::new("untitled")), None);
+        Ok(())
+    }
+
+    #[test]
+    fn test_diagnostic_preview_first_line_only() -> Result<(), Box<dyn std::error::Error>> {
+        assert_eq!(
+            diagnostic_preview("mismatched types\nexpected `u8`, found `i32`"),
+            "mismatched types"
+        );
+        assert_eq!(diagnostic_preview(""), "");
+        Ok(())
+    }
+
+    #[test]
+    fn test_diagnostic_preview_long_line_is_cut() -> Result<(), Box<dyn std::error::Error>> {
+        let preview = diagnostic_preview(&"x".repeat(200));
+        assert_eq!(preview.chars().count(), STATUS_DIAGNOSTIC_MAX_CHARS);
+        assert!(preview.ends_with('\u{2026}'));
+        Ok(())
+    }
+
+    #[test]
+    fn test_diagnostic_counts_errors_and_warnings() -> Result<(), Box<dyn std::error::Error>> {
+        let diagnostics = [
+            diagnostic(lsp_types::DiagnosticSeverity::ERROR),
+            diagnostic(lsp_types::DiagnosticSeverity::WARNING),
+            diagnostic(lsp_types::DiagnosticSeverity::ERROR),
+            diagnostic(lsp_types::DiagnosticSeverity::HINT),
+            diagnostic(lsp_types::DiagnosticSeverity::INFORMATION),
+        ];
+        assert_eq!(diagnostic_counts(&diagnostics), (2, 1));
+        Ok(())
+    }
+
+    #[test]
+    fn test_diagnostic_counts_empty() -> Result<(), Box<dyn std::error::Error>> {
+        assert_eq!(diagnostic_counts(&[]), (0, 0));
+        Ok(())
+    }
+
+    #[test]
+    fn test_diagnostic_summary_hidden_when_zero() -> Result<(), Box<dyn std::error::Error>> {
+        assert_eq!(diagnostic_summary(0, 0), None);
+        Ok(())
+    }
+
+    #[test]
+    fn test_diagnostic_summary_singular_and_plural() -> Result<(), Box<dyn std::error::Error>> {
+        assert_eq!(diagnostic_summary(1, 0).as_deref(), Some("1 error"));
+        assert_eq!(diagnostic_summary(0, 3).as_deref(), Some("3 warnings"));
+        assert_eq!(
+            diagnostic_summary(2, 1).as_deref(),
+            Some("2 errors, 1 warning")
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_status_bar_height_is_one_line_plus_padding() -> Result<(), Box<dyn std::error::Error>> {
+        // 8px + one 13px line at iced's 1.3 line height + 8px
+        assert!((STATUS_BAR_HEIGHT - 32.9).abs() < 0.01);
+        Ok(())
     }
 }

@@ -15,13 +15,13 @@ use iced::{
     },
     Alignment, Background, Color, Element, Font, Length, Point, Rectangle, Vector,
 };
-use lsp_types::DiagnosticSeverity;
 
 use super::{App, Tab, TabKind};
 use crate::{
     features::{
         git::ChangeKind,
         icons::{get_file_icon, icon_handle},
+        lsp::diagnostic_counts,
     },
     message::Message,
     theme::{theme, ICON_SIZE, RADIUS_SM, SPACE_2, SPACE_3, TEXT_MD, TEXT_SM, TEXT_XS},
@@ -401,14 +401,9 @@ impl App {
     }
 
     fn tab_problem_counts(&self, tab: &Tab) -> (usize, usize) {
-        self.lsp_diagnostics.get(&tab.path).into_iter().flatten().fold(
-            (0, 0),
-            |(errors, warnings), diagnostic| match diagnostic.severity {
-                DiagnosticSeverity::ERROR => (errors + 1, warnings),
-                DiagnosticSeverity::WARNING => (errors, warnings + 1),
-                _ => (errors, warnings),
-            },
-        )
+        self.lsp_diagnostics
+            .get(&tab.path)
+            .map_or((0, 0), |diagnostics| diagnostic_counts(diagnostics))
     }
 }
 

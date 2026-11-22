@@ -28,7 +28,7 @@ impl App {
                 } else {
                     provider.name.to_string()
                 };
-                button(text(label).size(TEXT_SM))
+                button(text(label).size(TEXT_MD))
                     .style(tab_button_style(is_active))
                     .on_press(Message::ProvidersSelect(provider.id.to_string()))
                     .padding(iced::Padding {
@@ -62,7 +62,7 @@ impl App {
             } else {
                 "Show"
             })
-            .size(TEXT_SM),
+            .size(TEXT_MD),
         )
         .style(tree_button_style)
         .on_press(Message::ProvidersToggleKeyVisibility)
@@ -81,7 +81,7 @@ impl App {
             .size(TEXT_XS)
             .color(theme().text_dim);
 
-        let save_btn = button(text("Save").size(TEXT_SM).color(theme().text_primary))
+        let save_btn = button(text("Save").size(TEXT_MD).color(theme().text_primary))
             .on_press(Message::ProvidersSave)
             .style(|_theme, _status| button::Style {
                 background: Some(Background::Color(ACCENT_PURPLE.scale_alpha(0.2))),
@@ -100,7 +100,7 @@ impl App {
                 left: 20.0,
             });
 
-        let test_btn = button(text("Test Connection").size(TEXT_SM))
+        let test_btn = button(text("Test Connection").size(TEXT_MD))
             .style(tree_button_style)
             .on_press(Message::ProvidersTestConnection(
                 self.providers_selected.clone(),
@@ -113,7 +113,7 @@ impl App {
             });
 
         let remove_btn =
-            button(text("Remove").size(TEXT_SM).color(Color::from_rgb(0.86, 0.35, 0.35)))
+            button(text("Remove").size(TEXT_MD).color(Color::from_rgb(0.86, 0.35, 0.35)))
                 .style(tree_button_style)
                 .on_press(Message::ProvidersRemove(self.providers_selected.clone()))
                 .padding(iced::Padding {

@@ -224,6 +224,19 @@ pub struct DiagnosticUpdate {
     pub diagnostics: Vec<InlineDiagnostic>,
 }
 
+/// How many of `diagnostics` are errors and how many are warnings.
+pub(crate) fn diagnostic_counts(
+    diagnostics: &[crate::features::lsp::InlineDiagnostic],
+) -> (usize, usize) {
+    diagnostics.iter().fold((0, 0), |(errors, warnings), diagnostic| {
+        match diagnostic.severity {
+            lsp_types::DiagnosticSeverity::ERROR => (errors + 1, warnings),
+            lsp_types::DiagnosticSeverity::WARNING => (errors, warnings + 1),
+            _ => (errors, warnings),
+        }
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

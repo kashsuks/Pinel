@@ -177,7 +177,7 @@ impl App {
 
         let open_btn = button(
             text("Open release page →")
-                .size(TEXT_SM)
+                .size(TEXT_MD)
                 .color(Color::from_rgb(0.55, 0.75, 1.0)),
         )
         .on_press(Message::DismissUpdateBanner)
