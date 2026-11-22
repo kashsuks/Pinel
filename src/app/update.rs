@@ -3,6 +3,7 @@ use std::path::Path;
 use iced_code_editor::Message as EditorMessage;
 use rodio::Source;
 
+use super::view_tabs::scroll_editor_tabs_by;
 use super::*;
 use crate::autocomplete::engine::Autocomplete;
 
@@ -13,6 +14,15 @@ impl App {
             let tab = self.active_tab.and_then(|index| self.tabs.get(index))?;
             tab.path.is_absolute().then_some(tab.path.as_path())?.parent()
         })
+    }
+
+    fn update_tab_drag_target(&mut self) {
+        if let Some(index) = self.tab_drag_index {
+            let offset =
+                self.last_cursor_position.x + self.tab_bar_scroll_x - self.tab_drag_start_x;
+            let widths = (0..self.tabs.len()).map(|slot| self.editor_tab_width(slot));
+            self.tab_drag_target = Some(tab_drop_index(widths, index, offset));
+        }
     }
 
     /// Walks `root` for the search and fuzzy finder file lists off the UI
@@ -421,6 +431,10 @@ impl App {
         }
         self.lsp_diagnostics.remove(&path);
         self.lsp_server_keys.remove(&path);
+        self.tab_drag_index = None;
+        self.tab_drag_target = None;
+        self.tab_pointer_press = None;
+        self.tab_hover_index = None;
         self.tabs.remove(idx);
         self.active_tab = active_tab_after_close(self.active_tab, idx, self.tabs.len());
         self.lsp_overlay = iced_code_editor::LspOverlayState::new();
@@ -477,7 +491,29 @@ impl App {
     /// * `message` - The event to process.
     #[allow(clippy::arc_with_non_send_sync)]
     pub fn update(&mut self, message: Message) -> iced::Task<Message> {
+        let previous = (
+            self.active_tab,
+            self.tabs.len(),
+            self.settings_open,
+            self.startup_page_open,
+        );
         let task = self.update_message(message);
+        let current = (
+            self.active_tab,
+            self.tabs.len(),
+            self.settings_open,
+            self.startup_page_open,
+        );
+        let task = if previous != current && !self.settings_open && !self.startup_page_open {
+            if let Some(index) = self.active_tab {
+                iced::Task::batch([task, self.reveal_editor_tab(index)])
+            } else {
+                self.tab_bar_scroll_x = 0.0;
+                task
+            }
+        } else {
+            task
+        };
         self.sync_activity_state(task)
     }
 
@@ -963,9 +999,11 @@ impl App {
                     tree.select(path.clone());
                 }
                 if let Some(idx) = self.tabs.iter().position(|t| t.path == path) {
-                    self.active_tab = Some(idx);
-                    self.vim_refresh_cursor_style();
-                    return iced::Task::none();
+                    if self.active_tab == Some(idx) {
+                        self.vim_refresh_cursor_style();
+                        return iced::Task::none();
+                    }
+                    return self.update_message(Message::TabSelected(idx));
                 }
                 if Self::should_confirm_sensitive_open(&path) {
                     self.pending_sensitive_open = Some(path);
@@ -1023,12 +1061,16 @@ impl App {
                 },
             ),
             Message::TabClosed(idx) => {
+                let was_active = self.active_tab == Some(idx);
                 self.close_tab(idx, true);
+                if let Some(next) = self.active_tab.filter(|_| was_active) {
+                    return self.update_message(Message::TabSelected(next));
+                }
                 iced::Task::none()
             },
             Message::CloseActiveTab => {
                 if let Some(idx) = self.active_tab {
-                    self.close_tab(idx, true);
+                    return self.update_message(Message::TabClosed(idx));
                 }
                 iced::Task::none()
             },
@@ -1426,8 +1468,13 @@ impl App {
                 iced::Task::batch([index_task, git_task])
             },
             Message::CursorPositionTracked(x, y) => {
-                self.last_cursor_position = iced::Point::new(x, y); // ensure this is global and
-                                                                    // possible to reference
+                self.last_cursor_position = iced::Point::new(x, y);
+                if let Some((index, origin)) = self.tab_pointer_press {
+                    if self.tab_drag_index.is_none() && (x - origin.x).abs() >= 5.0 {
+                        self.tab_drag_index = Some(index);
+                    }
+                }
+                self.update_tab_drag_target();
                 iced::Task::none()
             },
             Message::FileTreeContextMenuOpen(path, is_dir) => {
@@ -2961,86 +3008,60 @@ impl App {
                 self.tab_hover_index = Some(idx);
                 iced::Task::none()
             },
-            Message::TabHoverExit => {
-                self.tab_hover_index = None;
-                iced::Task::none()
-            },
-            Message::TabDragInitiate => {
-                // just record when the hold started
-                // drag only activates after the hold threshold is reached
-                if let Some(idx) = self.tab_hover_index {
-                    self.tab_hold_started_at = Some(Instant::now());
-                    self.tab_hold_index = Some(idx);
+            Message::TabHoverExit(idx) => {
+                if self.tab_hover_index == Some(idx) {
+                    self.tab_hover_index = None;
                 }
                 iced::Task::none()
             },
-            Message::TabHoldTick => {
-                const HOLD_THRESHOLD: Duration = Duration::from_millis(300);
-
-                if self.tab_drag_index.is_some() {
-                    return iced::Task::none();
-                }
-
-                if let (Some(started_at), Some(idx)) =
-                    (self.tab_hold_started_at, self.tab_hold_index)
-                {
-                    if started_at.elapsed() >= HOLD_THRESHOLD {
-                        self.tab_drag_index = Some(idx);
-                        self.tab_drag_start_x = self.tab_drag_curent_x;
-                        self.tab_drag_target = Some(idx);
-                        self.tab_drag_cursor_pos = None;
-                        self.tab_hold_started_at = None;
-                        self.tab_hold_index = None;
-                    }
-                }
+            Message::TabPointerPressed(index) => {
+                let origin = self.last_cursor_position;
+                self.tab_pointer_press = Some((index, origin));
+                self.tab_drag_start_x = origin.x + self.tab_bar_scroll_x;
                 iced::Task::none()
             },
-            Message::TabDragMove(abs_x) => {
-                self.tab_drag_curent_x = abs_x;
-                if let Some(drag_idx) = self.tab_drag_index {
-                    let offset = abs_x - self.tab_drag_start_x;
-                    const TAB_WIDTH: f32 = 120.0;
-                    let slot_offset = (offset / TAB_WIDTH).round() as i32;
-                    let raw_target = drag_idx as i32 + slot_offset;
-                    let clamped = raw_target.clamp(0, self.tabs.len() as i32 - 1) as usize;
-                    self.tab_drag_target = Some(clamped);
-                }
+            Message::TabBarScrolled(x) => {
+                self.tab_bar_scroll_x = x;
+                self.update_tab_drag_target();
                 iced::Task::none()
             },
-            Message::TabDragFloatMove(abs_x, abs_y) => {
-                self.tab_drag_curent_x = abs_x;
-                if let Some(drag_idx) = self.tab_drag_index {
-                    self.tab_drag_cursor_pos = Some((abs_x, abs_y));
-                    let offset = abs_x - self.tab_drag_start_x;
-                    const TAB_WIDTH: f32 = 120.0;
-                    let slot_offset = (offset / TAB_WIDTH).round() as i32;
-                    let raw_target = drag_idx as i32 + slot_offset;
-                    let clamped = raw_target.clamp(0, self.tabs.len() as i32 - 1) as usize;
-                    self.tab_drag_target = Some(clamped);
-                }
+            Message::TabBarWheel(x) => scroll_editor_tabs_by(x),
+            Message::TabDragCancelled => {
+                self.tab_pointer_press = None;
+                self.tab_drag_index = None;
+                self.tab_drag_target = None;
                 iced::Task::none()
             },
             Message::TabDragEnd => {
-                // cancel a pending hold that never crossed the threshold
-                self.tab_hold_started_at = None;
-                self.tab_hold_index = None;
-
-                if let (Some(from), Some(to)) = (self.tab_drag_index, self.tab_drag_target) {
-                    if from != to {
-                        self.tabs.swap(from, to);
-                        if let Some(active) = self.active_tab {
+                let pressed = self.tab_pointer_press.take();
+                if let Some(from) = self.tab_drag_index.take() {
+                    if let Some(to) = self.tab_drag_target.take().filter(|&to| to != from) {
+                        let tab = self.tabs.remove(from);
+                        self.tabs.insert(to, tab);
+                        self.active_tab = self.active_tab.map(|active| {
                             if active == from {
-                                self.active_tab = Some(to);
-                            } else if active == to {
-                                self.active_tab = Some(from);
+                                to
+                            } else if from < active && active <= to {
+                                active - 1
+                            } else if to <= active && active < from {
+                                active + 1
+                            } else {
+                                active
                             }
+                        });
+                    }
+                } else if let Some((index, _)) =
+                    pressed.filter(|(index, _)| self.tab_hover_index == Some(*index))
+                {
+                    if let Some(tab) = self.tabs.get(index) {
+                        if matches!(tab.kind, TabKind::Commit { preview: true, .. }) {
+                            return self.update_message(Message::PreviewTabPressed(index));
+                        }
+                        if self.active_tab != Some(index) {
+                            return self.update_message(Message::TabSelected(index));
                         }
                     }
                 }
-                self.tab_drag_index = None;
-                self.tab_drag_start_x = 0.0;
-                self.tab_drag_target = None;
-                self.tab_drag_cursor_pos = None;
                 iced::Task::none()
             },
             Message::SelectTabByIndex(idx) => {
@@ -3846,6 +3867,22 @@ fn search_results_are_current(current_query: &str, completed_query: &str) -> boo
     current_query == completed_query
 }
 
+// Find the slot beneath the dragged tab's center in the original strip.
+fn tab_drop_index(widths: impl Iterator<Item = f32> + Clone, source: usize, offset: f32) -> usize {
+    let center = widths.clone().take(source).sum::<f32>()
+        + widths.clone().nth(source).unwrap_or_default() / 2.0;
+    let mut right = 0.0;
+    let mut target = 0;
+    for (index, width) in widths.enumerate() {
+        target = index;
+        right += width;
+        if center + offset < right {
+            break;
+        }
+    }
+    target
+}
+
 /// The position of the first path in `paths` equal to `target`, if any.
 fn tab_index_for_path<'a>(
     paths: impl IntoIterator<Item = &'a Path>,
@@ -4060,6 +4097,16 @@ mod tests {
     #[test]
     fn test_search_results_are_current_cleared_query_is_stale() {
         assert!(!search_results_are_current("", "foo"));
+    }
+
+    #[test]
+    fn test_tab_drop_index_with_mixed_widths() {
+        let widths = [112.0, 220.0, 144.0];
+        assert_eq!(tab_drop_index(widths.into_iter(), 0, 55.0), 0);
+        assert_eq!(tab_drop_index(widths.into_iter(), 0, 57.0), 1);
+        assert_eq!(tab_drop_index(widths.into_iter(), 0, 278.0), 2);
+        assert_eq!(tab_drop_index(widths.into_iter(), 2, -400.0), 0);
+        assert_eq!(tab_drop_index(widths.into_iter(), 2, 400.0), 2);
     }
 
     #[test]

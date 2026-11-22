@@ -23,7 +23,6 @@ impl App {
         ];
 
         subs.push(crate::subscriptions::mouse::tab_drag());
-        subs.push(crate::subscriptions::mouse::tab_hold_tick());
 
         if !self.tabs.is_empty() && self.git_status_directory().is_some() {
             subs.push(iced::time::every(Duration::from_secs(3)).map(|_| Message::RefreshGitStatus));

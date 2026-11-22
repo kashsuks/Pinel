@@ -52,6 +52,7 @@ mod view_overlays;
 mod view_providers;
 mod view_root;
 mod view_settings;
+mod view_tabs;
 
 #[allow(clippy::large_enum_variant)]
 pub enum TabKind {
@@ -333,14 +334,12 @@ pub struct App {
 
     pending_sensitive_open: Option<PathBuf>,
 
+    tab_pointer_press: Option<(usize, iced::Point)>,
     tab_drag_index: Option<usize>,
     tab_drag_start_x: f32,
-    tab_drag_curent_x: f32,
     tab_drag_target: Option<usize>,
-    tab_drag_cursor_pos: Option<(f32, f32)>,
+    tab_bar_scroll_x: f32,
     tab_hover_index: Option<usize>,
-    tab_hold_started_at: Option<Instant>,
-    tab_hold_index: Option<usize>,
 
     autocomplete: Autocomplete,
     modifier_state: Modifiers,
@@ -539,14 +538,12 @@ impl Default for App {
             symbols_empty_replies: 0,
             pending_sensitive_open: None,
 
+            tab_pointer_press: None,
             tab_drag_index: None,
             tab_drag_start_x: 0.0,
-            tab_drag_curent_x: 0.0,
             tab_drag_target: None,
-            tab_drag_cursor_pos: None,
+            tab_bar_scroll_x: 0.0,
             tab_hover_index: None,
-            tab_hold_started_at: None,
-            tab_hold_index: None,
 
             autocomplete: Autocomplete::new(),
             modifier_state: Modifiers::default(),

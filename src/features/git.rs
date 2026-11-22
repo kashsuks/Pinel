@@ -33,6 +33,21 @@ impl ChangeKind {
         }
     }
 
+    /// The full status shown in a file tab's tooltip.
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Added => "Added",
+            Self::Modified => "Modified",
+            Self::Deleted => "Deleted",
+            Self::Renamed => "Renamed",
+            Self::Copied => "Copied",
+            Self::TypeChanged => "Type changed",
+            Self::Untracked => "Untracked",
+            Self::Ignored => "Ignored",
+            Self::Conflicted => "Merge conflict",
+        }
+    }
+
     fn from_code(code: u8) -> Option<ChangeKind> {
         match code {
             b'A' => Some(ChangeKind::Added),
