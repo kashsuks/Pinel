@@ -1,19 +1,20 @@
 [package]
-name = "iced-code-editor"
-version = "0.4.2"
+name = "pinel-code-editor"
+version = "0.1.0"
 edition = "2024"
-authors = ["LuDog71 <ludog71.trekker238@passmail.net>"]
-description = "A custom code editor widget for the Iced GUI framework with syntax highlighting, line numbers, and scrolling support."
-homepage = "https://github.com/LuDog71FR/iced-code-editor"
-documentation = "https://docs.rs/iced-code-editor"
+authors = ["LuDog71 <ludog71.trekker238@passmail.net>", "Kashyap Sukshavasi"]
+description = "Pinel's fork of iced-code-editor: a code editor widget for the Iced GUI framework with syntax highlighting, line numbers, and scrolling support."
+homepage = "https://github.com/kashsuks/Pinel"
+documentation = "https://docs.rs/pinel-code-editor"
 readme = "README.md"
 keywords = ["gui", "interface", "widgets", "iced", "editor"]
 categories = ["gui"]
 license = "MIT"
-repository = "https://github.com/LuDog71FR/iced-code-editor"
+repository = "https://github.com/kashsuks/Pinel"
 
-# Vendored into pinel-stardance from crates.io v0.4.2 so it can be maintained
-# and modified in-tree. See CREDITS.md for upstream attribution.
+# Forked from iced-code-editor v0.4.2 (https://github.com/LuDog71FR/iced-code-editor)
+# so it can be maintained and modified in-tree, and published as
+# pinel-code-editor. See CREDITS.md for upstream attribution.
 
 [lib]
 name = "iced_code_editor"

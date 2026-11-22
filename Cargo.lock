@@ -3160,22 +3160,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "iced-code-editor"
-version = "0.4.2"
-dependencies = [
- "criterion",
- "iced",
- "iced_aw",
- "iced_font_awesome",
- "rust-i18n",
- "serde_json",
- "syntect",
- "two-face 0.5.2+bat-0.26.1",
- "unicode-width 0.2.2",
- "web-time",
-]
-
-[[package]]
 name = "iced_aw"
 version = "0.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5349,7 +5333,6 @@ dependencies = [
  "frostmark",
  "fuzzy-matcher",
  "iced",
- "iced-code-editor",
  "iced_term",
  "iced_video_player",
  "ignore",
@@ -5358,6 +5341,7 @@ dependencies = [
  "lsp-types",
  "mlua",
  "once_cell",
+ "pinel-code-editor",
  "quinn-proto",
  "ratatui",
  "regex",
@@ -5383,6 +5367,22 @@ dependencies = [
  "tree-sitter-typescript",
  "url",
  "usvg 0.29.0",
+]
+
+[[package]]
+name = "pinel-code-editor"
+version = "0.1.0"
+dependencies = [
+ "criterion",
+ "iced",
+ "iced_aw",
+ "iced_font_awesome",
+ "rust-i18n",
+ "serde_json",
+ "syntect",
+ "two-face 0.5.2+bat-0.26.1",
+ "unicode-width 0.2.2",
+ "web-time",
 ]
 
 [[package]]

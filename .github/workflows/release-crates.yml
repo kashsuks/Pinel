@@ -37,5 +37,16 @@ jobs:
         shell: bash
         run: |
           cargo login "${{ secrets.CRATES_IO }}"
-          cargo publish --allow-dirty
+
+          # pinel depends on the in-tree editor fork by version, so a new
+          # editor version has to reach crates.io before pinel can publish.
+          editor_version=$(sed -n 's/^version = "\([^"]*\)"/\1/p' crates/iced-code-editor/Cargo.toml | head -n1)
+          if curl -sf -A "pinel-release (github.com/kashsuks/Pinel)" \
+            "https://crates.io/api/v1/crates/pinel-code-editor/${editor_version}" >/dev/null; then
+            echo "pinel-code-editor ${editor_version} is already on crates.io"
+          else
+            cargo publish -p pinel-code-editor
+          fi
+
+          cargo publish -p pinel --allow-dirty
           rm -f ~/.cargo/credentials
