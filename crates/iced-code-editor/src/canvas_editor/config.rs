@@ -536,6 +536,150 @@ impl CodeEditor {
         self.vim_enabled.then(|| self.vim_state.mode())
     }
 
+    /// Returns the Normal-mode keys typed so far that are still waiting for
+    /// the rest of a command, such as a count or an operator (`5d`, `3g`).
+    ///
+    /// Use this to show Vim's `showcmd` area in the host application's
+    /// status bar.
+    ///
+    /// # Returns
+    ///
+    /// `Some(keys)` when Vim is enabled, where `keys` is empty if nothing is
+    /// pending; `None` when Vim is disabled
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use iced_code_editor::{CodeEditor, Message};
+    ///
+    /// let mut editor = CodeEditor::new("fn main() {}", "rs");
+    /// // `None` while Vim is off.
+    /// assert_eq!(editor.vim_pending_keys(), None);
+    ///
+    /// editor.set_vim_enabled(true);
+    /// assert_eq!(editor.vim_pending_keys().as_deref(), Some(""));
+    ///
+    /// // A count and an operator wait for their motion.
+    /// let _ = editor.update(&Message::VimKey('5'));
+    /// let _ = editor.update(&Message::VimKey('d'));
+    /// assert_eq!(editor.vim_pending_keys().as_deref(), Some("5d"));
+    /// ```
+    pub fn vim_pending_keys(&self) -> Option<String> {
+        self.vim_enabled.then(|| self.vim_state.pending_keys())
+    }
+
+    /// Returns the Vim command line being typed, with its `:` or `/` prefix.
+    ///
+    /// Use this to show the command line in the host application's status
+    /// bar, for example after hiding the editor's own status line with
+    /// [`set_vim_status_line_visible`](Self::set_vim_status_line_visible).
+    ///
+    /// # Returns
+    ///
+    /// `Some(text)` such as `":w"` or `"/foo"` while a command line is open;
+    /// `None` when none is open or Vim is disabled
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use iced_code_editor::{CodeEditor, Message};
+    ///
+    /// let mut editor = CodeEditor::new("one\ntwo", "txt").with_vim_enabled(true);
+    /// assert_eq!(editor.vim_command_line(), None);
+    ///
+    /// for key in ":2".chars() {
+    ///     let _ = editor.update(&Message::VimKey(key));
+    /// }
+    /// assert_eq!(editor.vim_command_line().as_deref(), Some(":2"));
+    ///
+    /// // Enter runs the command and closes the command line.
+    /// let _ = editor.update(&Message::VimKey('\n'));
+    /// assert_eq!(editor.vim_command_line(), None);
+    /// ```
+    pub fn vim_command_line(&self) -> Option<String> {
+        if !self.vim_enabled {
+            return None;
+        }
+        self.vim_state.command_line_text()
+    }
+
+    /// Shows or hides the Vim status and command line drawn below the editor.
+    ///
+    /// The line is shown by default whenever Vim is enabled. Hide it when the
+    /// host application draws the mode, pending keys and command line itself,
+    /// using [`vim_mode`](Self::vim_mode),
+    /// [`vim_pending_keys`](Self::vim_pending_keys) and
+    /// [`vim_command_line`](Self::vim_command_line). Vim keeps working the
+    /// same either way.
+    ///
+    /// # Arguments
+    ///
+    /// * `visible` - Whether to draw the Vim status line while Vim is enabled
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use iced_code_editor::CodeEditor;
+    ///
+    /// let mut editor = CodeEditor::new("fn main() {}", "rs").with_vim_enabled(true);
+    /// editor.set_vim_status_line_visible(false);
+    /// assert!(!editor.vim_status_line_visible());
+    /// ```
+    pub fn set_vim_status_line_visible(&mut self, visible: bool) {
+        self.vim_status_line_visible = visible;
+    }
+
+    /// Sets whether the Vim status line is shown using the builder pattern.
+    ///
+    /// # Arguments
+    ///
+    /// * `visible` - Whether to draw the Vim status line while Vim is enabled
+    ///
+    /// # Returns
+    ///
+    /// Self for method chaining
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use iced_code_editor::CodeEditor;
+    ///
+    /// let editor = CodeEditor::new("fn main() {}", "rs")
+    ///     .with_vim_enabled(true)
+    ///     .with_vim_status_line_visible(false);
+    /// assert!(!editor.vim_status_line_visible());
+    /// ```
+    #[must_use]
+    pub fn with_vim_status_line_visible(mut self, visible: bool) -> Self {
+        self.set_vim_status_line_visible(visible);
+        self
+    }
+
+    /// Returns whether the Vim status line is shown while Vim is enabled.
+    ///
+    /// # Returns
+    ///
+    /// `true` if the editor draws its Vim status line, `false` otherwise
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use iced_code_editor::CodeEditor;
+    ///
+    /// let editor = CodeEditor::new("fn main() {}", "rs");
+    /// // On by default; it only appears once Vim is enabled.
+    /// assert!(editor.vim_status_line_visible());
+    /// ```
+    pub fn vim_status_line_visible(&self) -> bool {
+        self.vim_status_line_visible
+    }
+
+    /// Whether [`view`](Self::view) draws the Vim status line: Vim is enabled
+    /// and the line has not been hidden.
+    pub(crate) fn shows_vim_status_line(&self) -> bool {
+        self.vim_enabled && self.vim_status_line_visible
+    }
+
     /// Sets the theme style for the editor.
     ///
     /// # Arguments
@@ -1539,6 +1683,123 @@ mod tests {
         assert_eq!(editor.content(), "after");
         assert!(!editor.can_undo());
         assert!(!editor.can_redo());
+    }
+
+    fn vim_keys(editor: &mut CodeEditor, keys: &str) {
+        for key in keys.chars() {
+            let _ = editor.update(&crate::canvas_editor::Message::VimKey(key));
+        }
+    }
+
+    #[test]
+    fn test_vim_pending_keys_none_while_vim_disabled() -> Result<(), Box<dyn std::error::Error>> {
+        let mut editor = CodeEditor::new("one two", "txt");
+        assert_eq!(editor.vim_pending_keys(), None);
+
+        let mut vim = CodeEditor::new("one two", "txt").with_vim_enabled(true);
+        vim_keys(&mut vim, "5d");
+        vim.set_vim_enabled(false);
+        assert_eq!(vim.vim_pending_keys(), None);
+
+        // Plain typing never produces pending Vim keys.
+        let _ = editor.update(&crate::canvas_editor::Message::CharacterInput('5'));
+        assert_eq!(editor.vim_pending_keys(), None);
+        Ok(())
+    }
+
+    #[test]
+    fn test_vim_pending_keys_tracks_count_operator_and_prefix()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let mut editor = CodeEditor::new("one two three", "txt").with_vim_enabled(true);
+        assert_eq!(editor.vim_pending_keys().as_deref(), Some(""));
+
+        vim_keys(&mut editor, "5");
+        assert_eq!(editor.vim_pending_keys().as_deref(), Some("5"));
+        vim_keys(&mut editor, "d");
+        assert_eq!(editor.vim_pending_keys().as_deref(), Some("5d"));
+
+        // The motion completes the command and clears what was pending.
+        vim_keys(&mut editor, "w");
+        assert_eq!(editor.vim_pending_keys().as_deref(), Some(""));
+
+        vim_keys(&mut editor, "g");
+        assert_eq!(editor.vim_pending_keys().as_deref(), Some("g"));
+        vim_keys(&mut editor, "\u{1b}");
+        assert_eq!(editor.vim_pending_keys().as_deref(), Some(""));
+        Ok(())
+    }
+
+    #[test]
+    fn test_vim_command_line_open_edit_and_close() -> Result<(), Box<dyn std::error::Error>> {
+        let mut editor = CodeEditor::new("one\ntwo\nthree", "txt").with_vim_enabled(true);
+        assert_eq!(editor.vim_command_line(), None);
+
+        vim_keys(&mut editor, ":");
+        assert_eq!(editor.vim_command_line().as_deref(), Some(":"));
+        vim_keys(&mut editor, "12\u{8}");
+        assert_eq!(editor.vim_command_line().as_deref(), Some(":1"));
+        vim_keys(&mut editor, "\u{1b}");
+        assert_eq!(editor.vim_command_line(), None);
+
+        vim_keys(&mut editor, "/thr");
+        assert_eq!(editor.vim_command_line().as_deref(), Some("/thr"));
+        vim_keys(&mut editor, "\n");
+        assert_eq!(editor.vim_command_line(), None);
+        Ok(())
+    }
+
+    #[test]
+    fn test_vim_command_line_none_after_vim_disabled() -> Result<(), Box<dyn std::error::Error>> {
+        let mut editor = CodeEditor::new("one", "txt").with_vim_enabled(true);
+        vim_keys(&mut editor, ":w");
+        assert_eq!(editor.vim_command_line().as_deref(), Some(":w"));
+
+        editor.set_vim_enabled(false);
+        assert_eq!(editor.vim_command_line(), None);
+
+        // `:q` turns Vim off, so no command line is left behind.
+        editor.set_vim_enabled(true);
+        vim_keys(&mut editor, ":q\n");
+        assert_eq!(editor.vim_command_line(), None);
+        Ok(())
+    }
+
+    #[test]
+    fn test_vim_status_line_visible_configuration() -> Result<(), Box<dyn std::error::Error>> {
+        let mut editor = CodeEditor::new("", "rs");
+        assert!(editor.vim_status_line_visible());
+
+        editor.set_vim_status_line_visible(false);
+        assert!(!editor.vim_status_line_visible());
+
+        editor.set_vim_status_line_visible(true);
+        assert!(editor.vim_status_line_visible());
+
+        let editor = CodeEditor::new("", "rs").with_vim_status_line_visible(false);
+        assert!(!editor.vim_status_line_visible());
+        Ok(())
+    }
+
+    #[test]
+    fn test_shows_vim_status_line_needs_vim_and_visibility()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let editor = CodeEditor::new("", "rs");
+        assert!(!editor.shows_vim_status_line());
+
+        let mut editor = editor.with_vim_enabled(true);
+        assert!(editor.shows_vim_status_line());
+
+        editor.set_vim_status_line_visible(false);
+        assert!(!editor.shows_vim_status_line());
+        // Hiding the line leaves Vim itself on.
+        assert_eq!(editor.vim_mode(), Some(VimMode::Normal));
+
+        // The setting survives toggling Vim and resetting the content.
+        editor.set_vim_enabled(false);
+        editor.set_vim_enabled(true);
+        let _ = editor.reset("after");
+        assert!(!editor.shows_vim_status_line());
+        Ok(())
     }
 
     #[test]

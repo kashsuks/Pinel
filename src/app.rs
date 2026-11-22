@@ -241,6 +241,14 @@ pub struct App {
     git_show_all_changes: bool,
     git_status_guard: crate::features::git::RefreshGuard,
     git_history_guard: crate::features::git::RefreshGuard,
+    /// The open folder's branch, or short hash when `HEAD` is detached, for
+    /// the status bar. `None` with no folder open or outside a repository.
+    git_branch: Option<String>,
+    /// Bumped when a branch read starts and when a different folder opens,
+    /// so a read that finishes for an older request is dropped.
+    git_branch_generation: u64,
+    /// Keeps a second branch read from starting while one is running.
+    git_branch_guard: crate::features::git::RefreshGuard,
     git_viewport_h: f32,
     /// Full details of commits the cursor has rested on. A commit never
     /// changes, so entries are kept for the life of the app.
@@ -460,6 +468,9 @@ impl Default for App {
             git_show_all_changes: false,
             git_status_guard: crate::features::git::RefreshGuard::default(),
             git_history_guard: crate::features::git::RefreshGuard::default(),
+            git_branch: None,
+            git_branch_generation: 0,
+            git_branch_guard: crate::features::git::RefreshGuard::default(),
             // generous until the first scroll event reports the real height
             git_viewport_h: 1200.0,
             git_commit_details: HashMap::new(),
@@ -644,6 +655,8 @@ impl App {
         editor.set_show_whitespace(self.editor_preferences.show_whitespace);
         editor.set_line_number_width(self.editor_preferences.line_number_width);
         editor.set_vim_enabled(self.editor_preferences.vim_mode_enabled);
+        // The app's status bar shows the mode, pending keys and command line.
+        editor.set_vim_status_line_visible(false);
 
         editor
     }

@@ -30,6 +30,30 @@ impl App {
         )
     }
 
+    /// Reads the open folder's git branch for the status bar off the UI
+    /// thread.
+    ///
+    /// Does nothing with no folder open, or while an earlier read is still
+    /// running. The result carries a fresh generation and the folder it read,
+    /// so it can be dropped if the folder changes before it lands.
+    fn git_branch_task(&mut self) -> iced::Task<Message> {
+        let Some(root) = self.file_tree.as_ref().map(|tree| tree.root.clone()) else {
+            return iced::Task::none();
+        };
+        if !self.git_branch_guard.try_start() {
+            return iced::Task::none();
+        }
+        self.git_branch_generation = self.git_branch_generation.wrapping_add(1);
+        let generation = self.git_branch_generation;
+        iced::Task::perform(
+            async move {
+                let branch = crate::features::git::load_branch_async(root.clone()).await;
+                (generation, root, branch)
+            },
+            |(generation, root, branch)| Message::GitBranchLoaded(generation, root, branch),
+        )
+    }
+
     fn should_confirm_sensitive_open(path: &std::path::Path) -> bool {
         path.file_name()
             .and_then(|name| name.to_str())
@@ -1407,7 +1431,9 @@ impl App {
 
                 // Re-index off the UI thread; the old lists stay until it lands.
                 match root {
-                    Some(root) => self.index_workspace_task(root),
+                    Some(root) => {
+                        iced::Task::batch([self.index_workspace_task(root), self.git_branch_task()])
+                    },
                     None => iced::Task::none(),
                 }
             },
@@ -1607,6 +1633,12 @@ impl App {
                 },
             ),
             Message::FolderOpened(path) => {
+                if self.file_tree.as_ref().map(|tree| tree.root.as_path()) != Some(path.as_path()) {
+                    // The old folder's branch is wrong here, and so is any
+                    // read of it still running.
+                    self.git_branch = None;
+                    self.git_branch_generation = self.git_branch_generation.wrapping_add(1);
+                }
                 self.file_tree = Some(FileTree::new(path.clone()));
                 self.all_workspace_files.clear();
                 self.fuzzy_finder.set_folder_files(path.clone(), Vec::new());
@@ -1614,7 +1646,10 @@ impl App {
                 self.lsp_enabled = true;
                 self.chat_sessions = crate::config::chat_store::load_sessions(Some(&path));
                 self.active_chat_session = self.chat_sessions.first().map(|s| s.id.clone());
-                self.index_workspace_task(path.clone())
+                iced::Task::batch([
+                    self.index_workspace_task(path.clone()),
+                    self.git_branch_task(),
+                ])
             },
             Message::WorkspaceIndexed(generation, root, result) => {
                 let current = generation == self.workspace_index_generation
@@ -1774,19 +1809,41 @@ impl App {
                 iced::Task::none()
             },
             Message::RefreshGitStatus => {
+                let branch = self.git_branch_task();
                 if !self.git_status_guard.try_start() {
-                    return iced::Task::none();
+                    return branch;
                 }
                 let root = self.file_tree.as_ref().map(|t| t.root.clone());
-                iced::Task::perform(
-                    crate::features::git::load_status_async(root),
-                    Message::GitStatusLoaded,
-                )
+                iced::Task::batch([
+                    iced::Task::perform(
+                        crate::features::git::load_status_async(root),
+                        Message::GitStatusLoaded,
+                    ),
+                    branch,
+                ])
             },
             Message::GitStatusLoaded(changes) => {
                 self.git_status_guard.finish();
                 self.git_changes = changes;
                 iced::Task::none()
+            },
+            Message::GitBranchTick => self.git_branch_task(),
+            Message::GitBranchLoaded(generation, root, branch) => {
+                self.git_branch_guard.finish();
+                let open_root = self.file_tree.as_ref().map(|tree| tree.root.as_path());
+                if git_branch_result_is_current(
+                    generation,
+                    &root,
+                    self.git_branch_generation,
+                    open_root,
+                ) {
+                    self.git_branch = branch;
+                    iced::Task::none()
+                } else {
+                    // A read for a folder that is no longer open; read the
+                    // one that is (if any) instead of waiting for the tick.
+                    self.git_branch_task()
+                }
             },
             Message::RefreshGitHistory => {
                 if !self.git_history_guard.try_start() {
@@ -3820,6 +3877,18 @@ fn prettify_icon_key(key: &str) -> String {
         .join(" ")
 }
 
+/// Whether a finished branch read still describes the open folder: it is the
+/// latest read started (`generation` matches) and it read the folder that is
+/// open now.
+fn git_branch_result_is_current(
+    generation: u64,
+    root: &Path,
+    current_generation: u64,
+    open_root: Option<&Path>,
+) -> bool {
+    generation == current_generation && open_root == Some(root)
+}
+
 /// The active tab index after closing the tab at `closed`, given the number
 /// of tabs `remaining` once it is removed.
 fn active_tab_after_close(active: Option<usize>, closed: usize, remaining: usize) -> Option<usize> {
@@ -4121,5 +4190,45 @@ mod tests {
         let active = active_tab_after_close(Some(2), 1, 2);
         let active = active_tab_after_close(active, 0, 1);
         assert_eq!(active, Some(0));
+    }
+
+    #[test]
+    fn test_git_branch_result_is_current_same_read_and_folder(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let root = Path::new("/work/repo");
+        assert!(git_branch_result_is_current(3, root, 3, Some(root)));
+        Ok(())
+    }
+
+    #[test]
+    fn test_git_branch_result_is_current_older_generation() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let root = Path::new("/work/repo");
+        assert!(!git_branch_result_is_current(2, root, 3, Some(root)));
+        Ok(())
+    }
+
+    #[test]
+    fn test_git_branch_result_is_current_other_folder() -> Result<(), Box<dyn std::error::Error>> {
+        let open = Path::new("/work/other");
+        assert!(!git_branch_result_is_current(
+            3,
+            Path::new("/work/repo"),
+            3,
+            Some(open)
+        ));
+        Ok(())
+    }
+
+    #[test]
+    fn test_git_branch_result_is_current_no_folder_open() -> Result<(), Box<dyn std::error::Error>>
+    {
+        assert!(!git_branch_result_is_current(
+            3,
+            Path::new("/work/repo"),
+            3,
+            None
+        ));
+        Ok(())
     }
 }

@@ -411,7 +411,7 @@ impl CodeEditor {
             }
         };
 
-        if self.vim_enabled {
+        if self.shows_vim_status_line() {
             Column::new()
                 .push(editor_body)
                 .push(self.create_vim_status_bar())

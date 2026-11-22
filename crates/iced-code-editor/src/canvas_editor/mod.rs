@@ -190,6 +190,8 @@ pub struct CodeEditor {
     vim_enabled: bool,
     /// Per-editor Vim mode, parser prefixes and unnamed register.
     pub(crate) vim_state: vim::VimState,
+    /// Whether the Vim status and command line is drawn below the editor.
+    vim_status_line_visible: bool,
     /// Translations for UI text
     pub(crate) translations: Translations,
     /// Whether search/replace functionality is enabled
@@ -655,6 +657,7 @@ impl CodeEditor {
             command_palette_enabled: true,
             vim_enabled: false,
             vim_state: vim::VimState::default(),
+            vim_status_line_visible: true,
             translations: Translations::default(),
             search_replace_enabled: true,
             line_numbers_enabled: true,
