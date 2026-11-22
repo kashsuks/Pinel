@@ -95,7 +95,7 @@ This needs Rust 1.88 or newer. Run `rustup update stable` if your toolchain is o
 ```bash
 git clone https://github.com/kashsuks/pinel
 cd pinel
-git checkout v0.8.0
+git checkout v0.9.0
 cargo install --path . --locked
 ```
 
