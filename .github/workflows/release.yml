@@ -136,6 +136,8 @@ jobs:
   linux:
     needs: [prepare-release, create-release]
     if: needs.prepare-release.outputs.should_release == 'true'
+    permissions:
+      contents: write
     uses: ./.github/workflows/release-linux.yml
     with:
       binary_name: ${{ needs.prepare-release.outputs.binary_name }}
@@ -145,6 +147,8 @@ jobs:
   windows:
     needs: [prepare-release, create-release]
     if: needs.prepare-release.outputs.should_release == 'true'
+    permissions:
+      contents: write
     uses: ./.github/workflows/release-windows.yml
     with:
       binary_name: ${{ needs.prepare-release.outputs.binary_name }}
@@ -154,6 +158,8 @@ jobs:
   macos:
     needs: [prepare-release, create-release]
     if: needs.prepare-release.outputs.should_release == 'true'
+    permissions:
+      contents: write
     uses: ./.github/workflows/release-macos.yml
     with:
       binary_name: ${{ needs.prepare-release.outputs.binary_name }}
