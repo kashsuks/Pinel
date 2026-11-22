@@ -150,12 +150,16 @@ pub enum Message {
     SaveAs,
     SelectTabByIndex(usize),
     TabHoverEnter(usize),
-    TabHoverExit,
-    TabDragInitiate,
-    TabHoldTick,
-    TabDragMove(f32),
+    TabHoverExit(usize),
+    /// Left press on a tab body.
+    TabPointerPressed(usize),
+    /// Current horizontal scroll position of the editor tab strip.
+    TabBarScrolled(f32),
+    /// Horizontal tab scroll synthesized from a vertical mouse-wheel gesture.
+    TabBarWheel(f32),
     TabDragEnd,
-    TabDragFloatMove(f32, f32),
+    /// The window lost focus during a tab click or drag.
+    TabDragCancelled,
 
     WakaTimeApiKeyChanged(String),
     WakaTimeApiKeyHoverStart,
@@ -186,7 +190,12 @@ pub enum Message {
     StartupToggleRunOnStartup,
 
     RefreshGitStatus,
-    GitStatusLoaded(Vec<crate::features::git::FileChange>),
+    /// Status query scope, repository root, and paths relative to that root.
+    GitStatusLoaded(
+        Option<PathBuf>,
+        Option<PathBuf>,
+        Vec<crate::features::git::FileChange>,
+    ),
     /// Re-reads the open folder's git branch for the status bar. Sent every
     /// few seconds while a folder is open.
     GitBranchTick,

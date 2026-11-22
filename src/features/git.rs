@@ -33,6 +33,21 @@ impl ChangeKind {
         }
     }
 
+    /// The full status shown in a file tab's tooltip.
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Added => "Added",
+            Self::Modified => "Modified",
+            Self::Deleted => "Deleted",
+            Self::Renamed => "Renamed",
+            Self::Copied => "Copied",
+            Self::TypeChanged => "Type changed",
+            Self::Untracked => "Untracked",
+            Self::Ignored => "Ignored",
+            Self::Conflicted => "Merge conflict",
+        }
+    }
+
     fn from_code(code: u8) -> Option<ChangeKind> {
         match code {
             b'A' => Some(ChangeKind::Added),
@@ -223,19 +238,27 @@ fn status_command(root: Option<&Path>) -> std::process::Command {
     cmd
 }
 
-/// runs `git status` in `root` and returns the changed files
-///
-/// returns an empty list when `root` is not a repository, git is missing,
-/// or the command fails
-pub fn load_status(root: Option<&Path>) -> Vec<FileChange> {
+/// Reads the changed files and the repository root their paths are relative to.
+fn load_status(root: Option<&Path>) -> (Option<PathBuf>, Vec<FileChange>) {
     match status_command(root).output() {
-        Ok(out) if out.status.success() => parse_status(&out.stdout),
-        _ => Vec::new(),
+        Ok(out) if out.status.success() && !out.stdout.is_empty() => {
+            let mut command = std::process::Command::new("git");
+            command.args(["rev-parse", "--show-toplevel"]);
+            if let Some(dir) = root {
+                command.current_dir(dir);
+            }
+            let repo = command.output().ok().filter(|out| out.status.success()).map(|out| {
+                let path = String::from_utf8_lossy(&out.stdout);
+                PathBuf::from(path.strip_suffix('\n').unwrap_or(&path))
+            });
+            (repo, parse_status(&out.stdout))
+        },
+        _ => (None, Vec::new()),
     }
 }
 
-/// runs [`load_status`] off the UI thread
-pub async fn load_status_async(root: Option<PathBuf>) -> Vec<FileChange> {
+/// Reads the repository status off the UI thread.
+pub async fn load_status_async(root: Option<PathBuf>) -> (Option<PathBuf>, Vec<FileChange>) {
     tokio::task::spawn_blocking(move || load_status(root.as_deref()))
         .await
         .unwrap_or_default()
@@ -795,6 +818,28 @@ mod tests {
     fn test_status_command_pins_untracked_mode() {
         let cmd = status_command(None);
         assert!(cmd.get_args().any(|a| a == "--untracked-files=normal"));
+    }
+
+    #[test]
+    fn test_load_status_from_subfolder_reports_paths_from_repository_root(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let dir = tempfile::tempdir()?;
+        let root = dir.path().canonicalize()?;
+        assert!(std::process::Command::new("git")
+            .args(["init", "-q"])
+            .current_dir(&root)
+            .status()?
+            .success());
+        let subfolder = root.join("source files");
+        std::fs::create_dir(&subfolder)?;
+        std::fs::write(subfolder.join("example.rs"), "")?;
+
+        let (repo, changes) = load_status(Some(&subfolder));
+        assert_eq!(repo.as_deref(), Some(root.as_path()));
+        assert_eq!(changes.len(), 1);
+        assert_eq!(changes[0].path, "source files/");
+        assert_eq!(changes[0].unstaged_kind(), Some(ChangeKind::Untracked));
+        Ok(())
     }
 
     #[test]

@@ -23,7 +23,13 @@ impl App {
         ];
 
         subs.push(crate::subscriptions::mouse::tab_drag());
-        subs.push(crate::subscriptions::mouse::tab_hold_tick());
+
+        if !self.tabs.is_empty() && self.git_status_directory().is_some() {
+            subs.push(iced::time::every(Duration::from_secs(3)).map(|_| Message::RefreshGitStatus));
+        } else if self.file_tree.is_some() {
+            // Picks up a branch switched outside Pinel, such as in a terminal
+            subs.push(iced::time::every(Duration::from_secs(5)).map(|_| Message::GitBranchTick));
+        }
 
         if self.editor_preferences.autosave_enabled {
             subs.push(
@@ -37,11 +43,6 @@ impl App {
         if self.editor_preferences.discord_rpc_enabled {
             // 15s matches discords own recommended rich presence update rate
             subs.push(iced::time::every(Duration::from_secs(15)).map(|_| Message::DiscordRpcTick));
-        }
-
-        if self.file_tree.is_some() {
-            // Picks up a branch switched outside Pinel, such as in a terminal
-            subs.push(iced::time::every(Duration::from_secs(5)).map(|_| Message::GitBranchTick));
         }
 
         if self.editor_preferences.restore_session_enabled {

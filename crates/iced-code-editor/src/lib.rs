@@ -259,7 +259,7 @@ pub use i18n::{Language, Translations};
 pub use theme::{Catalog, Style, StyleFn, from_iced_theme};
 
 #[cfg(all(feature = "lsp-process", not(target_arch = "wasm32")))]
-pub use canvas_editor::lsp::process::{LspEvent, LspProcessClient};
+pub use canvas_editor::lsp::process::{LspDiagnostic, LspEvent, LspProcessClient};
 
 #[cfg(all(feature = "lsp-process", not(target_arch = "wasm32")))]
 pub use canvas_editor::lsp::process::config::{

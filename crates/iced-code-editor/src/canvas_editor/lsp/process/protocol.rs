@@ -17,7 +17,7 @@ use std::sync::{Arc, Mutex, mpsc};
 use serde_json::json;
 
 use super::pending::{LspRequestKind, PendingRequest};
-use super::{LspEvent, LspPosition, LspRange};
+use super::{LspDiagnostic, LspEvent, LspPosition, LspRange};
 use crate::canvas_editor::lsp::LspSymbol;
 
 /// JSON-RPC method name for server-push progress notifications.
@@ -276,14 +276,34 @@ pub(super) fn handle_client_response(
 
 /// Handles a server-initiated notification (e.g. `$/progress`).
 ///
-/// Parses the progress payload and emits a [`LspEvent::Progress`].
-/// Notifications for unknown methods are silently ignored.
+/// Forwards progress and diagnostics notifications to the application.
 pub(super) fn handle_server_notification(
     method: &str,
     params: &serde_json::Value,
     events: &mpsc::Sender<LspEvent>,
     server_key: &str,
 ) {
+    if method == "textDocument/publishDiagnostics" {
+        if let (Some(uri), Some(items)) = (params["uri"].as_str(), params["diagnostics"].as_array())
+        {
+            let diagnostics = items
+                .iter()
+                .filter_map(|item| {
+                    Some(LspDiagnostic {
+                        line: usize::try_from(item["range"]["start"]["line"].as_u64()?).ok()?,
+                        severity: item["severity"].as_u64(),
+                        message: item["message"].as_str()?.to_owned(),
+                    })
+                })
+                .collect();
+            let _ = events.send(LspEvent::Diagnostics {
+                uri: uri.to_owned(),
+                diagnostics,
+            });
+        }
+        return;
+    }
+
     if method != METHOD_PROGRESS {
         return;
     }
@@ -1111,6 +1131,51 @@ mod tests {
             },
             _ => panic!("expected LspEvent::Definition"),
         }
+    }
+
+    #[test]
+    fn test_handle_server_notification_publishes_and_clears_diagnostics()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let (tx, rx) = mpsc::channel();
+        let uri = "file:///project/file%20name.rs";
+        let mut params = json!({
+            "uri": uri,
+            "diagnostics": [
+                {
+                    "range": { "start": { "line": 3, "character": 0 } },
+                    "severity": 1,
+                    "message": "Unexpected token"
+                },
+                {
+                    "range": { "start": { "line": 5, "character": 2 } },
+                    "severity": 2,
+                    "message": "Unused binding"
+                }
+            ]
+        });
+
+        handle_server_notification("textDocument/publishDiagnostics", &params, &tx, "test");
+        let LspEvent::Diagnostics {
+            uri: path,
+            diagnostics,
+        } = rx.try_recv()?
+        else {
+            return Err("expected diagnostics".into());
+        };
+        assert_eq!(path, uri);
+        assert_eq!(diagnostics.len(), 2);
+        assert_eq!(diagnostics[0].line, 3);
+        assert_eq!(diagnostics[0].severity, Some(1));
+        assert_eq!(diagnostics[0].message, "Unexpected token");
+        assert_eq!(diagnostics[1].severity, Some(2));
+
+        params["diagnostics"] = json!([]);
+        handle_server_notification("textDocument/publishDiagnostics", &params, &tx, "test");
+        let LspEvent::Diagnostics { diagnostics, .. } = rx.try_recv()? else {
+            return Err("expected cleared diagnostics".into());
+        };
+        assert!(diagnostics.is_empty());
+        Ok(())
     }
 
     #[test]

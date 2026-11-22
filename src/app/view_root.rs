@@ -1,3 +1,4 @@
+use super::view_tabs::EDITOR_FRAME_WIDTH;
 use super::*;
 
 impl App {
@@ -12,19 +13,39 @@ impl App {
         let editor_area: Element<'_, Message> = if self.settings_open {
             self.view_settings_panel()
         } else {
-            let tab_bar = self.view_tab_bar();
-            let editor_widget = self.view_editor();
-
-            let mut editor_col_items: Vec<Element<'_, Message>> = Vec::new();
+            let mut editor_col_items = Vec::new();
+            let has_tabs = !self.tabs.is_empty();
+            if has_tabs {
+                editor_col_items.push(self.view_tab_bar());
+            }
+            let mut body = iced::widget::Column::new();
             if self.find_replace.open {
-                editor_col_items.push(self.view_find_replace_panel());
+                body = body.push(self.view_find_replace_panel());
             }
 
-            editor_col_items.push(tab_bar);
             if let Some(breadcrumbs) = self.view_breadcrumbs() {
-                editor_col_items.push(breadcrumbs);
+                body = body.push(breadcrumbs);
             }
-            editor_col_items.push(editor_widget);
+            let body = body.push(self.view_editor()).height(Length::Fill);
+            if has_tabs {
+                editor_col_items.push(
+                    container(
+                        container(body)
+                            .clip(true)
+                            .style(|_| container::Style::default().background(theme().bg_editor)),
+                    )
+                    .padding(iced::Padding {
+                        top: 0.0,
+                        right: EDITOR_FRAME_WIDTH,
+                        bottom: EDITOR_FRAME_WIDTH,
+                        left: EDITOR_FRAME_WIDTH,
+                    })
+                    .style(|_| container::Style::default().background(theme().border_subtle))
+                    .into(),
+                );
+            } else {
+                editor_col_items.push(body.into());
+            }
             if self.terminal_open {
                 editor_col_items.push(self.view_terminal_panel());
             }
@@ -237,17 +258,18 @@ impl App {
                 .height(Length::Fill)
                 .style(sidebar_editor_separator_style);
 
-            let resize_zone =
-                mouse_area(container(text("")).width(Length::Fixed(4.0)).height(Length::Fill))
-                    .on_press(Message::SidebarResizeStart)
-                    .interaction(iced::mouse::Interaction::ResizingHorizontally);
+            let resize_zone = mouse_area(iced::widget::Space::new().width(4).height(Length::Fill))
+                .on_press(Message::SidebarResizeStart)
+                .interaction(iced::mouse::Interaction::ResizingHorizontally);
+            let resizable_panel = stack![
+                row![panel, separator],
+                container(resize_zone).align_right(Length::Fill),
+            ];
 
             row![
                 activity_bar,
                 activity_separator,
-                panel,
-                separator,
-                resize_zone,
+                resizable_panel,
                 editor_area
             ]
             .into()

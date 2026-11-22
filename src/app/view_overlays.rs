@@ -68,61 +68,15 @@ impl App {
         if !self.editor_preferences.tab_drag_floating {
             return None;
         }
-        let (drag_idx, (cursor_x, cursor_y)) = match (self.tab_drag_index, self.tab_drag_cursor_pos)
-        {
-            (Some(i), Some(pos)) => (i, pos),
-            _ => return None,
-        };
-        let tab = self.tabs.get(drag_idx)?;
-        let is_modified =
-            matches!(&tab.kind, TabKind::Editor { code_editor, .. } if code_editor.is_modified());
-
-        let close_icon = if is_modified {
-            text("●").size(10).color(theme().text_muted)
-        } else {
-            text("x").size(10).color(theme().text_dim)
-        };
-
-        let ghost = container(
-            button(
-                row![
-                    text(&tab.name).size(TEXT_MD).color(theme().text_primary),
-                    button(close_icon).style(tab_close_button_style).padding(2),
-                ]
-                .spacing(SPACE_2)
-                .align_y(iced::Alignment::Center),
-            )
-            .style(tab_button_style(true))
-            .padding(iced::Padding {
-                top: SPACE_2,
-                right: SPACE_4,
-                bottom: SPACE_2,
-                left: SPACE_4,
-            }),
-        )
-        .style(|_theme| container::Style {
-            background: Some(iced::Background::Color(iced::Color::from_rgba(
-                theme().bg_tab_active.r,
-                theme().bg_tab_active.g,
-                theme().bg_tab_active.b,
-                0.92,
-            ))),
-            border: iced::Border {
-                color: iced::Color::from_rgba(1.0, 1.0, 1.0, 0.22),
-                width: 1.0,
-                radius: 8.0.into(),
-            },
-            shadow: iced::Shadow {
-                color: iced::Color::from_rgba(0.0, 0.0, 0.0, 0.45),
-                offset: iced::Vector::new(0.0, 6.0),
-                blur_radius: 18.0,
-            },
-            ..Default::default()
-        });
-
-        // Center the ghost on the cursor (tabs are ~120px wide, ~36px tall).
-        let ghost_top = (cursor_y - 15.0).max(0.0);
-        let ghost_left = (cursor_x - 60.0).max(0.0);
+        let drag_idx = self.tab_drag_index?;
+        let iced::Point {
+            x: cursor_x,
+            y: cursor_y,
+        } = self.last_cursor_position;
+        self.tabs.get(drag_idx)?;
+        let ghost = self.view_editor_tab(drag_idx, true);
+        let ghost_top = (cursor_y - super::view_tabs::TAB_HEIGHT / 2.0).max(0.0);
+        let ghost_left = (cursor_x - self.editor_tab_width(drag_idx) / 2.0).max(0.0);
 
         let positioned = container(ghost)
             .padding(iced::Padding {

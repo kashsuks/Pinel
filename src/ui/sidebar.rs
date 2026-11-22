@@ -30,7 +30,19 @@ fn icon_widget<'a>(icon: IconAsset) -> Element<'a, Message> {
 }
 
 /// The colour each status letter is drawn in.
-fn change_color(kind: ChangeKind) -> iced::Color {
+pub(crate) fn change_color(kind: ChangeKind) -> iced::Color {
+    let background = theme().bg_secondary;
+    if background.r * 0.2126 + background.g * 0.7152 + background.b * 0.0722 > 0.5 {
+        return match kind {
+            ChangeKind::Modified | ChangeKind::TypeChanged => iced::Color::from_rgb8(135, 85, 5),
+            ChangeKind::Added | ChangeKind::Untracked | ChangeKind::Copied => {
+                iced::Color::from_rgb8(24, 112, 60)
+            },
+            ChangeKind::Deleted | ChangeKind::Conflicted => iced::Color::from_rgb8(164, 40, 49),
+            ChangeKind::Renamed => iced::Color::from_rgb8(28, 83, 165),
+            ChangeKind::Ignored => theme().text_muted,
+        };
+    }
     match kind {
         ChangeKind::Modified | ChangeKind::TypeChanged => iced::Color::from_rgb(0.98, 0.74, 0.18),
         ChangeKind::Added | ChangeKind::Untracked | ChangeKind::Copied => {
