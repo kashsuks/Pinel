@@ -43,6 +43,13 @@ fn main() -> iced::Result {
 }
 
 fn run_gui(startup_path: Option<PathBuf>) -> iced::Result {
+    // `pinel .` passes a relative path, and language servers only attach to
+    // absolute ones. If the working directory is unreadable, keep it as given.
+    let startup_path = startup_path.map(|path| match std::env::current_dir() {
+        Ok(cwd) => fs_util::absolute_path(&path, &cwd),
+        Err(_) => path,
+    });
+
     lsp_setup::ensure_lsp_paths();
     iced_code_editor::ensure_rust_analyzer_config();
 
