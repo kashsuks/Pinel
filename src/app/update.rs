@@ -2300,15 +2300,20 @@ impl App {
                 if let Some(ref tree) = self.file_tree {
                     let root = tree.root.clone();
                     iced::Task::perform(
-                        async move { crate::features::search::search_workspace(&root, &query) },
-                        Message::SearchCompleted,
+                        async move {
+                            let results = crate::features::search::search_workspace(&root, &query);
+                            (query, results)
+                        },
+                        |(query, results)| Message::SearchCompleted(query, results),
                     )
                 } else {
                     iced::Task::none()
                 }
             },
-            Message::SearchCompleted(results) => {
-                self.search_results = results;
+            Message::SearchCompleted(query, results) => {
+                if search_results_are_current(&self.search_query, &query) {
+                    self.search_results = results;
+                }
                 iced::Task::none()
             },
             Message::SearchResultClicked(path, _line_number) => {
@@ -3747,6 +3752,12 @@ fn word_prefix_before(line: &str, cursor_col: usize) -> String {
     before[start..].iter().collect()
 }
 
+/// Whether results from a search for `completed_query` still match the
+/// query currently in the search box; stale results must be discarded.
+fn search_results_are_current(current_query: &str, completed_query: &str) -> bool {
+    current_query == completed_query
+}
+
 /// The position of the first path in `paths` equal to `target`, if any.
 fn tab_index_for_path<'a>(
     paths: impl IntoIterator<Item = &'a Path>,
@@ -3912,6 +3923,21 @@ mod tests {
             App::is_media_path(Path::new("clip.mp4")),
             cfg!(feature = "video")
         );
+    }
+
+    #[test]
+    fn test_search_results_are_current_matching_query() {
+        assert!(search_results_are_current("foo", "foo"));
+    }
+
+    #[test]
+    fn test_search_results_are_current_older_query_is_stale() {
+        assert!(!search_results_are_current("foo", "fo"));
+    }
+
+    #[test]
+    fn test_search_results_are_current_cleared_query_is_stale() {
+        assert!(!search_results_are_current("", "foo"));
     }
 
     #[test]
