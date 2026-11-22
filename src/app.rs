@@ -626,6 +626,9 @@ impl App {
         });
 
         editor.set_search_replace_enabled(false);
+        // Pinel draws its own themed palette (Cmd/Ctrl+Shift+P); stop the
+        // editor's built-in one from opening alongside it.
+        editor.set_command_palette_enabled(false);
         editor.set_line_numbers_enabled(true);
         editor.set_wrap_enabled(false);
         editor.set_font_size(CODE_FONT_SIZE, true);
