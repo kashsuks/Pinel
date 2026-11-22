@@ -42,7 +42,7 @@ impl App {
             .color(theme().text_dim);
 
         let reload_btn =
-            button(text("↻  Reload theme.lua").size(TEXT_SM).color(theme().text_primary))
+            button(text("↻  Reload theme.lua").size(TEXT_MD).color(theme().text_primary))
                 .on_press(Message::SettingsReloadTheme)
                 .style(|_theme, _status| button::Style {
                     background: Some(Background::Color(theme().bg_secondary)),
@@ -231,7 +231,7 @@ impl App {
         .align_y(iced::Alignment::Center);
 
         let save_btn =
-            button(text("Save WakaTime Settings").size(TEXT_SM).color(theme().text_primary))
+            button(text("Save WakaTime Settings").size(TEXT_MD).color(theme().text_primary))
                 .on_press(Message::SaveWakaTimeSettings)
                 .style(|_theme, _status| button::Style {
                     background: Some(Background::Color(ACCENT_PURPLE.scale_alpha(0.2))),

@@ -74,7 +74,7 @@ impl App {
 
                 let is_preview = matches!(tab.kind, TabKind::Commit { preview: true, .. });
 
-                let title = text(&tab.name).size(TEXT_SM).color(tab_text_color);
+                let title = text(&tab.name).size(TEXT_MD).color(tab_text_color);
                 let title = if is_preview {
                     title.font(iced::Font {
                         style: iced::font::Style::Italic,
@@ -405,7 +405,7 @@ impl App {
                                             )
                                             .width(Length::Fixed(20.0))
                                             .center_x(Length::Fixed(20.0)),
-                                            text(&suggestion.text).size(TEXT_SM).color(label_color),
+                                            text(&suggestion.text).size(TEXT_MD).color(label_color),
                                             iced::widget::Space::new().width(Length::Fill),
                                             text(format!("{:?}", suggestion.kind).to_lowercase())
                                                 .size(10)
@@ -501,7 +501,7 @@ impl App {
                                 .cursor_screen_position()
                                 .unwrap_or(iced::Point::new(48.0, 20.0));
                             let x = cursor_pos.x.clamp(0.0, 500.0);
-                            let y = (cursor_pos.y + 20.0).clamp(0.0, 560.0);
+                            let y = (cursor_pos.y + code_editor.line_height()).clamp(0.0, 560.0);
 
                             let positioned_panel = container(panel)
                                 .padding(iced::Padding {

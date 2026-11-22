@@ -86,7 +86,7 @@ impl App {
         let ghost = container(
             button(
                 row![
-                    text(&tab.name).size(TEXT_SM).color(theme().text_primary),
+                    text(&tab.name).size(TEXT_MD).color(theme().text_primary),
                     button(close_icon).style(tab_close_button_style).padding(2),
                 ]
                 .spacing(SPACE_2)
@@ -223,7 +223,7 @@ impl App {
 
         let open_btn = button(
             text("Open release page →")
-                .size(TEXT_SM)
+                .size(TEXT_MD)
                 .color(Color::from_rgb(0.55, 0.75, 1.0)),
         )
         .on_press(Message::DismissUpdateBanner)

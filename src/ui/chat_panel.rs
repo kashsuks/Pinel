@@ -105,7 +105,7 @@ fn view_chat_history<'a>(
                         .size(TEXT_MD)
                         .color(theme().text_primary),
                     text("Would you like to set it up?").size(TEXT_SM).color(theme().text_muted),
-                    button(text("Set Up a Provider").size(TEXT_SM))
+                    button(text("Set Up a Provider").size(TEXT_MD))
                         .style(tree_button_style)
                         .on_press(Message::OpenProviderSettings)
                         .padding(ROW_PADDING),
@@ -269,7 +269,7 @@ fn view_chat_conversation<'a>(
             } else {
                 "Send"
             })
-            .size(TEXT_SM)
+            .size(TEXT_MD)
         )
         .style(tree_button_style)
         .on_press_maybe((!sending).then_some(Message::ChatSend))
@@ -387,7 +387,7 @@ fn model_trigger_button(session: &ChatSession, is_open: bool) -> Element<'_, Mes
 
     button(
         row![
-            text(label).size(TEXT_SM).color(theme().text_primary),
+            text(label).size(TEXT_MD).color(theme().text_primary),
             Space::new().width(Length::Fill),
             text(if is_open {
                 "^"
@@ -474,7 +474,7 @@ fn model_picker<'a>(
                 let rows: Vec<Element<'a, Message>> = matching_models
                     .into_iter()
                     .map(|model| {
-                        button(text(model).size(TEXT_SM))
+                        button(text(model).size(TEXT_MD))
                             .style(tree_button_style)
                             .on_press(Message::ChatModelPicked(
                                 provider_owned.clone(),
@@ -492,7 +492,7 @@ fn model_picker<'a>(
 
     let search_box = text_input("Search models...", search)
         .on_input(Message::ChatModelSearchChanged)
-        .size(TEXT_SM)
+        .size(TEXT_MD)
         .padding(iced::Padding {
             top: SPACE_1,
             right: 6.0,

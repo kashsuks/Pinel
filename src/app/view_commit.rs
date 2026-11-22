@@ -171,10 +171,10 @@ fn view_file_diff<'a>(idx: usize, file: &'a FileDiff, folded: bool) -> Element<'
             } else {
                 "▾"
             })
-            .size(TEXT_SM)
+            .size(TEXT_MD)
             .color(muted),
-            text(letter).size(TEXT_SM).color(color),
-            text(title).size(TEXT_SM).color(primary),
+            text(letter).size(TEXT_MD).color(color),
+            text(title).size(TEXT_MD).color(primary),
             Space::new().width(Length::Fill),
             text(format!("+{}", file.added)).size(TEXT_XS).color(GREEN),
             text(format!("-{}", file.removed)).size(TEXT_XS).color(RED),
@@ -243,7 +243,7 @@ fn view_diff_line<'a>(line: &'a DiffLine) -> Element<'a, Message> {
             number(line.old_line),
             number(line.new_line),
             text(format!("{sign}{}", line.text))
-                .size(TEXT_SM)
+                .size(TEXT_MD)
                 .color(theme().text_primary)
                 .font(iced::Font::MONOSPACE)
                 .wrapping(iced::widget::text::Wrapping::None),
