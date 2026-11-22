@@ -1085,6 +1085,17 @@ const VIM_PILL_TEXT_SIZE: f32 = TEXT_SM;
 /// Vertical padding inside the Vim mode pill, above and below its label.
 const VIM_PILL_PADDING_Y: f32 = 2.0;
 
+/// How far the pill's label is moved down from the middle of the pill.
+///
+/// iced's line box keeps room for descenders under the baseline, and the
+/// labels are all capitals, which have none, so the letters sit high in the
+/// box. Measured on screen at [`VIM_PILL_TEXT_SIZE`] (12px), the capitals
+/// were 2px above the pill's centre; re-measure if that size changes.
+const VIM_PILL_LABEL_NUDGE: f32 = 2.0;
+
+// The nudge comes out of the bottom padding, which must not go negative.
+const _: () = assert!(VIM_PILL_LABEL_NUDGE <= VIM_PILL_PADDING_Y);
+
 /// Fixed height of the status bar: `SPACE_2` above and below one line of
 /// [`STATUS_TEXT_SIZE`] text, which iced lays out at its default line height
 /// of 1.3 times the font size (13 × 1.3 = 16.9px). 32.9px in all, and the bar
@@ -1153,7 +1164,14 @@ fn vim_mode_pill<'a>(mode: iced_code_editor::VimMode) -> Element<'a, Message> {
             .color(VIM_PILL_TEXT)
             .wrapping(iced::widget::text::Wrapping::None),
     )
-    .padding([VIM_PILL_PADDING_Y, 0.0])
+    // Same total height as even padding, with the label moved down so the
+    // capitals sit in the middle of the pill.
+    .padding(iced::Padding {
+        top: VIM_PILL_PADDING_Y + VIM_PILL_LABEL_NUDGE,
+        right: 0.0,
+        bottom: VIM_PILL_PADDING_Y - VIM_PILL_LABEL_NUDGE,
+        left: 0.0,
+    })
     .center_x(Length::Fixed(VIM_PILL_WIDTH))
     .clip(true)
     .style(move |_theme| container::Style {
