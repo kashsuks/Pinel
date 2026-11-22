@@ -5,9 +5,12 @@
 
 use crate::CodeEditor;
 use iced::widget::{
-    Id, Space, button, column, container, markdown, mouse_area, row, scrollable, stack, text,
+    Id, Space, button, column, container, markdown, mouse_area, rich_text, row, rule, scrollable,
+    stack, text,
 };
-use iced::{Background, Border, Color, Element, Length, Point, Shadow, Theme};
+use iced::{
+    Background, Border, Color, Element, Font, Length, Point, Shadow, Theme, Vector, padding,
+};
 
 /// Maximum number of completion items shown at once in the menu.
 const MAX_COMPLETION_ITEMS: usize = 8;
@@ -21,6 +24,53 @@ const COMPLETION_PADDING: f32 = 4.0;
 const COMPLETION_MENU_WIDTH: f32 = 250.0;
 /// Border radius in pixels applied to scrollable rail and scroller borders.
 const SCROLLABLE_BORDER_RADIUS: f32 = 4.0;
+
+/// Padding in pixels between the hover box border and its content.
+const HOVER_PADDING: f32 = 8.0;
+/// Transparent gap in pixels between the hovered line and the hover box.
+///
+/// The gap is padding *inside* the hover's mouse area, so the hit area still
+/// touches the hovered line: moving the mouse from the word into the popup
+/// never crosses a strip of bare editor, which would clear the hover.
+const HOVER_GAP: f32 = 4.0;
+/// Number of editor lines the hover box shows before its content scrolls.
+///
+/// The box is capped at `HOVER_MAX_VISIBLE_LINES * line_height` plus its
+/// padding (256 px at the default 20 px line height), and further by the space
+/// left on the side of the hovered line it opens on.
+const HOVER_MAX_VISIBLE_LINES: f32 = 12.0;
+/// Horizontal room in pixels the hover box always leaves free in the viewport.
+const HOVER_VIEWPORT_INSET: f32 = 24.0;
+/// Minimum gap in pixels between the hover box and the viewport's right edge.
+const HOVER_EDGE_MARGIN: f32 = 4.0;
+/// Extra width in pixels given to the measured content, so rounding in text
+/// shaping never wraps a code line that measured exactly to the box width.
+const HOVER_WIDTH_SLACK: f32 = 2.0;
+/// Corner radius in pixels of the hover box.
+const HOVER_RADIUS: f32 = 6.0;
+/// Hairline colour (white at 8 % opacity) of the hover border and divider.
+const HOVER_HAIRLINE: Color = Color {
+    r: 1.0,
+    g: 1.0,
+    b: 1.0,
+    a: 0.08,
+};
+/// Colour of the hover box's drop shadow.
+const HOVER_SHADOW_COLOR: Color = Color {
+    r: 0.0,
+    g: 0.0,
+    b: 0.0,
+    a: 0.35,
+};
+/// Downward offset in pixels of the hover box's drop shadow.
+const HOVER_SHADOW_OFFSET_Y: f32 = 4.0;
+/// Blur radius in pixels of the hover box's drop shadow.
+const HOVER_SHADOW_BLUR: f32 = 14.0;
+/// Vertical spacing between markdown blocks, as a fraction of the text size.
+///
+/// Tighter than iced's default (0.875) so the signature, divider and docs read
+/// as one compact tooltip.
+const HOVER_ITEM_SPACING_RATIO: f32 = 0.5;
 
 /// State for the LSP overlay display (hover tooltips and completion menus).
 ///
@@ -365,11 +415,6 @@ pub enum LspOverlayMessage {
     CompletionConfirm,
 }
 
-/// Measures the maximum pixel width of any line in the given text.
-fn measure_hover_width(editor: &CodeEditor, text: &str) -> f32 {
-    text.lines().map(|line| editor.measure_text_width(line)).fold(0.0, f32::max)
-}
-
 /// Renders LSP overlay elements (hover tooltip and completion menu) on top of a [`CodeEditor`].
 ///
 /// Returns an [`Element`] containing the overlays positioned relative to the editor viewport.
@@ -378,11 +423,19 @@ fn measure_hover_width(editor: &CodeEditor, text: &str) -> f32 {
 /// # Arguments
 ///
 /// * `state` — current overlay display state
-/// * `editor` — the editor this overlay is associated with (used for viewport measurements)
+/// * `editor` — the editor this overlay is associated with (used for viewport
+///   measurements, and for the font hover code blocks are rendered in)
 /// * `theme` — the active Iced theme for styling
-/// * `font_size` — font size in points, used for markdown rendering
-/// * `line_height` — line height in pixels, used for vertical positioning
+/// * `font_size` — font size in points, used for markdown rendering; pass
+///   [`CodeEditor::font_size`] so hover text matches the editor
+/// * `line_height` — line height in pixels, used for vertical positioning and
+///   for hover code lines; pass [`CodeEditor::line_height`]
 /// * `f` — mapping function from [`LspOverlayMessage`] to the app's message type
+///
+/// The hover box opens below the hovered line and flips above it only when it
+/// does not fit below and there is more room above. It is sized to its content,
+/// capped to the viewport width and to a dozen lines of height (scrolling
+/// beyond that), and shifted left when it would cross the viewport's right edge.
 ///
 /// # Example
 ///
@@ -406,8 +459,8 @@ fn measure_hover_width(editor: &CodeEditor, text: &str) -> f32 {
 ///         &app.overlay,
 ///         &app.editor,
 ///         &iced::Theme::Dark,
-///         14.0,
-///         20.0,
+///         app.editor.font_size(),
+///         app.editor.line_height(),
 ///         Message::Overlay,
 ///     )
 /// }
@@ -464,6 +517,13 @@ pub fn view_lsp_overlay<'a, M: Clone + 'a>(
 }
 
 /// Builds the hover tooltip layer.
+///
+/// The layer fills the editor viewport and places the hover box with spacers.
+/// Below the line, a spacer as tall as the line's bottom edge pushes the box's
+/// hit area down to it. Above the line, a container as tall as the line's top
+/// edge aligns the box to its bottom, so the box ends on the line whatever its
+/// rendered height. Either way the transparent [`HOVER_GAP`] sits inside the
+/// hit area, which therefore touches the hovered line.
 fn build_hover_layer<'a, M: Clone + 'a>(
     state: &'a LspOverlayState,
     editor: &'a CodeEditor,
@@ -482,30 +542,63 @@ fn build_hover_layer<'a, M: Clone + 'a>(
         return empty_overlay();
     };
 
-    let line_count = hover.lines().count().max(1);
-    let visible_lines = line_count.min(10);
-    let hover_padding = 8.0;
-    let scroll_height =
-        line_height * visible_lines as f32 + (line_height * 0.75).max(10.0) + hover_padding * 2.0;
+    let mut markdown_style = markdown::Style::from_palette(theme.palette());
+    markdown_style.code_block_font = editor.font;
+    markdown_style.inline_code_font = editor.font;
+    let mut markdown_settings = markdown::Settings::with_text_size(font_size, markdown_style);
+    markdown_settings.spacing = (font_size * HOVER_ITEM_SPACING_RATIO).into();
 
+    // Width: the widest content line, capped to the viewport.
+    let measure = |line: &str| editor.measure_text_width(line);
     let viewport_width = editor.viewport_width();
-    let max_line_width = measure_hover_width(editor, hover);
-    let max_width = (viewport_width - 24.0).max(0.0);
-    let content_max_width = if max_width > hover_padding * 2.0 {
-        max_width - hover_padding * 2.0
-    } else {
-        max_width
-    };
+    let natural_width =
+        hover_content_width(hover, &state.hover_items, &measure).ceil() + HOVER_WIDTH_SLACK;
+    let content_max_width = (viewport_width - HOVER_VIEWPORT_INSET - 2.0 * HOVER_PADDING).max(0.0);
     let content_width = if content_max_width > 0.0 {
-        max_line_width.min(content_max_width)
+        natural_width.min(content_max_width)
     } else {
-        max_line_width
+        natural_width
     };
-    let hover_width = content_width + hover_padding * 2.0;
+    let hover_width = content_width + 2.0 * HOVER_PADDING;
 
-    let palette = theme.palette();
-    let markdown_settings =
-        markdown::Settings::with_text_size(font_size, markdown::Style::from_palette(palette));
+    // Height: the box shrink-wraps its content up to `max_box_height`; the
+    // estimate only picks the side of the line the box opens on.
+    let max_box_height = HOVER_MAX_VISIBLE_LINES * line_height + 2.0 * HOVER_PADDING;
+    let estimated_height = HeightEstimator {
+        settings: markdown_settings,
+        line_height,
+        measure: &measure,
+    }
+    .hover_height(&state.hover_items, content_width)
+    .min(max_box_height)
+        + HOVER_GAP;
+
+    // The anchor is the hovered word's top-left corner in content coordinates.
+    let (anchor_x, anchor_top) = match state.hover_position {
+        Some(anchor) => (
+            anchor.x - editor.horizontal_scroll_offset,
+            anchor.y - editor.viewport_scroll(),
+        ),
+        None => (HOVER_EDGE_MARGIN, HOVER_EDGE_MARGIN),
+    };
+    let placement = hover_vertical_placement(
+        anchor_top,
+        line_height,
+        estimated_height,
+        editor.viewport_height(),
+    );
+    let offset_x = hover_offset_x(anchor_x, hover_width, viewport_width);
+    let (side_space, gap) = match placement {
+        HoverPlacement::Below { max_height, .. } => (max_height, padding::top(HOVER_GAP)),
+        HoverPlacement::Above { max_height, .. } => (max_height, padding::bottom(HOVER_GAP)),
+    };
+    let box_max_height = max_box_height.min(side_space - HOVER_GAP).max(0.0);
+
+    let viewer = HoverViewer {
+        font: editor.font,
+        font_size: editor.font_size(),
+        line_height,
+    };
 
     let entered_for_map = msg_entered.clone();
     let entered_for_enter = msg_entered.clone();
@@ -513,14 +606,14 @@ fn build_hover_layer<'a, M: Clone + 'a>(
 
     let hover_content = scrollable(
         container(
-            markdown::view(&state.hover_items, markdown_settings)
+            markdown::view_with(&state.hover_items, markdown_settings, &viewer)
                 .map(move |_| entered_for_map.clone()),
         )
         .width(Length::Fixed(hover_width))
-        .padding(hover_padding),
+        .padding(HOVER_PADDING),
     )
-    .height(Length::Fixed(scroll_height))
     .width(Length::Fixed(hover_width))
+    .height(Length::Shrink)
     .style(|theme: &Theme, _status| {
         let palette = theme.extended_palette();
         scrollable::Style {
@@ -540,66 +633,377 @@ fn build_hover_layer<'a, M: Clone + 'a>(
         }
     });
 
-    let hover_box =
-        container(column![hover_content]).width(Length::Shrink).style(|theme: &Theme| {
-            let palette = theme.extended_palette();
-            container::Style {
-                background: Some(iced::Background::Color(palette.background.weak.color)),
-                border: iced::Border {
-                    color: palette.primary.weak.color,
-                    width: 1.0,
-                    radius: 6.0.into(),
-                },
-                ..Default::default()
-            }
-        });
+    let hover_box = container(hover_content).max_height(box_max_height).style(hover_box_style);
 
-    let hover_box: Element<'_, M> = mouse_area(hover_box)
+    // `Idle` makes the popup report an interaction, so the stacks beneath it
+    // see a levitating cursor: the editor stops receiving `MouseHover` (which
+    // would re-anchor or clear the hover) while the mouse is over the popup.
+    let hit_area = mouse_area(container(hover_box).padding(gap))
+        .interaction(iced::mouse::Interaction::Idle)
         .on_enter(entered_for_enter)
         .on_move(move |_| entered_for_move.clone())
-        .on_exit(msg_exited)
-        .into();
+        .on_exit(msg_exited);
 
-    let hover_pos = state.hover_position.unwrap_or(Point::new(4.0, 4.0));
-    let viewport_scroll = editor.viewport_scroll();
-    let hover_pos = Point::new(hover_pos.x, (hover_pos.y - viewport_scroll).max(0.0));
-    let viewport_height = editor.viewport_height();
-    let gap = 1.0;
-    let show_above = hover_pos.y >= scroll_height + gap;
+    let positioned = row![Space::new().width(Length::Fixed(offset_x)), hit_area];
 
-    let gap_x = (editor.char_width() * 0.5).max(2.0);
-    let right_x = hover_pos.x + gap_x;
-    let left_x = hover_pos.x - hover_width - gap_x;
-    let max_x = (viewport_width - hover_width - 4.0).max(0.0);
-
-    let offset_x = if right_x <= max_x {
-        right_x
-    } else if left_x >= 0.0 {
-        left_x
-    } else {
-        right_x.clamp(0.0, max_x)
-    };
-
-    let offset_y = if show_above {
-        (hover_pos.y - scroll_height - gap).max(0.0)
-    } else {
-        (hover_pos.y + line_height + gap).max(0.0).min(viewport_height)
+    let layer: Element<'a, M> = match placement {
+        HoverPlacement::Below { top, .. } => {
+            column![Space::new().height(Length::Fixed(top)), positioned].into()
+        },
+        HoverPlacement::Above { bottom, .. } => container(positioned)
+            .width(Length::Fill)
+            .align_bottom(Length::Fixed(bottom))
+            .into(),
     };
 
     *has_overlay = true;
 
-    container(
-        column![
-            Space::new().height(Length::Fixed(offset_y)),
-            row![Space::new().width(Length::Fixed(offset_x)), hover_box]
-        ]
-        .spacing(0)
-        .width(Length::Fill)
-        .height(Length::Fill),
-    )
-    .width(Length::Fill)
-    .height(Length::Fill)
-    .into()
+    container(layer).width(Length::Fill).height(Length::Fill).into()
+}
+
+/// Styles the hover box: the theme's weak background, a faint hairline border
+/// and a soft drop shadow.
+fn hover_box_style(theme: &Theme) -> container::Style {
+    container::Style {
+        background: Some(Background::Color(
+            theme.extended_palette().background.weak.color,
+        )),
+        border: Border {
+            color: HOVER_HAIRLINE,
+            width: 1.0,
+            radius: HOVER_RADIUS.into(),
+        },
+        shadow: Shadow {
+            color: HOVER_SHADOW_COLOR,
+            offset: Vector::new(0.0, HOVER_SHADOW_OFFSET_Y),
+            blur_radius: HOVER_SHADOW_BLUR,
+        },
+        ..container::Style::default()
+    }
+}
+
+/// Where the hover box opens relative to the hovered line.
+///
+/// All values are in pixels, relative to the top of the editor viewport, and
+/// describe the box's hit area, which includes the transparent [`HOVER_GAP`].
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum HoverPlacement {
+    /// Below the line: the hit area starts at `top`, the line's bottom edge,
+    /// and may extend at most `max_height` down to the viewport's bottom.
+    Below {
+        /// Top edge of the hit area.
+        top: f32,
+        /// Space between `top` and the viewport's bottom edge.
+        max_height: f32,
+    },
+    /// Above the line: the hit area ends at `bottom`, the line's top edge,
+    /// and may extend at most `max_height` up to the viewport's top.
+    Above {
+        /// Bottom edge of the hit area.
+        bottom: f32,
+        /// Space between the viewport's top edge and `bottom`.
+        max_height: f32,
+    },
+}
+
+/// Chooses the side of the hovered line the hover box opens on.
+///
+/// Below is the default. The box flips above only when `estimated_height`
+/// does not fit below the line *and* there is more room above than below, so
+/// a box too tall for either side still opens on the roomier one. The returned
+/// `max_height` is the space on the chosen side, never negative.
+///
+/// # Arguments
+///
+/// * `anchor_top` — top edge of the hovered line, relative to the viewport top
+/// * `line_height` — height of the hovered line
+/// * `estimated_height` — expected height of the hit area (box plus gap)
+/// * `viewport_height` — height of the editor viewport
+fn hover_vertical_placement(
+    anchor_top: f32,
+    line_height: f32,
+    estimated_height: f32,
+    viewport_height: f32,
+) -> HoverPlacement {
+    let viewport_height = viewport_height.max(0.0);
+    let line_bottom = (anchor_top + line_height).max(0.0).min(viewport_height);
+    let space_below = viewport_height - line_bottom;
+    let space_above = anchor_top.max(0.0).min(viewport_height);
+
+    if estimated_height > space_below && space_above > space_below {
+        HoverPlacement::Above {
+            bottom: space_above,
+            max_height: space_above,
+        }
+    } else {
+        HoverPlacement::Below {
+            top: line_bottom,
+            max_height: space_below,
+        }
+    }
+}
+
+/// Returns the left edge of the hover box, relative to the viewport's left.
+///
+/// The box starts at the hovered word (`anchor_x`, already corrected for
+/// horizontal scroll) and shifts left as needed to keep [`HOVER_EDGE_MARGIN`]
+/// free at the viewport's right edge, but never past the viewport's left edge.
+fn hover_offset_x(anchor_x: f32, hover_width: f32, viewport_width: f32) -> f32 {
+    let max_x = (viewport_width - hover_width - HOVER_EDGE_MARGIN).max(0.0);
+    anchor_x.min(max_x).max(0.0)
+}
+
+/// Returns the natural content width of a hover, in pixels.
+///
+/// Code blocks render in the editor's font, so their lines, taken from the
+/// parsed `items`, measure exactly. Prose renders in the proportional UI font
+/// and wraps, so its raw source lines (outside code fences) give an estimate.
+/// The result is the widest line of either kind.
+fn hover_content_width(
+    markdown: &str,
+    items: &[markdown::Item],
+    measure: &dyn Fn(&str) -> f32,
+) -> f32 {
+    let mut code_blocks = Vec::new();
+    collect_code_blocks(items, &mut code_blocks);
+    let code_width = code_blocks
+        .iter()
+        .flat_map(|code| code.lines())
+        .map(measure)
+        .fold(0.0, f32::max);
+    let prose_width = prose_lines(markdown).map(measure).fold(0.0, f32::max);
+    code_width.max(prose_width)
+}
+
+/// Appends the code of every code block in `items`, including blocks nested
+/// in lists and quotes, to `out`.
+fn collect_code_blocks<'a>(items: &'a [markdown::Item], out: &mut Vec<&'a str>) {
+    for item in items {
+        match item {
+            markdown::Item::CodeBlock { code, .. } => out.push(code),
+            markdown::Item::Quote(items) => collect_code_blocks(items, out),
+            markdown::Item::List { bullets, .. } => {
+                for bullet in bullets {
+                    collect_code_blocks(bullet_items(bullet), out);
+                }
+            },
+            _ => {},
+        }
+    }
+}
+
+/// Returns the items of a markdown list bullet.
+fn bullet_items(bullet: &markdown::Bullet) -> &[markdown::Item] {
+    match bullet {
+        markdown::Bullet::Point { items } | markdown::Bullet::Task { items, .. } => items,
+    }
+}
+
+/// Returns the lines of `markdown` outside fenced code blocks, without the
+/// fence lines themselves.
+fn prose_lines(markdown: &str) -> impl Iterator<Item = &str> {
+    let mut fence: Option<&str> = None;
+    markdown.lines().filter(move |line| {
+        let line = line.trim_start();
+        match fence {
+            Some(marker) => {
+                if line.starts_with(marker) {
+                    fence = None;
+                }
+                false
+            },
+            None => match ["```", "~~~"].into_iter().find(|marker| line.starts_with(marker)) {
+                Some(marker) => {
+                    fence = Some(marker);
+                    false
+                },
+                None => true,
+            },
+        }
+    })
+}
+
+/// Estimates the rendered height of hover markdown, for the flip decision.
+///
+/// The estimate aims to be close rather than exact: every rendered line counts
+/// as one `line_height` (code lines render at exactly that height), prose
+/// wraps at the content width, blocks are separated by the markdown spacing,
+/// and headings, lists, quotes and tables are approximated.
+struct HeightEstimator<'m> {
+    /// The markdown settings the hover is rendered with.
+    settings: markdown::Settings,
+    /// Height in pixels of one rendered line.
+    line_height: f32,
+    /// Measures the width in pixels of one line of text.
+    measure: &'m dyn Fn(&str) -> f32,
+}
+
+impl HeightEstimator<'_> {
+    /// Estimates the hover box height for `items` laid out `content_width`
+    /// wide, box padding included.
+    fn hover_height(&self, items: &[markdown::Item], content_width: f32) -> f32 {
+        self.blocks(items, content_width, self.settings.spacing.0) + 2.0 * HOVER_PADDING
+    }
+
+    /// Estimates the height of `items` stacked `spacing` apart, `width` wide.
+    fn blocks(&self, items: &[markdown::Item], width: f32, spacing: f32) -> f32 {
+        let gaps = items.len().saturating_sub(1) as f32 * spacing;
+        items.iter().map(|item| self.block(item, width, spacing)).sum::<f32>() + gaps
+    }
+
+    /// Estimates the height of one markdown block, `width` wide.
+    fn block(&self, item: &markdown::Item, width: f32, spacing: f32) -> f32 {
+        let text_size = self.settings.text_size.0;
+        match item {
+            markdown::Item::CodeBlock { code, .. } => {
+                self.wrapped_lines(code, width) * self.line_height
+            },
+            markdown::Item::Rule => 1.0,
+            markdown::Item::Paragraph(text) => {
+                self.wrapped_lines(&self.plain_text(text), width) * self.line_height
+            },
+            markdown::Item::Heading(level, text) => {
+                let scale = if text_size > 0.0 {
+                    self.heading_size(*level) / text_size
+                } else {
+                    1.0
+                };
+                let lines = self.wrapped_lines(&self.plain_text(text), width / scale);
+                lines * self.line_height * scale + text_size / 2.0
+            },
+            markdown::Item::List { bullets, .. } => {
+                let width = (width - 2.0 * spacing).max(0.0);
+                let gaps = bullets.len().saturating_sub(1) as f32 * spacing;
+                bullets
+                    .iter()
+                    .map(|bullet| self.blocks(bullet_items(bullet), width, spacing))
+                    .sum::<f32>()
+                    + gaps
+            },
+            markdown::Item::Quote(items) => self.blocks(items, width, spacing),
+            markdown::Item::Table { rows, .. } => {
+                (rows.len() + 1) as f32 * (self.line_height + spacing)
+            },
+            markdown::Item::Image { .. } => self.line_height,
+        }
+    }
+
+    /// Returns how many lines `text` takes when wrapped at `width`, counting
+    /// every hard line at least once.
+    fn wrapped_lines(&self, text: &str, width: f32) -> f32 {
+        let lines: f32 = text
+            .lines()
+            .map(|line| {
+                if width > 0.0 {
+                    ((self.measure)(line) / width).ceil().max(1.0)
+                } else {
+                    1.0
+                }
+            })
+            .sum();
+        lines.max(1.0)
+    }
+
+    /// Returns the text size in pixels of a heading of `level`.
+    fn heading_size(&self, level: markdown::HeadingLevel) -> f32 {
+        let settings = &self.settings;
+        match level {
+            markdown::HeadingLevel::H1 => settings.h1_size.0,
+            markdown::HeadingLevel::H2 => settings.h2_size.0,
+            markdown::HeadingLevel::H3 => settings.h3_size.0,
+            markdown::HeadingLevel::H4 => settings.h4_size.0,
+            markdown::HeadingLevel::H5 => settings.h5_size.0,
+            markdown::HeadingLevel::H6 => settings.h6_size.0,
+        }
+    }
+
+    /// Returns the plain text of parsed markdown text.
+    ///
+    /// Uses the same style the hover renders with, so the spans cached on
+    /// `text` stay valid for rendering.
+    fn plain_text(&self, text: &markdown::Text) -> String {
+        text.spans(self.settings.style).iter().map(|span| &*span.text).collect()
+    }
+}
+
+/// Markdown [`Viewer`](markdown::Viewer) for hover content.
+///
+/// Code blocks, such as the signature, render as plain lines of highlighted
+/// text in the editor's font, size and line height, without iced's default
+/// code-block chrome (dark box, padding, nested horizontal scrollable), so
+/// they look like the code they came from and measure exactly as the editor
+/// measures text. Rules render as a faint 1 px divider. Everything else falls
+/// back to iced's default rendering.
+#[derive(Debug, Clone, Copy)]
+struct HoverViewer {
+    /// The editor's font, used for code blocks.
+    font: Font,
+    /// The editor's font size in pixels, used for code blocks.
+    font_size: f32,
+    /// Height in pixels of one code line.
+    line_height: f32,
+}
+
+impl<'a> markdown::Viewer<'a, markdown::Uri> for HoverViewer {
+    fn on_link_click(url: markdown::Uri) -> markdown::Uri {
+        url
+    }
+
+    fn code_block(
+        &self,
+        settings: markdown::Settings,
+        _language: Option<&'a str>,
+        _code: &'a str,
+        lines: &'a [markdown::Text],
+    ) -> Element<'a, markdown::Uri> {
+        let HoverViewer {
+            font,
+            font_size,
+            line_height,
+        } = *self;
+        column(lines.iter().map(|line| {
+            rich_text(spans_in_font_family(&line.spans(settings.style), font))
+                .font(font)
+                .size(font_size)
+                .line_height(text::LineHeight::Absolute(line_height.into()))
+                .into()
+        }))
+        .into()
+    }
+
+    fn rule(&self, _settings: markdown::Settings) -> Element<'a, markdown::Uri> {
+        rule::horizontal(1)
+            .style(|_theme: &Theme| rule::Style {
+                color: HOVER_HAIRLINE,
+                radius: 0.0.into(),
+                fill_mode: rule::FillMode::Full,
+                snap: true,
+            })
+            .into()
+    }
+}
+
+/// Moves syntax-highlighted spans onto `font`'s family.
+///
+/// iced's markdown highlighter gives bold and italic tokens an explicit
+/// [`Font::MONOSPACE`], which overrides the font set on the line. Each such
+/// span keeps its weight and style but takes `font`'s family, so every token
+/// renders in the editor's face.
+fn spans_in_font_family(
+    spans: &[text::Span<'static, markdown::Uri>],
+    font: Font,
+) -> Vec<text::Span<'static, markdown::Uri>> {
+    spans
+        .iter()
+        .map(|span| {
+            let mut span = span.clone();
+            span.font = span.font.map(|token_font| Font {
+                family: font.family,
+                ..token_font
+            });
+            span
+        })
+        .collect()
 }
 
 /// Builds the auto-completion menu layer.
@@ -872,5 +1276,181 @@ mod tests {
         assert_eq!(state.selected_item(), Some("first"));
         state.navigate(1);
         assert_eq!(state.selected_item(), Some("second"));
+    }
+
+    // -------------------------------------------------------------------------
+    // Hover layout helpers
+    // -------------------------------------------------------------------------
+
+    /// Tolerance for comparing computed pixel values.
+    const EPSILON: f32 = 1e-3;
+
+    /// Returns whether two pixel values are equal within [`EPSILON`].
+    fn approx_eq(a: f32, b: f32) -> bool {
+        (a - b).abs() < EPSILON
+    }
+
+    /// Measures text as a monospace font 8 px per character would.
+    fn measure_8px(text: &str) -> f32 {
+        text.chars().count() as f32 * 8.0
+    }
+
+    /// Markdown settings at a 14 px text size with 7 px block spacing.
+    fn settings_14px() -> markdown::Settings {
+        let mut settings = markdown::Settings::with_text_size(
+            14.0,
+            markdown::Style::from_palette(Theme::Dark.palette()),
+        );
+        settings.spacing = 7.0.into();
+        settings
+    }
+
+    #[test]
+    fn test_hover_vertical_placement_defaults_below() {
+        // Line top at 100 px with 20 px lines: a 120 px box fits below.
+        let placement = hover_vertical_placement(100.0, 20.0, 120.0, 600.0);
+        assert!(
+            matches!(
+                placement,
+                HoverPlacement::Below { top, max_height }
+                    if approx_eq(top, 120.0) && approx_eq(max_height, 480.0)
+            ),
+            "got {placement:?}"
+        );
+    }
+
+    #[test]
+    fn test_hover_vertical_placement_flips_above_when_no_room() {
+        // Only 80 px below the line, 500 px above it.
+        let placement = hover_vertical_placement(500.0, 20.0, 120.0, 600.0);
+        assert!(
+            matches!(
+                placement,
+                HoverPlacement::Above { bottom, max_height }
+                    if approx_eq(bottom, 500.0) && approx_eq(max_height, 500.0)
+            ),
+            "got {placement:?}"
+        );
+    }
+
+    #[test]
+    fn test_hover_vertical_placement_stays_below_when_above_is_smaller() {
+        // The box fits on neither side, but below (140 px) beats above (40 px).
+        let placement = hover_vertical_placement(40.0, 20.0, 300.0, 200.0);
+        assert!(
+            matches!(
+                placement,
+                HoverPlacement::Below { top, max_height }
+                    if approx_eq(top, 60.0) && approx_eq(max_height, 140.0)
+            ),
+            "got {placement:?}"
+        );
+    }
+
+    #[test]
+    fn test_hover_vertical_placement_max_height_never_negative() {
+        let cases = [
+            // Line partly below the viewport's bottom edge.
+            (590.0, 20.0, 0.0, 600.0),
+            // Line partly above the viewport's top edge.
+            (-10.0, 20.0, 500.0, 100.0),
+            // Viewport not laid out yet.
+            (10.0, 20.0, 50.0, 0.0),
+            // Negative viewport height.
+            (10.0, 20.0, 50.0, -5.0),
+        ];
+        for (anchor_top, line_height, estimated_height, viewport_height) in cases {
+            let placement = hover_vertical_placement(
+                anchor_top,
+                line_height,
+                estimated_height,
+                viewport_height,
+            );
+            let (edge, max_height) = match placement {
+                HoverPlacement::Below { top, max_height } => (top, max_height),
+                HoverPlacement::Above { bottom, max_height } => (bottom, max_height),
+            };
+            assert!(max_height >= 0.0, "negative max_height in {placement:?}");
+            assert!(edge >= 0.0, "edge outside the viewport in {placement:?}");
+        }
+    }
+
+    #[test]
+    fn test_hover_offset_x_starts_at_anchor() {
+        assert!(approx_eq(hover_offset_x(100.0, 200.0, 800.0), 100.0));
+    }
+
+    #[test]
+    fn test_hover_offset_x_clamps_to_viewport() {
+        // Too far right: shift left to keep the edge margin free.
+        let max_x = 800.0 - 200.0 - HOVER_EDGE_MARGIN;
+        assert!(approx_eq(hover_offset_x(700.0, 200.0, 800.0), max_x));
+        // Left of the viewport (scrolled horizontally): pin to its left edge.
+        assert!(approx_eq(hover_offset_x(-50.0, 200.0, 800.0), 0.0));
+    }
+
+    #[test]
+    fn test_hover_offset_x_narrow_viewport_is_zero() {
+        assert!(approx_eq(hover_offset_x(100.0, 300.0, 200.0), 0.0));
+    }
+
+    #[test]
+    fn test_prose_lines_skips_fenced_code() {
+        let markdown = "```rust\nfn main()\n```\nprose\n~~~\ncode\n~~~\n---\nmore";
+        let lines: Vec<&str> = prose_lines(markdown).collect();
+        assert_eq!(lines, vec!["prose", "---", "more"]);
+    }
+
+    #[test]
+    fn test_hover_content_width_uses_widest_line() {
+        // The signature is wider than any prose line (or the fence lines).
+        let markdown = "```rust\nfn long_signature()\n```\n\nshort docs";
+        let items: Vec<markdown::Item> = markdown::parse(markdown).collect();
+        let width = hover_content_width(markdown, &items, &measure_8px);
+        assert!(
+            approx_eq(width, measure_8px("fn long_signature()")),
+            "got {width}"
+        );
+
+        // A prose line wider than the code wins.
+        let markdown = "```rust\nfn f()\n```\n\nthese docs are the widest";
+        let items: Vec<markdown::Item> = markdown::parse(markdown).collect();
+        let width = hover_content_width(markdown, &items, &measure_8px);
+        assert!(
+            approx_eq(width, measure_8px("these docs are the widest")),
+            "got {width}"
+        );
+    }
+
+    #[test]
+    fn test_hover_height_estimate_counts_code_rule_and_prose() {
+        let items: Vec<markdown::Item> =
+            markdown::parse("```rust\nfn foo()\n```\n\n---\n\nSome docs.").collect();
+        let estimator = HeightEstimator {
+            settings: settings_14px(),
+            line_height: 20.0,
+            measure: &measure_8px,
+        };
+        // Code line 20 + spacing 7 + rule 1 + spacing 7 + prose line 20,
+        // plus the box padding on both sides.
+        let expected = 20.0 + 7.0 + 1.0 + 7.0 + 20.0 + 2.0 * HOVER_PADDING;
+        assert!(approx_eq(estimator.hover_height(&items, 400.0), expected));
+    }
+
+    #[test]
+    fn test_hover_height_estimate_wraps_prose() {
+        // 99 characters at 8 px is 792 px: two lines in a 400 px box.
+        let paragraph = "word ".repeat(20);
+        let items: Vec<markdown::Item> = markdown::parse(paragraph.trim_end()).collect();
+        let estimator = HeightEstimator {
+            settings: settings_14px(),
+            line_height: 20.0,
+            measure: &measure_8px,
+        };
+        let height = estimator.hover_height(&items, 400.0);
+        assert!(
+            approx_eq(height, 2.0 * 20.0 + 2.0 * HOVER_PADDING),
+            "got {height}"
+        );
     }
 }

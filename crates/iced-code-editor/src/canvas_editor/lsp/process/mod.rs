@@ -326,26 +326,7 @@ impl LspProcessClient {
             "jsonrpc": "2.0",
             "id": client.next_id(),
             "method": "initialize",
-            "params": {
-                "processId": std::process::id(),
-                "rootUri": root_uri,
-                "capabilities": {
-                    "textDocument": {
-                        "synchronization": {
-                            "dynamicRegistration": false,
-                            "willSave": false,
-                            "didSave": true
-                        },
-                        "documentSymbol": {
-                            "hierarchicalDocumentSymbolSupport": true
-                        }
-                    },
-                    "window": {
-                        "workDoneProgress": true
-                    }
-                },
-                "workspaceFolders": null
-            }
+            "params": initialize_params(root_uri, std::process::id())
         });
         client.send_message(&initialize);
 
@@ -410,6 +391,37 @@ impl LspProcessClient {
             },
         }
     }
+}
+
+/// Builds the `params` of the `initialize` request sent to every server.
+///
+/// `textDocument.hover.contentFormat` prefers markdown: without it, servers
+/// such as pyright, rust-analyzer and clangd answer hovers with plaintext, so
+/// the signature arrives without a code fence and renders as prose.
+fn initialize_params(root_uri: &str, process_id: u32) -> serde_json::Value {
+    json!({
+        "processId": process_id,
+        "rootUri": root_uri,
+        "capabilities": {
+            "textDocument": {
+                "synchronization": {
+                    "dynamicRegistration": false,
+                    "willSave": false,
+                    "didSave": true
+                },
+                "hover": {
+                    "contentFormat": ["markdown", "plaintext"]
+                },
+                "documentSymbol": {
+                    "hierarchicalDocumentSymbolSupport": true
+                }
+            },
+            "window": {
+                "workDoneProgress": true
+            }
+        },
+        "workspaceFolders": null
+    })
 }
 
 // =============================================================================
@@ -711,6 +723,29 @@ mod tests {
                 character: ec,
             },
         }
+    }
+
+    // -------------------------------------------------------------------------
+    // initialize_params
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_initialize_params_requests_markdown_hover() {
+        let params = initialize_params("file:///tmp/project", 42);
+
+        let hover = &params["capabilities"]["textDocument"]["hover"];
+        assert_eq!(hover["contentFormat"][0], "markdown");
+        assert_eq!(hover["contentFormat"][1], "plaintext");
+
+        // The rest of the request is unchanged by the hover capability.
+        assert_eq!(params["processId"], 42);
+        assert_eq!(params["rootUri"], "file:///tmp/project");
+        assert_eq!(
+            params["capabilities"]["textDocument"]["documentSymbol"]["hierarchicalDocumentSymbolSupport"],
+            true
+        );
+        assert_eq!(params["capabilities"]["window"]["workDoneProgress"], true);
+        assert!(params["workspaceFolders"].is_null());
     }
 
     // -------------------------------------------------------------------------
