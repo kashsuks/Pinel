@@ -60,6 +60,9 @@ jobs:
 
           build() {
               cd "$srcdir"/Pinel-*
+              release_version="${{ inputs.release_tag }}"
+              release_version="${release_version#v}"
+              sed -i "0,/^version = /s/^version = .*/version = \"$release_version\"/" Cargo.toml
               cargo build --release
           }
 

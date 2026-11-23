@@ -33,6 +33,25 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
+      - name: Set embedded release version
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          python_cmd=python
+          if ! command -v python >/dev/null; then python_cmd=python3; fi
+          "$python_cmd" - <<'PYTHON'
+          import os
+          import pathlib
+          import re
+
+          version = os.environ["RELEASE_TAG"].removeprefix("v")
+          path = pathlib.Path("Cargo.toml")
+          content, count = re.subn(r'^version = "[^"\n]+"', f'version = "{version}"', path.read_text(), count=1, flags=re.MULTILINE)
+          assert count == 1, "package version not found"
+          path.write_text(content)
+          PYTHON
+
       - name: Build release binary
         run: cargo build --release --target ${{ matrix.target }}
         env:
@@ -46,8 +65,10 @@ jobs:
             target/${{ inputs.binary_name }}-${{ matrix.asset_suffix }}
 
       - name: Upload asset to release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
+          draft: true
+          fail_on_unmatched_files: true
           files: target/${{ inputs.binary_name }}-${{ matrix.asset_suffix }}
           tag_name: ${{ inputs.release_tag }}
         env:
