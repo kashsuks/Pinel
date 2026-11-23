@@ -115,7 +115,7 @@ Manual checks also reveal releases you previously skipped. Failed automatic chec
 On the first launch of a new installed version, Pinel opens its published GitHub release notes
 in a read-only **What's New** tab, after restoring your files. This also happens once when
 this feature is first installed. The tab is never autosaved or restored as a file.
-Notes are cached locally and can be reopened from **Settings → General → What's New in this version**.
+Notes are cached locally and can be reopened from **Settings → General → What's New**.
 If you're offline or notes aren't published yet, Pinel retries on a later launch. Turning off
 automatic checks also disables automatic fetching of release notes; manual actions still work.
 
