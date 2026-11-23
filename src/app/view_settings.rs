@@ -260,7 +260,8 @@ impl App {
                 .on_toggle(Message::ToggleAutomaticUpdates),
             button(text("Check for updates"))
                 .on_press_maybe((!self.update_check_in_flight).then_some(Message::CheckForUpdate)),
-            text(&self.update_status).size(TEXT_SM).color(theme().text_muted)
+            text(&self.update_status).size(TEXT_SM).color(theme().text_muted),
+            button(text("What's New in this version")).on_press(Message::ShowReleaseNotes)
         ]
         .spacing(SPACE_3)
         .width(Length::Fill)

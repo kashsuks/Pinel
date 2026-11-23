@@ -30,7 +30,13 @@ impl App {
             None => app.restore_last_session_task(),
         };
 
-        (app, iced::Task::batch([update_task, startup_task]))
+        (
+            app,
+            iced::Task::batch([
+                update_task,
+                startup_task.chain(iced::Task::done(Message::StartupReady)),
+            ]),
+        )
     }
 
     /// Restores the last saved session: reopens its folder and its tabs.

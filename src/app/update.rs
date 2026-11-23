@@ -2434,7 +2434,9 @@ impl App {
 
                 iced::Task::none()
             },
-            Message::MarkdownLinkClicked(_uri) => iced::Task::none(),
+            Message::MarkdownLinkClicked(uri) => {
+                self.update_message(Message::OpenUrl(uri.to_string()))
+            },
             Message::ToggleSearch => {
                 if self.search_visible {
                     self.search_visible = false;
@@ -3632,7 +3634,7 @@ impl App {
                 self.apply_editor_theme_to_tabs();
                 self.editor_preferences.theme_name = name;
                 let _ = crate::config::preferences::save_preferences(&self.editor_preferences);
-                iced::Task::none()
+                self.start_release_notes(false)
             },
             Message::StartupThemeSelected(name) => {
                 self.startup_selected_theme = name.clone();
@@ -3659,6 +3661,12 @@ impl App {
                 self.startup_run_on_startup = !self.startup_run_on_startup;
                 iced::Task::none()
             },
+            Message::StartupReady => {
+                self.startup_ready = true;
+                self.start_release_notes(false)
+            },
+            Message::ShowReleaseNotes => self.start_release_notes(true),
+            Message::ReleaseNotesLoaded(result) => self.finish_release_notes(result),
             Message::CheckForUpdate => self.start_update_check(true),
             Message::UpdateChecked { manual, result } => {
                 self.finish_update_check(manual, result);

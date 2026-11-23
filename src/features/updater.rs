@@ -35,6 +35,10 @@ pub struct UpdateState {
     pub reminded_version: Option<String>,
     /// End of the reminder delay, as Unix seconds.
     pub remind_until: u64,
+    /// Highest installed version whose notes have been displayed.
+    pub last_seen_version: Option<String>,
+    /// Cached installed-version notes for reopening without a connection.
+    pub release_notes: Option<ReleaseNotes>,
 }
 
 impl UpdateState {
@@ -85,6 +89,14 @@ impl UpdateState {
         }
     }
 
+    /// Whether this installed version has unseen notes (including the initial rollout).
+    pub fn needs_release_notes(&self, current: &str) -> bool {
+        match self.last_seen_version.as_deref() {
+            None => true,
+            Some(seen) => Version::parse(seen).is_err() || is_newer(current, seen),
+        }
+    }
+
     /// Postpones only this release for one day.
     pub fn remind_tomorrow(&mut self, version: String, now: u64) {
         self.reminded_version = Some(version);
@@ -100,6 +112,59 @@ struct GithubRelease {
     draft: bool,
     #[serde(default)]
     prerelease: bool,
+    #[serde(default)]
+    body: Option<String>,
+}
+
+/// Notes for exactly one installed release, never for a newer available update.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReleaseNotes {
+    /// Version described by these notes.
+    pub version: String,
+    /// Published GitHub release URL.
+    pub url: String,
+    /// Markdown body from the published release.
+    pub body: String,
+}
+
+impl ReleaseNotes {
+    /// Formats the read-only editor page, including an online fallback link.
+    pub fn markdown(&self) -> String {
+        format!(
+            "# What's New in Pinel {}\n\n{}\n\n[View this release on GitHub]({})\n",
+            self.version, self.body, self.url
+        )
+    }
+}
+
+/// Fetches notes by the installed version's tag, rather than the latest release.
+pub async fn fetch_release_notes() -> Result<ReleaseNotes> {
+    Version::parse(CURRENT_VERSION)?;
+    let release = client()?
+        .get(format!("{RELEASES_URL}/tags/v{CURRENT_VERSION}"))
+        .send()
+        .await?
+        .error_for_status()?
+        .json::<GithubRelease>()
+        .await?;
+    notes_from_release(release, CURRENT_VERSION)
+}
+
+fn notes_from_release(release: GithubRelease, current: &str) -> Result<ReleaseNotes> {
+    anyhow::ensure!(!release.draft, "release is not published");
+    anyhow::ensure!(
+        release.tag_name.strip_prefix('v') == Some(current),
+        "release version mismatch"
+    );
+    let body = release
+        .body
+        .filter(|body| !body.trim().is_empty())
+        .context("release has no notes yet")?;
+    Ok(ReleaseNotes {
+        version: current.into(),
+        url: release.html_url,
+        body,
+    })
 }
 
 /// Current wall-clock time for persisted cooldowns.
@@ -242,6 +307,53 @@ mod tests {
         state.disabled = true;
         assert!(!state.check_due(u64::MAX));
         assert!(state.notification("0.9.0", u64::MAX).is_none());
+        Ok(())
+    }
+    #[test]
+    fn test_needs_release_notes_install_upgrade_restart_and_downgrade() {
+        let mut state = UpdateState::default();
+        assert!(state.needs_release_notes("1.0.0"));
+        state.last_seen_version = Some("1.0.0".into());
+        assert!(!state.needs_release_notes("1.0.0"));
+        assert!(state.needs_release_notes("1.1.0"));
+        assert!(!state.needs_release_notes("0.9.0"));
+        state.last_seen_version = Some("1.1.0-dev.9".into());
+        assert!(state.needs_release_notes("1.1.0-dev.10"));
+        assert!(state.needs_release_notes("1.1.0"));
+    }
+
+    #[test]
+    fn test_notes_from_release_requires_installed_published_nonempty_notes() -> Result<()> {
+        let release = |tag: &str, draft, body| GithubRelease {
+            tag_name: tag.into(),
+            html_url: "https://github.com/kashsuks/pinel/releases/tag/v1.0.0".into(),
+            draft,
+            prerelease: false,
+            body,
+        };
+        assert!(
+            notes_from_release(release("v1.1.0", false, Some("Newer".into())), "1.0.0").is_err()
+        );
+        assert!(
+            notes_from_release(release("v1.0.0", true, Some("Draft".into())), "1.0.0").is_err()
+        );
+        assert!(notes_from_release(release("v1.0.0", false, Some("  ".into())), "1.0.0").is_err());
+        let notes = notes_from_release(
+            release("v1.0.0", false, Some("## Improvements\n- Faster".into())),
+            "1.0.0",
+        )?;
+        assert!(notes.markdown().contains("What's New in Pinel 1.0.0"));
+        assert!(notes.markdown().contains("## Improvements"));
+        let items: Vec<_> = iced::widget::markdown::parse(&notes.markdown()).collect();
+        assert!(!items.is_empty());
+        let state = UpdateState {
+            release_notes: Some(notes),
+            last_seen_version: Some("1.0.0".into()),
+            ..UpdateState::default()
+        };
+        let restored: UpdateState = serde_json::from_str(&serde_json::to_string(&state)?)?;
+        assert!(!restored.needs_release_notes("1.0.0"));
+        assert!(restored.release_notes.is_some());
         Ok(())
     }
 }

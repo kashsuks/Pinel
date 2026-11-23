@@ -381,15 +381,19 @@ impl App {
                         return editor_stack;
                     },
                     TabKind::Preview { md_items } => {
-                        return scrollable(
-                            markdown::view(
-                                md_items,
-                                markdown::Settings::with_style(markdown::Style::from_palette(
-                                    iced::theme::Palette::CATPPUCCIN_MOCHA,
-                                )),
+                        return container(
+                            scrollable(
+                                markdown::view(
+                                    md_items,
+                                    markdown::Settings::with_style(markdown::Style::from_palette(
+                                        iced::theme::Palette::CATPPUCCIN_MOCHA,
+                                    )),
+                                )
+                                .map(Message::MarkdownLinkClicked),
                             )
-                            .map(Message::MarkdownLinkClicked),
+                            .height(Length::Fill),
                         )
+                        .padding(24)
                         .height(Length::Fill)
                         .into();
                     },

@@ -302,6 +302,12 @@ pub enum Message {
     /// "no providers set up" prompt.
     OpenProviderSettings,
 
+    /// Begins post-restore startup work, including installed-release notes.
+    StartupReady,
+    /// Opens the installed release's notes on demand.
+    ShowReleaseNotes,
+    /// Receives installed-version notes from GitHub.
+    ReleaseNotesLoaded(Result<crate::features::updater::ReleaseNotes, String>),
     CheckForUpdate,
     /// Completes a release check; manual checks always show their result.
     UpdateChecked {

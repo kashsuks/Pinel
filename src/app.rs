@@ -61,8 +61,7 @@ pub enum TabKind {
         code_editor: CodeEditor,
         buffer: crate::features::editor_buffer::EditorBuffer,
     },
-    /// markdown preview for an editor tab.
-    #[allow(dead_code)]
+    /// Read-only Markdown page, used for installed-release notes.
     Preview {
         md_items: Vec<markdown::Item>,
     },
@@ -331,6 +330,9 @@ pub struct App {
     update_state: crate::features::updater::UpdateState,
     update_check_in_flight: bool,
     update_status: String,
+    startup_ready: bool,
+    release_notes_in_flight: bool,
+    release_notes_manual: bool,
 
     lsp: crate::features::lsp::LspManager,
     lsp_diagnostics: HashMap<PathBuf, Vec<crate::features::lsp::InlineDiagnostic>>,
@@ -546,6 +548,9 @@ impl Default for App {
             update_state: crate::features::updater::UpdateState::load(),
             update_check_in_flight: false,
             update_status: String::new(),
+            startup_ready: false,
+            release_notes_in_flight: false,
+            release_notes_manual: false,
 
             lsp: crate::features::lsp::LspManager::new(),
             lsp_diagnostics: HashMap::new(),
@@ -899,7 +904,7 @@ impl App {
         let open_tabs: Vec<std::path::PathBuf> = self
             .tabs
             .iter()
-            .filter(|tab| !matches!(tab.kind, TabKind::Commit { .. }))
+            .filter(|tab| !matches!(tab.kind, TabKind::Commit { .. } | TabKind::Preview { .. }))
             .map(|tab| tab.path.clone())
             .collect();
 
@@ -920,7 +925,7 @@ impl App {
             active_tab_index: self
                 .active_tab
                 .and_then(|idx| self.tabs.get(idx))
-                .filter(|tab| !matches!(tab.kind, TabKind::Commit { .. }))
+                .filter(|tab| !matches!(tab.kind, TabKind::Commit { .. } | TabKind::Preview { .. }))
                 .map(|tab| tab.path.clone()),
             cursor_position,
         }
@@ -1030,7 +1035,7 @@ impl App {
             return;
         };
 
-        if matches!(tab.kind, TabKind::Commit { .. }) {
+        if matches!(tab.kind, TabKind::Commit { .. } | TabKind::Preview { .. }) {
             return;
         }
 
