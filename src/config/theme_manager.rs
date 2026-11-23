@@ -183,8 +183,8 @@ return {{
 }
 
 pub fn get_config_dir() -> PathBuf {
-    let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
-    PathBuf::from(home).join(".config").join("pinel")
+    let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
+    home.join(".config").join("pinel")
 }
 
 pub fn get_theme_path() -> PathBuf {
@@ -266,5 +266,16 @@ mod tests {
         let defaults = ThemeColors::default();
         assert_eq!(theme.rosewater, defaults.rosewater);
         assert_eq!(theme.base, defaults.base);
+    }
+
+    #[test]
+    fn config_dir_is_dot_config_pine_under_the_home_directory() {
+        let dir = get_config_dir();
+
+        assert!(dir.ends_with(".config/pinel"));
+        // must be anchored at the real home directory
+        let home = dirs::home_dir().expect("test machine has a home directory");
+        assert_eq!(dir, home.join(".config").join("pinel"));
+        assert!(dir.is_absolute());
     }
 }

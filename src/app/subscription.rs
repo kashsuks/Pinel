@@ -5,8 +5,14 @@ use super::*;
 impl App {
     /// Registers global event listeners and maps them to [`Message`] values.
     pub fn subscription(&self) -> Subscription<Message> {
+        let shortcuts = if self.terminal_open && self.focused_pane == FocusPane::Terminal {
+            crate::subscriptions::keyboard::terminal_shortcuts()
+        } else {
+            crate::subscriptions::keyboard::shortcuts()
+        };
+
         let mut subs = vec![
-            crate::subscriptions::keyboard::shortcuts(),
+            shortcuts,
             crate::subscriptions::keyboard::modifier_state(),
             crate::subscriptions::mouse::sidebar_resize(),
             crate::subscriptions::mouse::cursor_tracker(),
@@ -17,7 +23,13 @@ impl App {
         ];
 
         subs.push(crate::subscriptions::mouse::tab_drag());
-        subs.push(crate::subscriptions::mouse::tab_hold_tick());
+
+        if !self.tabs.is_empty() && self.git_status_directory().is_some() {
+            subs.push(iced::time::every(Duration::from_secs(3)).map(|_| Message::RefreshGitStatus));
+        } else if self.file_tree.is_some() {
+            // Picks up a branch switched outside Pinel, such as in a terminal
+            subs.push(iced::time::every(Duration::from_secs(5)).map(|_| Message::GitBranchTick));
+        }
 
         if self.editor_preferences.autosave_enabled {
             subs.push(

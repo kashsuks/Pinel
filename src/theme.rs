@@ -1,7 +1,7 @@
 use std::{str::FromStr, sync::RwLock};
 
 use iced::Color;
-use iced_code_editor::theme::Style as CodeEditorStyle;
+use iced_code_editor::{theme::Style as CodeEditorStyle, CodeEditor};
 use once_cell::sync::Lazy;
 use syntect::highlighting::{
     Color as SynColor, FontStyle, ScopeSelectors, StyleModifier, Theme as SynTheme, ThemeItem,
@@ -9,15 +9,71 @@ use syntect::highlighting::{
 };
 
 // Layout Constants
-pub const SIDEBAR_DEFAULT_WIDTH: f32 = 180.0;
-pub const SIDEBAR_MIN_WIDTH: f32 = 100.0;
+pub const SIDEBAR_DEFAULT_WIDTH: f32 = 280.0;
+pub const SIDEBAR_MIN_WIDTH: f32 = 220.0;
 pub const SIDEBAR_MAX_WIDTH: f32 = 500.0;
 #[allow(dead_code)]
 pub const RESIZE_HIT_WIDTH: f32 = 12.0;
 pub const ICON_SIZE: f32 = 16.0;
 pub const INDENT_WIDTH: f32 = 16.0;
 pub const BORDER_RADIUS: f32 = 14.0;
-pub const BORDER_RADIUS_TAB: f32 = 10.0;
+/// Corner radius for editor tabs; shares the [`RADIUS_LG`] step of the radius scale.
+pub const BORDER_RADIUS_TAB: f32 = RADIUS_LG;
+
+/// Default width of the conversation panel, independent of the explorer.
+pub const CHAT_DEFAULT_WIDTH: f32 = 400.0;
+/// Font used consistently for source text and code previews.
+pub const CODE_FONT: iced::Font = iced::Font {
+    family: iced::font::Family::Name("Fira Code"),
+    weight: iced::font::Weight::Medium,
+    ..iced::Font::DEFAULT
+};
+/// Size for extended prose such as chat messages.
+pub const TEXT_BODY: f32 = 16.0;
+
+// Text Size Scale
+/// Extra-small UI text: badges, hints and secondary metadata.
+pub const TEXT_XS: f32 = 13.0;
+/// Small UI text: secondary text such as the status bar, breadcrumbs,
+/// metadata (hashes, dates, counts), hints, and loading or empty states.
+pub const TEXT_SM: f32 = 14.0;
+/// Medium UI text: primary labels, inputs and body copy.
+pub const TEXT_MD: f32 = 15.0;
+/// Large UI text: prominent inputs such as the finder and palette queries.
+pub const TEXT_LG: f32 = 17.0;
+/// Font size of the code editor text, in pixels.
+///
+/// Applied together with [`CODE_LINE_HEIGHT`] by [`apply_code_metrics`].
+pub const CODE_FONT_SIZE: f32 = 16.0;
+/// Default code line height in logical pixels. User font sizes preserve
+/// this ratio to [`CODE_FONT_SIZE`].
+pub const CODE_LINE_HEIGHT: f32 = 24.0;
+
+/// Applies a font size and the default line-height ratio to `editor`.
+///
+/// The font size is set first: it recomputes the character width, and with
+/// auto-adjust off it leaves the line height alone, so the fixed line height
+/// set afterwards is the one that sticks.
+pub fn apply_code_metrics(editor: &mut CodeEditor, font_size: f32) {
+    editor.set_font_size(font_size, false);
+    editor.set_line_height(font_size * CODE_LINE_HEIGHT / CODE_FONT_SIZE);
+}
+
+// Spacing Scale (used for padding and spacing between widgets)
+/// Spacing step 1: the tightest gap between related elements.
+pub const SPACE_1: f32 = 4.0;
+/// Spacing step 2: the default gap and padding inside controls.
+pub const SPACE_2: f32 = 8.0;
+/// Spacing step 3: padding around groups and panel content.
+pub const SPACE_3: f32 = 12.0;
+/// Spacing step 4: the widest gap, between sections.
+pub const SPACE_4: f32 = 16.0;
+
+// Radius Scale
+/// Small corner radius for buttons, inputs and list rows.
+pub const RADIUS_SM: f32 = 6.0;
+/// Large corner radius for cards, popups and tabs.
+pub const RADIUS_LG: f32 = 10.0;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // PALETTE – Generic color slots.  Swap these values to re-theme the editor.
@@ -281,6 +337,7 @@ fn editor_style(
         gutter_background,
         gutter_border,
         line_number_color,
+        line_number_active_color: text_color,
         scrollbar_background,
         scroller_color,
         current_line_highlight,
@@ -462,6 +519,7 @@ impl ThemeColors {
             "editor.gutter_background" => self.editor_style.gutter_background = color,
             "editor.gutter_border" => self.editor_style.gutter_border = color,
             "editor.line_number_color" => self.editor_style.line_number_color = color,
+            "editor.line_number_active_color" => self.editor_style.line_number_active_color = color,
             "editor.scrollbar_background" => self.editor_style.scrollbar_background = color,
             "editor.scroller_color" => self.editor_style.scroller_color = color,
             "editor.current_line_highlight" => self.editor_style.current_line_highlight = color,
@@ -493,10 +551,13 @@ pub const BUILTIN_THEMES: &[&str] = &[
     "Ayu Dark",
 ];
 
+/// Returns the palette for the built-in theme `name`, falling back to Pinel
+/// Blueberry Dark for unknown names.
 pub fn builtin_theme(name: &str) -> ThemeColors {
     match name {
         "Pinel Blueberry Dark" => pinel_blueberry_dark(),
         "Pinel Blueberry Light" => pinel_blueberry_light(),
+        "Catppuccin Mocha" => catppuccin_mocha(),
         "Gruvbox Dark" => gruvbox_dark(),
         "GitHub Dark" => github_dark(),
         "Nord" => nord(),
@@ -674,6 +735,86 @@ fn pinel_blueberry_light() -> ThemeColors {
             Color::from_rgb(0.983, 0.985, 0.991),
             blue,
             Color::from_rgba(0.647, 0.690, 0.906, 0.14),
+        ),
+        syntax_theme: syn,
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Catppuccin Mocha
+// ═══════════════════════════════════════════════════════════════════════════
+
+fn catppuccin_mocha() -> ThemeColors {
+    // Catppuccin Mocha palette
+    let rosewater = Color::from_rgb(0.961, 0.878, 0.863); // #f5e0dc
+    let mauve = Color::from_rgb(0.796, 0.651, 0.969); // #cba6f7
+    let peach = Color::from_rgb(0.980, 0.702, 0.529); // #fab387
+    let yellow = Color::from_rgb(0.976, 0.886, 0.686); // #f9e2af
+    let green = Color::from_rgb(0.651, 0.890, 0.631); // #a6e3a1
+    let sky = Color::from_rgb(0.537, 0.863, 0.922); // #89dceb
+    let blue = Color::from_rgb(0.537, 0.706, 0.980); // #89b4fa
+    let lavender = Color::from_rgb(0.706, 0.745, 0.996); // #b4befe
+    let text = Color::from_rgb(0.804, 0.839, 0.957); // #cdd6f4
+    let subtext1 = Color::from_rgb(0.729, 0.761, 0.871); // #bac2de
+    let subtext0 = Color::from_rgb(0.651, 0.678, 0.784); // #a6adc8
+    let overlay2 = Color::from_rgb(0.576, 0.600, 0.698); // #9399b2
+    let overlay1 = Color::from_rgb(0.498, 0.518, 0.612); // #7f849c
+    let overlay0 = Color::from_rgb(0.424, 0.439, 0.525); // #6c7086
+    let surface1 = Color::from_rgb(0.271, 0.278, 0.353); // #45475a
+    let surface0 = Color::from_rgb(0.192, 0.196, 0.267); // #313244
+    let base = Color::from_rgb(0.118, 0.118, 0.180); // #1e1e2e
+    let mantle = Color::from_rgb(0.094, 0.094, 0.145); // #181825
+    let crust = Color::from_rgb(0.067, 0.067, 0.106); // #11111b
+
+    let syn = build_syntax_theme(
+        "Catppuccin Mocha",
+        text,
+        base,
+        rosewater,
+        surface0,
+        overlay2, // comments
+        mauve,    // keywords
+        blue,     // functions
+        yellow,   // types
+        green,    // strings
+        peach,    // numbers
+        peach,    // constants
+        text,     // variables
+        lavender, // properties
+        sky,      // operators
+        overlay2, // punctuation
+    );
+
+    ThemeColors {
+        bg_primary: mantle,
+        bg_secondary: mantle,
+        bg_editor: base,
+        bg_tab_active: surface0,
+        bg_tab_inactive: mantle,
+        bg_status_bar: mantle,
+        bg_tab_bar: crust,
+        bg_hover: surface0,
+        bg_pressed: surface1,
+        bg_drag_handle: surface0,
+        text_primary: text,
+        text_secondary: subtext1,
+        text_muted: subtext0,
+        text_dim: overlay1,
+        text_placeholder: overlay0,
+        border_subtle: surface1,
+        border_very_subtle: surface0,
+        selection: Color::from_rgba(overlay2.r, overlay2.g, overlay2.b, 0.30),
+        shadow_dark: Color::from_rgba(crust.r, crust.g, crust.b, 0.5),
+        shadow_light: Color::from_rgba(mauve.r, mauve.g, mauve.b, 0.06),
+        editor_style: editor_style(
+            base,
+            text,
+            mantle,
+            surface0,
+            overlay0,
+            base,
+            blue,
+            Color::from_rgba(surface0.r, surface0.g, surface0.b, 0.6),
         ),
         syntax_theme: syn,
     }
@@ -1143,5 +1284,61 @@ fn build_syntax_theme(
             ..ThemeSettings::default()
         },
         scopes,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_builtin_theme_catppuccin_mocha_not_fallback() {
+        let theme = builtin_theme("Catppuccin Mocha");
+        assert_eq!(theme.syntax_theme.name.as_deref(), Some("Catppuccin Mocha"));
+    }
+
+    #[test]
+    fn test_builtin_theme_every_listed_name_resolves() {
+        for name in BUILTIN_THEMES.iter().filter(|name| **name != "Pinel Blueberry Dark") {
+            let theme = builtin_theme(name);
+            assert_ne!(
+                theme.syntax_theme.name.as_deref(),
+                Some("Pinel Blueberry Dark"),
+                "built-in theme {name:?} fell back to Pinel Blueberry Dark"
+            );
+        }
+    }
+
+    #[test]
+    fn test_size_scale_is_ordered() {
+        let text_scale = [TEXT_XS, TEXT_SM, TEXT_MD, TEXT_LG];
+        assert!(text_scale.windows(2).all(|w| w[0] < w[1]));
+
+        let space_scale = [SPACE_1, SPACE_2, SPACE_3, SPACE_4];
+        assert!(space_scale.windows(2).all(|w| w[0] < w[1]));
+    }
+
+    #[test]
+    fn test_apply_code_metrics_resizes_existing_editor() {
+        let mut editor = CodeEditor::new("let value = 42;", "rs");
+        for size in [24.0, 12.0, 18.0] {
+            apply_code_metrics(&mut editor, size);
+            assert_eq!(editor.font_size(), size);
+            assert_eq!(editor.line_height(), size * 1.5);
+            assert!(editor.char_width().is_finite() && editor.char_width() > 0.0);
+        }
+    }
+
+    #[test]
+    fn test_apply_code_metrics_sets_font_and_line_height() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let mut editor = CodeEditor::new("fn main() {}", "rs");
+        apply_code_metrics(&mut editor, CODE_FONT_SIZE);
+
+        assert!((editor.font_size() - CODE_FONT_SIZE).abs() < f32::EPSILON);
+        assert!((editor.line_height() - CODE_LINE_HEIGHT).abs() < f32::EPSILON);
+        // Keep at least the 20/14 ratio the editor used to derive on its own.
+        assert!(editor.line_height() >= editor.font_size() * 1.4);
+        Ok(())
     }
 }

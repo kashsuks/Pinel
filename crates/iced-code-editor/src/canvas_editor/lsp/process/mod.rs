@@ -65,6 +65,8 @@ use std::time::Instant;
 ///         LspEvent::Completion { items } => drop(items),
 ///         LspEvent::Definition { uri, .. } => drop(uri),
 ///         LspEvent::Progress { done, .. } => drop(done),
+///         LspEvent::DocumentSymbols { symbols, .. } => drop(symbols),
+///         LspEvent::Diagnostics { diagnostics, .. } => drop(diagnostics),
 ///         LspEvent::Log { message, .. } => drop(message),
 ///     }
 /// }
@@ -102,6 +104,20 @@ pub enum LspEvent {
         /// `true` when this is the final progress notification.
         done: bool,
     },
+    /// Document outline received from the LSP server.
+    DocumentSymbols {
+        /// URI of the document the symbols belong to.
+        uri: String,
+        /// Top-level symbols; nested symbols are in each symbol's `children`.
+        symbols: Vec<crate::canvas_editor::lsp::LspSymbol>,
+    },
+    /// The latest diagnostics published for a document. An empty list clears them.
+    Diagnostics {
+        /// URI of the file being diagnosed.
+        uri: String,
+        /// Full replacement for the previous diagnostics for this URI.
+        diagnostics: Vec<LspDiagnostic>,
+    },
     /// Log message from the LSP server's stderr.
     Log {
         /// Key of the server that sent this message.
@@ -109,6 +125,16 @@ pub enum LspEvent {
         /// The log line.
         message: String,
     },
+}
+
+/// A diagnostic published by a language server.
+pub struct LspDiagnostic {
+    /// Zero-based start line.
+    pub line: usize,
+    /// LSP severity from 1 (error) through 4 (hint), when provided.
+    pub severity: Option<u64>,
+    /// Human-readable description of the problem.
+    pub message: String,
 }
 
 // =============================================================================
@@ -318,23 +344,7 @@ impl LspProcessClient {
             "jsonrpc": "2.0",
             "id": client.next_id(),
             "method": "initialize",
-            "params": {
-                "processId": std::process::id(),
-                "rootUri": root_uri,
-                "capabilities": {
-                    "textDocument": {
-                        "synchronization": {
-                            "dynamicRegistration": false,
-                            "willSave": false,
-                            "didSave": true
-                        }
-                    },
-                    "window": {
-                        "workDoneProgress": true
-                    }
-                },
-                "workspaceFolders": null
-            }
+            "params": initialize_params(root_uri, std::process::id())
         });
         client.send_message(&initialize);
 
@@ -399,6 +409,37 @@ impl LspProcessClient {
             },
         }
     }
+}
+
+/// Builds the `params` of the `initialize` request sent to every server.
+///
+/// `textDocument.hover.contentFormat` prefers markdown: without it, servers
+/// such as pyright, rust-analyzer and clangd answer hovers with plaintext, so
+/// the signature arrives without a code fence and renders as prose.
+fn initialize_params(root_uri: &str, process_id: u32) -> serde_json::Value {
+    json!({
+        "processId": process_id,
+        "rootUri": root_uri,
+        "capabilities": {
+            "textDocument": {
+                "synchronization": {
+                    "dynamicRegistration": false,
+                    "willSave": false,
+                    "didSave": true
+                },
+                "hover": {
+                    "contentFormat": ["markdown", "plaintext"]
+                },
+                "documentSymbol": {
+                    "hierarchicalDocumentSymbolSupport": true
+                }
+            },
+            "window": {
+                "workDoneProgress": true
+            }
+        },
+        "workspaceFolders": null
+    })
 }
 
 // =============================================================================
@@ -599,6 +640,33 @@ impl LspClient for LspProcessClient {
         });
         self.send_message(&msg);
     }
+
+    fn request_document_symbols(&mut self, document: &LspDocument) {
+        let id = self.next_id();
+        {
+            let mut pending = self.pending_requests.lock().unwrap_or_else(|e| e.into_inner());
+            evict_expired_requests(&mut pending);
+            pending.insert(
+                id,
+                PendingRequest {
+                    kind: LspRequestKind::DocumentSymbols {
+                        uri: document.uri.clone(),
+                    },
+                    requested_at: Instant::now(),
+                },
+            );
+        }
+
+        let msg = json!({
+            "jsonrpc": "2.0",
+            "id": id,
+            "method": "textDocument/documentSymbol",
+            "params": {
+                "textDocument": { "uri": document.uri }
+            }
+        });
+        self.send_message(&msg);
+    }
 }
 
 // =============================================================================
@@ -673,6 +741,29 @@ mod tests {
                 character: ec,
             },
         }
+    }
+
+    // -------------------------------------------------------------------------
+    // initialize_params
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_initialize_params_requests_markdown_hover() {
+        let params = initialize_params("file:///tmp/project", 42);
+
+        let hover = &params["capabilities"]["textDocument"]["hover"];
+        assert_eq!(hover["contentFormat"][0], "markdown");
+        assert_eq!(hover["contentFormat"][1], "plaintext");
+
+        // The rest of the request is unchanged by the hover capability.
+        assert_eq!(params["processId"], 42);
+        assert_eq!(params["rootUri"], "file:///tmp/project");
+        assert_eq!(
+            params["capabilities"]["textDocument"]["documentSymbol"]["hierarchicalDocumentSymbolSupport"],
+            true
+        );
+        assert_eq!(params["capabilities"]["window"]["workDoneProgress"], true);
+        assert!(params["workspaceFolders"].is_null());
     }
 
     // -------------------------------------------------------------------------
@@ -886,6 +977,29 @@ mod tests {
         match pending.get(&id).map(|p| &p.kind) {
             Some(LspRequestKind::Completion) => {},
             _ => panic!("expected a pending Completion request"),
+        }
+    }
+
+    #[test]
+    fn test_request_document_symbols_registers_pending_and_sends_request()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let (mut client, writer_rx, _events_rx) = test_client();
+        let doc = document("file:///a.rs");
+
+        client.request_document_symbols(&doc);
+
+        let value = decode_sent(&writer_rx.try_recv()?);
+        assert_eq!(value["method"], "textDocument/documentSymbol");
+        assert_eq!(value["params"]["textDocument"]["uri"], "file:///a.rs");
+        let id = value["id"].as_u64().ok_or("id missing")?;
+
+        let pending = client.pending_requests.lock().unwrap_or_else(|e| e.into_inner());
+        match pending.get(&id).map(|p| &p.kind) {
+            Some(LspRequestKind::DocumentSymbols { uri }) => {
+                assert_eq!(uri, "file:///a.rs");
+                Ok(())
+            },
+            _ => Err("expected a pending DocumentSymbols request".into()),
         }
     }
 

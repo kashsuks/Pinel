@@ -12,6 +12,7 @@ mod cli;
 mod config;
 mod discord_rpc;
 mod features;
+mod fs_util;
 mod lsp_setup;
 mod message;
 mod scripting;
@@ -24,6 +25,7 @@ mod wakatime;
 
 const FIRA_CODE_BOLD: &[u8] = include_bytes!("assets/fonts/FiraCode-Bold.ttf");
 const FIRA_CODE_REGULAR: &[u8] = include_bytes!("assets/fonts/FiraCode-Regular.ttf");
+const FIRA_CODE_MEDIUM: &[u8] = include_bytes!("assets/fonts/FiraCode-Medium.ttf");
 const SF_PRO: &[u8] = include_bytes!("assets/fonts/SF-Pro.ttf");
 
 fn main() -> iced::Result {
@@ -42,6 +44,13 @@ fn main() -> iced::Result {
 }
 
 fn run_gui(startup_path: Option<PathBuf>) -> iced::Result {
+    // `pinel .` passes a relative path, and language servers only attach to
+    // absolute ones. If the working directory is unreadable, keep it as given.
+    let startup_path = startup_path.map(|path| match std::env::current_dir() {
+        Ok(cwd) => fs_util::absolute_path(&path, &cwd),
+        Err(_) => path,
+    });
+
     lsp_setup::ensure_lsp_paths();
     iced_code_editor::ensure_rust_analyzer_config();
 
@@ -57,12 +66,15 @@ fn run_gui(startup_path: Option<PathBuf>) -> iced::Result {
         app::App::view,
     )
     .title("Pinel")
+    .scale_factor(app::App::ui_scale)
     .subscription(|app| app.subscription())
     .font(FIRA_CODE_BOLD)
     .font(FIRA_CODE_REGULAR)
+    .font(FIRA_CODE_MEDIUM)
     .font(SF_PRO)
     .default_font(iced::Font {
         family: iced::font::Family::Name("SF Pro"),
+        weight: iced::font::Weight::Medium,
         ..iced::Font::DEFAULT
     })
     .window_size((window_width, window_height))

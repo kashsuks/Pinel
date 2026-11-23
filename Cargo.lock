@@ -3160,22 +3160,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "iced-code-editor"
-version = "0.4.2"
-dependencies = [
- "criterion",
- "iced",
- "iced_aw",
- "iced_font_awesome",
- "rust-i18n",
- "serde_json",
- "syntect",
- "two-face 0.5.2+bat-0.26.1",
- "unicode-width 0.2.2",
- "web-time",
-]
-
-[[package]]
 name = "iced_aw"
 version = "0.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5337,7 +5321,7 @@ checksum = "8b870d8c151b6f2fb93e84a13146138f05d02ed11c7e7c54f8826aaaf7c9f184"
 
 [[package]]
 name = "pinel"
-version = "0.8.0"
+version = "0.9.0"
 dependencies = [
  "anyhow",
  "bytes",
@@ -5349,7 +5333,6 @@ dependencies = [
  "frostmark",
  "fuzzy-matcher",
  "iced",
- "iced-code-editor",
  "iced_term",
  "iced_video_player",
  "ignore",
@@ -5358,6 +5341,7 @@ dependencies = [
  "lsp-types",
  "mlua",
  "once_cell",
+ "pinel-code-editor",
  "quinn-proto",
  "ratatui",
  "regex",
@@ -5374,6 +5358,7 @@ dependencies = [
  "tiny-skia 0.11.4",
  "tokio",
  "tokio-lsp",
+ "trash",
  "tree-sitter",
  "tree-sitter-highlight",
  "tree-sitter-javascript",
@@ -5382,6 +5367,22 @@ dependencies = [
  "tree-sitter-typescript",
  "url",
  "usvg 0.29.0",
+]
+
+[[package]]
+name = "pinel-code-editor"
+version = "0.1.0"
+dependencies = [
+ "criterion",
+ "iced",
+ "iced_aw",
+ "iced_font_awesome",
+ "rust-i18n",
+ "serde_json",
+ "syntect",
+ "two-face 0.5.2+bat-0.26.1",
+ "unicode-width 0.2.2",
+ "web-time",
 ]
 
 [[package]]
@@ -6302,9 +6303,9 @@ dependencies = [
 
 [[package]]
 name = "rustls"
-version = "0.23.37"
+version = "0.23.46"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "758025cb5fccfd3bc2fd74708fd4682be41d99e5dff73c377c0646c6012c73a4"
+checksum = "48e13bd8c0e9365c43cfa5c9e8f9ad49d3c8444926c9aac819e0e4dc503c8fdf"
 dependencies = [
  "once_cell",
  "ring",
@@ -7534,6 +7535,24 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "db97caf9d906fbde555dd62fa95ddba9eecfd14cb388e4f491a66d74cd5fb79a"
 dependencies = [
  "once_cell",
+]
+
+[[package]]
+name = "trash"
+version = "5.2.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "be89b3fe156965d29ac4f8522f3a640c655affdd9f21cb4f36857f0c92c00317"
+dependencies = [
+ "chrono",
+ "libc",
+ "log",
+ "objc2 0.6.3",
+ "objc2-foundation 0.3.2",
+ "once_cell",
+ "percent-encoding",
+ "scopeguard",
+ "urlencoding",
+ "windows 0.62.2",
 ]
 
 [[package]]

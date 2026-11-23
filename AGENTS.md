@@ -1,208 +1,109 @@
-# AGENTS.md for Pinel
+# Git Conventions
 
-You are an advanced Rust developer that always puts efficiency and stability as your priority.
+## Commit Rules
 
-**Tech Stack:** Rust 2021/2024, [key crates like tokio, serde, clap, anyhow]
+- Do not commit code automatically unless explicitly requested
+- Ensure the code runs correctly before committing
+- If already in a branch commit there, else, commit in the main/master branch
 
-## Quick Start
-
-```bash
-# Build and test
-cargo build
-cargo test
-cargo clippy
-cargo fmt
-
-# Run
-cargo run -- [args]
-
-# Run with test data
-cargo run -- tests/fixtures/example.txt
-```
-
-## File Structure
+## Commit Message Format
 
 ```
-project/
-├── src/
-│   ├── main.rs          # Binary entry point
-│   ├── lib.rs           # Library root
-│   ├── module.rs        # Modules
-│   └── utils.rs
-├── tests/               # Integration tests
-│   └── common/          # Test utilities
-├── benches/             # Benchmarks
-├── examples/            # Usage examples
-├── Cargo.toml           # Manifest
-└── Cargo.lock           # Locked dependencies
+<type>[<scope>]: <subject>
 ```
 
-**Module responsibilities:**
-- `main.rs` - CLI, orchestration, error handling
-- `lib.rs` - Public API
-- `[module].rs` - Feature implementations
+A space follows the colon. Type values:
 
-## Common Commands
+| type | Purpose |
+|------|---------|
+| feat | New feature |
+| fix | Bug fix |
+| docs | Documentation or comments |
+| style | Code formatting (no runtime impact) |
+| refactor | Refactoring (not a new feature or bug fix) |
+| perf | Performance optimization |
+| test | Adding tests |
+| chore | Build process or tooling changes |
 
-```bash
-# Build
-cargo build                      # Debug
-cargo build --release            # Release (optimized)
-cargo check                      # Fast compile check
-cargo check --all-targets        # Check everything
+Additionally, ensure that the first letter of the scope is capitalized. The first letter of the type and the subject must NOT be capitalized (e.g. `feat[Chat]: add message input box`).
 
-# Test
-cargo test                       # All tests
-cargo test -- --nocapture        # Show output
-cargo test pattern               # Match pattern
-cargo test --release             # With optimizations
+## Squash Commits and Pull Requests
 
-# Code quality
-cargo clippy                     # Lint
-cargo clippy --all-targets       # Include tests
-cargo clippy -- -D warnings      # Deny all warnings
-cargo fmt                        # Format
-cargo fmt -- --check             # Check format only
+PR Message/Title Format
 
-# Dependencies
-cargo add [crate]                # Add dependency
-cargo add --dev [crate]          # Dev dependency
-cargo add tokio --features full  # With features
-cargo update                     # Update deps
+PR's MUST use squash commit formatting as follows
 
-# Documentation
-cargo doc --open                 # Generate and view docs
-
-# Full cycle
-cargo fmt && cargo clippy -- -D warnings && cargo test && cargo build --release
 ```
+[Scope] <overview of changes for this PR>
+```
+
+Note that for squash commits, the first letter of both the scope and the commit message must be capitalized. Normal (non-squash) commits still capitalize the scope, but the first letter of the short commit message must NOT be capitalized.
+
+For example:
+
+```
+[Shooter] Add different shooting angles
+```
+
+This allows us to squash multiple commits that were in the Pull Request into one general commit.
+
+## Other
+
+- You MUST also use squash commit formatting if your commit covers more than one changed issue. Refer to the [squash commit](#squash-commits-and-pull-requests)
+- Keep commit names short and elaborate. They're meant to be used to quickly identify issues or to understand changes.
+
+## Build & Test Commands
+- Build: `cargo build`
+- Test: `cargo test`
+- Test with output: `cargo test -- --nocapture`
+- Lint: `cargo clippy -- -D warnings`
+- Format: `cargo fmt`
+- Check (fast, no codegen): `cargo check`
+- Audit dependencies: `cargo audit`
+- Documentation: `cargo doc --open`
+
+## Rust Edition and Toolchain
+- Edition: 2021 (always specify in Cargo.toml)
+- MSRV: 1.75.0 (stable, pinned in rust-toolchain.toml)
+- Do NOT use nightly features
+
+## Error Handling
+- Libraries: use `thiserror` — derive `Error` for all custom error types
+- Applications/binaries: use `anyhow` — propagate with `?`, add context with `.context()`
+- Never use `.unwrap()` or `.expect()` in library code
+- `.expect()` is acceptable in binary main() for setup failures (file not found, etc.)
+- Never use `.unwrap()` in tests — use `?` with `#[tokio::test]` or return `Result<(), Box<dyn Error>>`
+- Propagate errors with `?` unless there is a documented reason to handle locally
+
+## Clippy Policy
+- Treat all warnings as errors: `cargo clippy -- -D warnings`
+- Run clippy before committing, not just before merging
+- Do not use `#[allow(clippy::...)]` without a comment explaining why
 
 ## Code Style
+- All public items (structs, enums, functions, traits, modules) must have doc comments (`///`)
+- Private items: doc comments are encouraged but not required
+- Prefer explicit type annotations on public function signatures
+- Do not use wildcard imports (`use foo::*`) except in test modules
 
-- **Style:** Official Rust style (enforced by rustfmt)
-- **Format:** `cargo fmt`
-- **Lint:** `cargo clippy -- -D warnings`
-- **Max line length:** 100 characters (default)
+## Dependency Policy
+- Prefer minimal dependencies — justify each new crate in the PR description
+- Pin exact versions for production binaries (`=1.2.3` in Cargo.toml)
+- Use `^` (caret) for library crates (allows compatible updates)
+- Run `cargo audit` before every release
+- Do not add a crate to solve a problem that can be solved with std in under 20 lines
 
-**Naming:**
-- Functions/variables: `snake_case`
-- Types/traits: `PascalCase`
-- Constants: `SCREAMING_SNAKE_CASE`
-- Modules: `snake_case`
+## Testing
+- Unit tests: `#[cfg(test)]` module at the bottom of each file
+- Integration tests: `tests/` directory
+- Test naming: `test_<function_name>_<scenario>` pattern
+- Use `cargo test -- --nocapture` when debugging output
+- Mock external dependencies using trait objects, not concrete types
+- Aim for 80%+ coverage on library crates; focus on edge cases not happy paths
 
-## Common Patterns
-
-**Error handling (applications):**
-```rust
-use anyhow::{Context, Result};
-
-fn process(path: &str) -> Result<Data> {
-    let file = std::fs::read_to_string(path)
-        .with_context(|| format!("Failed to read: {}", path))?;
-    
-    let data = parse(&file)
-        .context("Failed to parse")?;
-    
-    Ok(data)
-}
-```
-
-**Error handling (libraries):**
-```rust
-use thiserror::Error;
-
-#[derive(Error, Debug)]
-pub enum MyError {
-    #[error("Invalid format: {0}")]
-    InvalidFormat(String),
-    
-    #[error("IO error")]
-    Io(#[from] std::io::Error),
-}
-```
-
-**Tests:**
-```rust
-#[cfg(test)]
-mod tests {
-    use super::*;
-    
-    #[test]
-    fn test_function() {
-        assert_eq!(function("input"), expected);
-    }
-    
-    #[test]
-    #[should_panic(expected = "error")]
-    fn test_panic() {
-        function_that_panics();
-    }
-}
-```
-
-**Documentation:**
-```rust
-/// Brief description.
-///
-/// # Arguments
-///
-/// * `x` - Description
-///
-/// # Returns
-///
-/// Description
-///
-/// # Errors
-///
-/// When errors occur
-///
-/// # Examples
-///
-/// ```
-/// let result = function("input");
-/// ```
-pub fn function(x: &str) -> Result<String> {
-    Ok(x.to_string())
-}
-```
-
-## Development Workflow
-
-**Commits:** Conventional format (`feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `perf:`)
-
-**Branching:** `feature/[name]`, `fix/[name]`, `refactor/[name]`
-
-**PR Checklist:**
-- [ ] Code compiles: `cargo build`
-- [ ] Tests pass: `cargo test`
-- [ ] No clippy warnings: `cargo clippy -- -D warnings`
-- [ ] Formatted: `cargo fmt -- --check`
-- [ ] Documentation builds: `cargo doc --no-deps`
-- [ ] No `unwrap()` in production code
-
-## Coding Conventions
-
-- Use `?` operator for error propagation (not `unwrap()`)
-- Prefer immutability (`let` over `let mut`)
-- Use iterators over loops when appropriate
-- Keep functions small and focused
-- Leverage type system for safety
-- Add context to errors with `.context()`
-- [Add project-specific conventions]
-
-## Performance
-
-- Use `--release` for benchmarking
-- Profile with `cargo flamegraph`
-
-**Cargo.toml optimization:**
-```toml
-[profile.release]
-opt-level = 3
-lto = true
-codegen-units = 1
-```
-
-## Project-Specific Notes
-
-[Add special instructions, test data generation, deployment, etc.]
+## Memory Safety and Unsafe
+- No `unsafe` blocks without a `// SAFETY:` comment explaining the invariants upheld
+- If `unsafe` is required, isolate it in a dedicated module (e.g., `src/ffi/` or `src/sys/`)
+- Prefer `Arc<Mutex<T>>` over raw pointers for shared state across threads
+- Do not use `Rc<RefCell<T>>` in async code (not `Send`)
+- If you need `unsafe`, ask before writing it — we may have a safe alternative

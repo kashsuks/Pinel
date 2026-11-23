@@ -135,6 +135,101 @@ pub struct LspTextChange {
     pub text: String,
 }
 
+/// A symbol in a document's outline, as reported by `textDocument/documentSymbol`.
+///
+/// Symbols form a tree: a method sits in the `children` of its type, which
+/// sits in the `children` of its module. Servers that only return a flat list
+/// are nested by range containment when the response is parsed.
+///
+/// # Example
+///
+/// ```
+/// use iced_code_editor::{LspPosition, LspRange, LspSymbol};
+///
+/// let symbol = LspSymbol {
+///     name: "main".to_string(),
+///     range: LspRange {
+///         start: LspPosition { line: 0, character: 0 },
+///         end: LspPosition { line: 2, character: 1 },
+///     },
+///     children: Vec::new(),
+/// };
+/// assert!(symbol.contains_line(1));
+/// assert!(!symbol.contains_line(3));
+/// ```
+#[derive(Debug, Clone)]
+pub struct LspSymbol {
+    /// Name shown for the symbol, such as a function or type name.
+    pub name: String,
+    /// Full range of the symbol, including its body.
+    pub range: LspRange,
+    /// Symbols declared inside this one.
+    pub children: Vec<LspSymbol>,
+}
+
+impl LspSymbol {
+    /// Returns `true` if the zero-based `line` falls inside this symbol's range.
+    ///
+    /// # Arguments
+    ///
+    /// * `line` - Zero-based line number to test
+    ///
+    /// # Returns
+    ///
+    /// `true` when `line` is between the range's start and end lines, inclusive
+    pub fn contains_line(&self, line: u32) -> bool {
+        self.range.start.line <= line && line <= self.range.end.line
+    }
+}
+
+/// Returns the names of the symbols enclosing `line`, outermost first.
+///
+/// At each level the first symbol whose range contains `line` is entered, so
+/// the result reads like a breadcrumb trail: `["Editor", "render"]` for a
+/// line inside the `render` method of `Editor`.
+///
+/// # Arguments
+///
+/// * `symbols` - Top-level symbols of the document
+/// * `line` - Zero-based line number
+///
+/// # Returns
+///
+/// The chain of enclosing symbol names, empty when `line` is outside every symbol
+///
+/// # Example
+///
+/// ```
+/// use iced_code_editor::{LspPosition, LspRange, LspSymbol, symbol_path_at};
+///
+/// let range = |start, end| LspRange {
+///     start: LspPosition { line: start, character: 0 },
+///     end: LspPosition { line: end, character: 0 },
+/// };
+/// let symbols = vec![LspSymbol {
+///     name: "Editor".to_string(),
+///     range: range(0, 10),
+///     children: vec![LspSymbol {
+///         name: "render".to_string(),
+///         range: range(2, 5),
+///         children: Vec::new(),
+///     }],
+/// }];
+///
+/// assert_eq!(symbol_path_at(&symbols, 3), ["Editor", "render"]);
+/// assert_eq!(symbol_path_at(&symbols, 8), ["Editor"]);
+/// assert!(symbol_path_at(&symbols, 11).is_empty());
+/// ```
+pub fn symbol_path_at(symbols: &[LspSymbol], line: u32) -> Vec<String> {
+    let mut path = Vec::new();
+    let mut level = symbols;
+    while let Some(symbol) = level.iter().find(|symbol| symbol.contains_line(line)) {
+        path.push(symbol.name.clone());
+        level = &symbol.children;
+    }
+    path
+}
+
 /// LSP client hooks invoked by the editor.
 ///
 /// Every method has a no-op default, so an implementation only overrides the
@@ -191,6 +286,11 @@ pub trait LspClient {
     /// (e.g., via Ctrl+Click or a context menu). The client implementation should
     /// send a `textDocument/definition` request to the LSP server.
     fn request_definition(&mut self, _document: &LspDocument, _position: LspPosition) {}
+    /// Requests the outline (`textDocument/documentSymbol`) of the document.
+    ///
+    /// The client implementation should send the request and report the
+    /// symbols back through its own channel, as with the other requests.
+    fn request_document_symbols(&mut self, _document: &LspDocument) {}
 }
 
 /// Computes a minimal text change between two snapshots.
@@ -281,6 +381,44 @@ fn position_for_char_index(text: &str, target_index: usize) -> LspPosition {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn symbol(name: &str, start: u32, end: u32, children: Vec<LspSymbol>) -> LspSymbol {
+        LspSymbol {
+            name: name.to_string(),
+            range: LspRange {
+                start: LspPosition {
+                    line: start,
+                    character: 0,
+                },
+                end: LspPosition {
+                    line: end,
+                    character: 0,
+                },
+            },
+            children,
+        }
+    }
+
+    #[test]
+    fn test_symbol_path_at_picks_matching_sibling() {
+        let symbols = vec![
+            symbol("first", 0, 3, Vec::new()),
+            symbol("second", 5, 9, vec![symbol("inner", 6, 7, Vec::new())]),
+        ];
+        assert_eq!(symbol_path_at(&symbols, 6), ["second", "inner"]);
+        assert_eq!(symbol_path_at(&symbols, 9), ["second"]);
+        assert_eq!(symbol_path_at(&symbols, 2), ["first"]);
+    }
+
+    #[test]
+    fn test_symbol_path_at_between_symbols_is_empty() {
+        let symbols = vec![
+            symbol("first", 0, 3, Vec::new()),
+            symbol("second", 5, 9, Vec::new()),
+        ];
+        assert!(symbol_path_at(&symbols, 4).is_empty());
+        assert!(symbol_path_at(&[], 0).is_empty());
+    }
 
     #[test]
     fn test_compute_text_change_none_when_equal() {

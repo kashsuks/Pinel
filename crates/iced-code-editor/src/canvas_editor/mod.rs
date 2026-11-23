@@ -22,8 +22,8 @@ pub use editing::history::CommandHistory;
 use features::{command_palette, folding, goto_line, search, vim};
 use metrics::{
     CACHE_WINDOW_MARGIN_MULTIPLIER, CHAR_WIDTH, CURSOR_BLINK_INTERVAL, FONT_SIZE, GUTTER_WIDTH,
-    HIGHLIGHT_LINES_PER_FRAME, LINE_HEIGHT, TAB_WIDTH, compare_floats, indent_width,
-    measure_char_width, measure_text_width,
+    HIGHLIGHT_LINES_PER_FRAME, LINE_HEIGHT, LINE_NUMBER_RIGHT_PADDING, TAB_WIDTH,
+    TEXT_LEFT_PADDING, compare_floats, indent_width, measure_char_width, measure_text_width,
 };
 
 #[cfg(target_arch = "wasm32")]
@@ -190,12 +190,16 @@ pub struct CodeEditor {
     vim_enabled: bool,
     /// Per-editor Vim mode, parser prefixes and unnamed register.
     pub(crate) vim_state: vim::VimState,
+    /// Whether the Vim status and command line is drawn below the editor.
+    vim_status_line_visible: bool,
     /// Translations for UI text
     pub(crate) translations: Translations,
     /// Whether search/replace functionality is enabled
     pub(crate) search_replace_enabled: bool,
     /// Whether line numbers are displayed
     pub(crate) line_numbers_enabled: bool,
+    /// Minimum width in pixels of the line-number area; grows to fit wider numbers
+    pub(crate) line_number_width: f32,
     /// Whether to render whitespace characters visibly (spaces as `·`, tabs as `→`)
     pub(crate) show_whitespace: bool,
     /// Whether vertical indentation guides are drawn behind the text.
@@ -653,10 +657,12 @@ impl CodeEditor {
             command_palette_enabled: true,
             vim_enabled: false,
             vim_state: vim::VimState::default(),
+            vim_status_line_visible: true,
             translations: Translations::default(),
             search_replace_enabled: true,
             line_numbers_enabled: true,
-            show_whitespace: true,
+            line_number_width: GUTTER_WIDTH,
+            show_whitespace: false,
             show_indent_guides: true,
             show_color_previews: true,
             bracket_match_highlight_enabled: true,
@@ -785,9 +791,134 @@ impl CodeEditor {
         snap_to(self.scrollable_id.clone(), RelativeOffset::START)
     }
 
+    /// Replaces the whole buffer content as a single undoable edit.
+    ///
+    /// Unlike [`Self::reset`], this keeps the undo history, cursor, scroll
+    /// position and Vim state: the change is recorded so it can be undone and
+    /// redone, and [`Self::is_modified`] reflects it. Use this when the host
+    /// computes new document text itself (for example an application-level
+    /// find/replace). Passing the current content is a no-op.
+    ///
+    /// The primary cursor is kept where it was, clamped into the new content;
+    /// extra cursors and selections are cleared. Attached language servers
+    /// receive a full-document sync.
+    ///
+    /// # Arguments
+    ///
+    /// * `content` - The new text content
+    ///
+    /// # Returns
+    ///
+    /// A `Task<Message>` that scrolls to keep the cursor visible
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use iced_code_editor::{CodeEditor, Message};
+    ///
+    /// let mut editor = CodeEditor::new("foo foo", "rs");
+    /// let _task = editor.replace_content("bar bar");
+    /// assert_eq!(editor.content(), "bar bar");
+    /// assert!(editor.is_modified());
+    ///
+    /// let _ = editor.update(&Message::Undo);
+    /// assert_eq!(editor.content(), "foo foo");
+    /// ```
+    pub fn replace_content(&mut self, content: &str) -> iced::Task<Message> {
+        let old = self.buffer.to_string();
+        if content == old {
+            return iced::Task::none();
+        }
+
+        // An open group would absorb this command into the previous edit.
+        self.end_grouping_if_active();
+        self.cursors.remove_all_but_primary();
+
+        let mut cmd = editing::command::ReplaceContentCommand::new(old, content.to_string());
+        let mut cursor_pos = self.cursors.primary_position();
+        editing::command::Command::execute(&mut cmd, &mut self.buffer, &mut cursor_pos);
+        if self.vim_enabled && self.vim_state.mode() == VimMode::Normal {
+            cursor_pos = self.vim_normal_position(cursor_pos);
+        }
+        self.cursors.primary_mut().position = cursor_pos;
+        self.history.push(Box::new(cmd));
+
+        // The whole buffer changed, so discard the whole highlight prefix.
+        self.pre_edit_line = 0;
+        self.pre_edit_last_line = usize::MAX;
+        self.clear_selection();
+        // Without a captured snapshot, `finish_edit_operation` falls back to a
+        // full-document LSP sync instead of a (stale) incremental range.
+        self.lsp_edit_snapshot = None;
+        self.finish_edit_operation();
+        self.scroll_to_cursor()
+    }
+
     /// Resets the cursor blink animation.
     pub(crate) fn reset_cursor_blink(&mut self) {
         self.last_blink = Instant::now();
         self.cursor_visible = true;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_replace_content_marks_modified() {
+        let mut editor = CodeEditor::new("foo foo", "rs");
+        let _ = editor.replace_content("bar bar");
+        assert_eq!(editor.content(), "bar bar");
+        assert!(editor.is_modified());
+        assert!(editor.can_undo());
+    }
+
+    #[test]
+    fn test_replace_content_undo_restores_original() {
+        let mut editor = CodeEditor::new("foo\nfoo\n", "rs");
+        editor.mark_saved();
+        let _ = editor.replace_content("bar\nbar\n");
+        assert!(editor.is_modified());
+
+        let _ = editor.update(&Message::Undo);
+        assert_eq!(editor.content(), "foo\nfoo\n");
+        assert!(!editor.is_modified());
+    }
+
+    #[test]
+    fn test_replace_content_redo_reapplies() {
+        let mut editor = CodeEditor::new("foo foo", "rs");
+        let _ = editor.replace_content("bar bar");
+        let _ = editor.update(&Message::Undo);
+        assert_eq!(editor.content(), "foo foo");
+
+        let _ = editor.update(&Message::Redo);
+        assert_eq!(editor.content(), "bar bar");
+        assert!(editor.is_modified());
+    }
+
+    #[test]
+    fn test_replace_content_same_content_is_noop() {
+        let mut editor = CodeEditor::new("foo foo", "rs");
+        let _ = editor.replace_content("foo foo");
+        assert!(!editor.is_modified());
+        assert!(!editor.can_undo());
+
+        let _ = editor.update(&Message::Undo);
+        assert_eq!(editor.content(), "foo foo");
+        assert!(!editor.is_modified());
+    }
+
+    #[test]
+    fn test_replace_content_clamps_cursor() {
+        let mut editor = CodeEditor::new("a long first line\nsecond line\nthird line here", "rs");
+        let _ = editor.set_cursor(2, 15);
+        assert_eq!(editor.cursor_position(), (2, 15));
+
+        let _ = editor.replace_content("ab");
+        let (line, col) = editor.cursor_position();
+        assert_eq!(line, 0);
+        assert!(col <= "ab".chars().count());
     }
 }

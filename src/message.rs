@@ -8,6 +8,13 @@ use iced_term::Event as TerminalEvent;
 /// Other instances of Message types.
 use crate::features::search::SearchResult;
 
+/// The two file lists a background workspace index produces: the search
+/// list (relative display path, absolute path) and the fuzzy finder entries.
+pub type WorkspaceIndex = (
+    Vec<(String, PathBuf)>,
+    Vec<crate::features::fuzzy_finder::FileEntry>,
+);
+
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
 pub enum Message {
@@ -17,7 +24,10 @@ pub enum Message {
 
     CodeEditorContentChanged,
     FileClicked(PathBuf),
-    FileOpened(PathBuf, String),
+    /// A file finished loading: its text, or why it could not be read as text.
+    FileOpened(PathBuf, Result<String, String>),
+    /// Session restore opened all its tabs; carries the path that was active when the session was saved.
+    SessionRestoreFinished(Option<PathBuf>),
     SensitiveFileOpenConfirm(bool),
     FolderToggled(PathBuf),
 
@@ -34,6 +44,7 @@ pub enum Message {
     FileTreeReveal,
     FileTreeCopyPath,
     FileTreeDelete,
+    FileTreeDeleted(PathBuf, bool),
     /// Fired whenever the active file or open workspace changes, from any
     /// code path. Carries no data — consumers read the new state from
     /// `App::activity_state` when they receive this.
@@ -44,16 +55,24 @@ pub enum Message {
     OpenFolderDialog,
     OpenFileOrFolder,
     FolderOpened(PathBuf),
+    /// A background workspace index finished: the generation it was started
+    /// with, the root it walked, and either the search file list and the
+    /// fuzzy finder entries or the error from the indexing task.
+    WorkspaceIndexed(u64, PathBuf, Result<WorkspaceIndex, String>),
 
     SaveFile,
     SaveCurrentFileAs(PathBuf),
     CurrentFileSavedAs(PathBuf),
-    FileSaved(Result<(), String>),
+    /// A manual save finished for the tab at this path; carries the content that was written.
+    FileSaved(PathBuf, String, Result<(), String>),
 
     TabSelected(usize),
     TabClosed(usize),
     ReopenClosedTab,
     CloseActiveTab,
+
+    /// Ask the language server where the symbol under the cursor is defined.
+    GoToDefinition,
 
     SidebarResizeStart,
     SidebarResizing(f32),
@@ -64,7 +83,8 @@ pub enum Message {
 
     ToggleSearch,
     SearchQueryChanged(String),
-    SearchCompleted(Vec<SearchResult>),
+    /// A workspace search finished; carries the query it ran for and its results.
+    SearchCompleted(String, Vec<SearchResult>),
     SearchResultClicked(PathBuf, usize),
 
     ToggleFileFinder,
@@ -101,9 +121,19 @@ pub enum Message {
 
     ToggleSettings,
     SettingsNavigate(String),
+    /// Set additional UI zoom, preserving the OS display scale.
+    SettingsUiScaleChanged(f32),
+    /// Set the source text size in all open editors.
+    SettingsEditorFontSizeChanged(f32),
+    /// Set the embedded terminal size without restarting its shell.
+    SettingsTerminalFontSizeChanged(f32),
+    /// Switch source text between Regular and Medium weight.
+    SettingsToggleCodeWeight,
     SettingsTabSizeChanged(String),
     SettingsToggleUseSpaces,
     SettingsToggleAutoIndent,
+    SettingsToggleShowWhitespace,
+    SettingsToggleShowBreadcrumbs,
     SettingsToggleVimMode,
     SettingsToggleDiscordRpc,
     SettingsToggleRestoreSession,
@@ -120,18 +150,24 @@ pub enum Message {
     CommandInputChanged(String),
     CommandInputSubmit,
     WindowResized(u32, u32),
+    /// The window size save delay ran out. The number says which resize it was for.
+    WindowSizeSave(u64),
     WindowCloseRequested(iced::window::Id),
 
     NewFile,
     SaveAs,
     SelectTabByIndex(usize),
     TabHoverEnter(usize),
-    TabHoverExit,
-    TabDragInitiate,
-    TabHoldTick,
-    TabDragMove(f32),
+    TabHoverExit(usize),
+    /// Left press on a tab body.
+    TabPointerPressed(usize),
+    /// Current horizontal scroll position of the editor tab strip.
+    TabBarScrolled(f32),
+    /// Horizontal tab scroll synthesized from a vertical mouse-wheel gesture.
+    TabBarWheel(f32),
     TabDragEnd,
-    TabDragFloatMove(f32, f32),
+    /// The window lost focus during a tab click or drag.
+    TabDragCancelled,
 
     WakaTimeApiKeyChanged(String),
     WakaTimeApiKeyHoverStart,
@@ -162,7 +198,63 @@ pub enum Message {
     StartupToggleRunOnStartup,
 
     RefreshGitStatus,
-    GitStatusLoaded(Vec<(String, String)>),
+    /// Status query scope, repository root, and paths relative to that root.
+    GitStatusLoaded(
+        Option<PathBuf>,
+        Option<PathBuf>,
+        Vec<crate::features::git::FileChange>,
+    ),
+    /// Re-reads the open folder's git branch for the status bar. Sent every
+    /// few seconds while a folder is open.
+    GitBranchTick,
+    /// A background branch read finished: the generation it was started
+    /// with, the folder it read, and the branch name (or short hash when
+    /// `HEAD` is detached), `None` outside a repository.
+    GitBranchLoaded(u64, PathBuf, Option<String>),
+    /// Re-reads the commit history behind the git panel's graph.
+    RefreshGitHistory,
+    /// Loads the page of commits older than the ones the panel holds.
+    LoadMoreGitHistory,
+    /// Carries one page of commits from `git log`, newest first, with its
+    /// graph rows already built.
+    GitHistoryLoaded(crate::features::git::HistoryPage),
+    /// Lifts the cap on how many changed files the git panel lists.
+    GitShowAllChanges,
+    /// The git panel scrolled; `offset` is the distance scrolled from the
+    /// top, `viewport` the visible height and `content` the height of
+    /// everything in the list, all in pixels.
+    GitPanelScrolled {
+        offset: f32,
+        viewport: f32,
+        content: f32,
+    },
+    /// The cursor entered a commit row in the git graph.
+    GitCommitHovered(String),
+    /// The cursor left a commit row in the git graph.
+    GitCommitUnhovered,
+    /// The card's open delay ran out. The number says which hover it was for.
+    GitCardShow(u64),
+    /// The card's close delay ran out. The number says which leave it was for.
+    GitCardHide(u64),
+    /// The cursor entered (`true`) or left (`false`) the commit card.
+    GitCardHovered(bool),
+    /// Carries the full details of one commit, or `None` if git could not read it.
+    GitCommitDetailLoaded(String, Option<crate::features::git_commit::CommitDetail>),
+    /// Opens a web link in the default browser.
+    OpenUrl(String),
+    /// Opens a commit from the git graph in the preview tab.
+    OpenCommitTab(String),
+    /// Keeps the commit's tab it stops being the preview tab, so the next
+    /// click in the graph opens a new one
+    PinCommit(String),
+    /// A preview tab was pressed. Two quick presses to pin it
+    PreviewTabPressed(usize),
+    /// Carries the per-file diffs of a commit for its tab.
+    GitCommitDiffLoaded(String, Vec<crate::features::git_diff::FileDiff>),
+    /// Folds or unfolds one file's diff in the active commit tab.
+    ToggleCommitFile(usize),
+    /// Copies text to the clipboard.
+    CopyText(String),
 
     /// Starts a new, empty chat session and makes it the active one.
     ChatNewSession,
@@ -175,6 +267,8 @@ pub enum Message {
     /// Switches which provider's models are shown in the open picker's
     /// right-hand list. Does not commit anything to the session yet.
     ChatPickerProviderSelected(String),
+    /// Refreshes the current provider’s model list.
+    ChatRefreshModels(String),
     ChatModelSearchChanged(String),
     /// Commits a (provider, model) pair to the active session and closes
     /// the picker.
@@ -192,9 +286,8 @@ pub enum Message {
     ChatRenameSubmit,
     ChatRenameCancel,
 
-    /// A model list fetch for a provider (by stable id) finished, either
-    /// from the chat picker or the Providers settings panel.
-    ProviderModelsFetched(String, Result<Vec<String>, String>),
+    /// A chat picker model lookup finished for a provider and request ID.
+    ProviderModelsFetched(String, u64, Result<Vec<String>, String>),
     /// Switches which provider's credential form is shown in the Providers
     /// settings panel.
     ProvidersSelect(String),
@@ -207,8 +300,10 @@ pub enum Message {
     ProvidersSave,
     /// Clears a saved credential for the given provider id.
     ProvidersRemove(String),
-    /// Re-fetches the model list for a provider to confirm its key works.
-    ProvidersTestConnection(String),
+    /// Tests the URL and credentials in the current settings form.
+    ProvidersTestConnection,
+    /// A connection test completed for the given request ID.
+    ProviderConnectionTested(u64, Result<Vec<String>, String>),
     /// Jumps straight to Settings → Providers, e.g. from the chat tab's
     /// "no providers set up" prompt.
     OpenProviderSettings,

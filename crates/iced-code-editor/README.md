@@ -194,6 +194,37 @@ current mode. While entering `/pattern` or `:N`, it shows the command and
 current input; otherwise it shows pending Normal-mode keys such as `5d` or
 `3g`. The status line remains visible while the document scrolls.
 
+An application with its own status bar can hide that line and draw the same
+information itself. `vim_mode()`, `vim_pending_keys()` and `vim_command_line()`
+all return `None` while Vim is off:
+
+```rust
+use iced_code_editor::{CodeEditor, Message, VimMode};
+
+let mut editor = CodeEditor::new("one\ntwo", "txt")
+    .with_vim_enabled(true)
+    .with_vim_status_line_visible(false);
+assert!(!editor.vim_status_line_visible());
+
+let _ = editor.update(&Message::VimKey('5'));
+let _ = editor.update(&Message::VimKey('d'));
+assert_eq!(editor.vim_mode(), Some(VimMode::Normal));
+assert_eq!(editor.vim_pending_keys().as_deref(), Some("5d"));
+
+let _ = editor.update(&Message::VimKey('\u{1b}'));
+let _ = editor.update(&Message::VimKey(':'));
+let _ = editor.update(&Message::VimKey('w'));
+assert_eq!(editor.vim_command_line().as_deref(), Some(":w"));
+
+// The setter form works on an existing editor.
+editor.set_vim_status_line_visible(true);
+```
+
+`vim_pending_keys()` is `Some("")` when nothing is pending, and
+`vim_command_line()` is `Some` only while a `:` or `/` line is open.
+`set_vim_status_line_visible` changes only what is drawn; Vim keys behave the
+same either way.
+
 `j` and `k` move by visible display lines, so they follow wrapped lines and
 skip folded content. Vim mode is intentionally single-cursor; attempts to add
 extra cursors are ignored while it is enabled.
@@ -845,6 +876,20 @@ overlay.show_hover(text);
 
 // On LspEvent::Completion
 overlay.set_completions(items, cursor_position);
+```
+
+#### Document symbols
+
+Call `editor.lsp_request_document_symbols()` to ask the server for the file's
+outline. The answer arrives as `LspEvent::DocumentSymbols { uri, symbols }`;
+`symbol_path_at` turns it into the chain of symbols around a line, which is
+handy for a breadcrumb:
+
+```rust
+use iced_code_editor::symbol_path_at;
+
+// On LspEvent::DocumentSymbols { symbols, .. }
+let crumbs = symbol_path_at(&symbols, cursor_line); // e.g. ["Editor", "render"]
 ```
 
 #### Supported servers

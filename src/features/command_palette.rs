@@ -76,6 +76,11 @@ impl CommandPalette {
                 description: "Comment or uncomment the current line/selelection (Ctrl+/)"
                     .to_string(),
             },
+            Command {
+                name: "Go to Definition".to_string(),
+                description: "Jump to where the symbol under the cursor is defined (F12)"
+                    .to_string(),
+            },
         ];
 
         if include_markdown_render {

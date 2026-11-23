@@ -13,7 +13,7 @@ use crate::canvas_editor::features::context_menu;
 use crate::canvas_editor::features::goto_line::dialog as goto_line_dialog;
 use crate::canvas_editor::features::search::dialog as search_dialog;
 use crate::canvas_editor::input::ime_requester::ImeRequester;
-use crate::canvas_editor::{CodeEditor, GUTTER_WIDTH, Message};
+use crate::canvas_editor::{CodeEditor, Message};
 use std::rc::Rc;
 
 /// Builds the transparent-container scrollable style shared by the canvas
@@ -130,7 +130,7 @@ impl CodeEditor {
             let gutter_background = self.style.gutter_background;
             Some(
                 container(Space::new().width(Length::Fill).height(Length::Fill))
-                    .width(Length::Fixed(GUTTER_WIDTH))
+                    .width(Length::Fixed(self.line_number_gutter_width()))
                     .height(Length::Fill)
                     .style(move |_| container::Style {
                         background: Some(Background::Color(gutter_background)),
@@ -230,8 +230,7 @@ impl CodeEditor {
             let prefix_len = self.cursors.primary_position().1.saturating_sub(vl.start_col);
             let prefix_text: String =
                 line_content.chars().skip(vl.start_col).take(prefix_len).collect();
-            let cursor_x = self.gutter_width()
-                + 5.0
+            let cursor_x = self.text_start_x()
                 + crate::canvas_editor::measure_text_width(
                     &prefix_text,
                     self.full_char_width,
@@ -412,7 +411,7 @@ impl CodeEditor {
             }
         };
 
-        if self.vim_enabled {
+        if self.shows_vim_status_line() {
             Column::new()
                 .push(editor_body)
                 .push(self.create_vim_status_bar())

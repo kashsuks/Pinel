@@ -12,10 +12,17 @@ pub(crate) const FONT_SIZE: f32 = 14.0;
 pub(crate) const LINE_HEIGHT: f32 = 20.0;
 pub(crate) const CHAR_WIDTH: f32 = 8.4; // Monospace character width
 pub(crate) const TAB_WIDTH: usize = 4;
+/// Default minimum width in pixels of the line-number area.
 pub(crate) const GUTTER_WIDTH: f32 = 45.0;
 /// Width in pixels of the fold margin (chevron column) added to the gutter when
 /// code folding is enabled.
 pub(crate) const FOLD_MARGIN_WIDTH: f32 = 14.0;
+/// Gap in pixels between the end of the gutter and the first text column.
+pub(crate) const TEXT_LEFT_PADDING: f32 = 5.0;
+/// Gap in pixels between the right edge of a line number and the fold margin
+pub(crate) const LINE_NUMBER_RIGHT_PADDING: f32 = 6.0;
+/// Minimum gap in pixels kept to the left of the widest line number.
+pub(crate) const LINE_NUMBER_LEFT_PADDING: f32 = 4.0;
 pub(crate) const CURSOR_BLINK_INTERVAL: std::time::Duration = std::time::Duration::from_millis(530);
 
 /// Measures the width of a single character.
@@ -466,13 +473,24 @@ impl CodeEditor {
         self.line_number_gutter_width() + self.fold_margin_width()
     }
 
+    /// Returns the x coordinate where the first text column starts, before
+    /// horizontal scroll is applied
+    pub(crate) fn text_start_x(&self) -> f32 {
+        self.gutter_width() + TEXT_LEFT_PADDING
+    }
+
     /// Returns the width of the line-number area (excluding the fold margin).
+    ///
+    /// This is the configured line-number width, widened when needed so the
+    /// largest line number still fits with its padding.
     pub(crate) fn line_number_gutter_width(&self) -> f32 {
-        if self.line_numbers_enabled {
-            GUTTER_WIDTH
-        } else {
-            0.0
+        if !self.line_numbers_enabled {
+            return 0.0;
         }
+        let digits = self.buffer.line_count().max(1).to_string().len();
+        let needed =
+            digits as f32 * self.char_width + LINE_NUMBER_LEFT_PADDING + LINE_NUMBER_RIGHT_PADDING;
+        self.line_number_width.max(needed)
     }
 
     /// Returns the width of the fold margin (the chevron column), or `0.0` when
@@ -495,6 +513,49 @@ mod tests {
         assert_eq!(indent_width(""), None);
         assert_eq!(indent_width("   "), None);
         assert_eq!(indent_width("\t"), None);
+    }
+
+    #[test]
+    fn test_line_number_gutter_width_uses_configured_width() {
+        let mut editor = CodeEditor::new("a\nb", "rs");
+        editor.set_line_number_width(30.0);
+        assert!((editor.line_number_gutter_width() - 30.0).abs() < f32::EPSILON);
+
+        editor.set_line_numbers_enabled(false);
+        assert!(editor.line_number_gutter_width().abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn test_line_number_gutter_width_grows_for_wide_numbers() {
+        let content = "x\n".repeat(100_000);
+        let mut editor = CodeEditor::new(&content, "txt");
+        editor.set_line_number_width(20.0);
+        let digits = editor.buffer.line_count().to_string().len();
+        assert!(digits >= 6);
+        let needed = digits as f32 * editor.char_width
+            + LINE_NUMBER_LEFT_PADDING
+            + LINE_NUMBER_RIGHT_PADDING;
+        assert!((editor.line_number_gutter_width() - needed).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_set_line_number_width_ignores_invalid_values() {
+        let mut editor = CodeEditor::new("", "rs");
+        let before = editor.line_number_width();
+        editor.set_line_number_width(-5.0);
+        editor.set_line_number_width(f32::NAN);
+        assert!((editor.line_number_width() - before).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn test_text_start_x_adds_padding_to_gutter() {
+        let mut editor = CodeEditor::new("", "rs");
+        let expected = editor.gutter_width() + TEXT_LEFT_PADDING;
+        assert!((editor.text_start_x() - expected).abs() < f32::EPSILON);
+
+        editor.set_line_numbers_enabled(false);
+        editor.set_folding_enabled(false);
+        assert!((editor.text_start_x() - TEXT_LEFT_PADDING).abs() < f32::EPSILON);
     }
 
     #[test]

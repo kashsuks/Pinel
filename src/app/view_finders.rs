@@ -14,35 +14,36 @@ impl App {
         let input = text_input("Search files...", &self.fuzzy_finder.input)
             .id(self.fuzzy_finder.input_id.clone())
             .on_input(Message::FuzzyFinderQueryChanged)
-            .size(15)
+            .size(TEXT_LG)
             .padding(iced::Padding {
-                top: 16.0,
+                top: SPACE_4,
                 right: 18.0,
-                bottom: 16.0,
+                bottom: SPACE_4,
                 left: 18.0,
             })
             .style(search_input_style)
             .width(Length::Fill);
 
-        let folder_label: Element<'_, Message> =
-            if let Some(folder) = &self.fuzzy_finder.current_folder {
-                container(text(format!("{}", folder.display())).size(10).color(theme().text_dim))
-                    .padding(iced::Padding {
-                        top: 0.0,
-                        right: 18.0,
-                        bottom: 0.0,
-                        left: 18.0,
-                    })
-                    .into()
-            } else {
-                container(text("")).into()
-            };
+        let folder_label: Element<'_, Message> = if let Some(folder) =
+            &self.fuzzy_finder.current_folder
+        {
+            container(text(format!("{}", folder.display())).size(TEXT_XS).color(theme().text_muted))
+                .padding(iced::Padding {
+                    top: 0.0,
+                    right: 18.0,
+                    bottom: 0.0,
+                    left: 18.0,
+                })
+                .into()
+        } else {
+            container(text("")).into()
+        };
 
         let mut items: Vec<Element<'_, Message>> = Vec::new();
 
         if self.fuzzy_finder.filtered_files.is_empty() {
             items.push(
-                container(text("No files found").size(13).color(theme().text_dim))
+                container(text("No files found").size(TEXT_MD).color(theme().text_muted))
                     .padding(20)
                     .width(Length::Fill)
                     .center_x(Length::Fill)
@@ -66,13 +67,13 @@ impl App {
                     button(
                         row![
                             icon,
-                            text(&file.display_name).size(13).color(if is_selected {
+                            text(&file.display_name).size(TEXT_MD).color(if is_selected {
                                 theme().text_primary
                             } else {
                                 theme().text_muted
                             }),
                         ]
-                        .spacing(8)
+                        .spacing(SPACE_2)
                         .align_y(iced::Alignment::Center),
                     )
                     .style(file_finder_item_style(is_selected))
@@ -90,10 +91,10 @@ impl App {
         }
 
         let file_list = scrollable(column(items).spacing(2).padding(iced::Padding {
-            top: 4.0,
-            right: 4.0,
-            bottom: 4.0,
-            left: 4.0,
+            top: SPACE_1,
+            right: SPACE_1,
+            bottom: SPACE_1,
+            left: SPACE_1,
         }))
         .height(Length::Fill);
 
@@ -142,7 +143,7 @@ impl App {
                 .collect();
 
                 let line_num: Element<'_, Message> =
-                    container(text(format!("{}", line_idx + 1)).size(11).color(OVERLAY_2))
+                    container(text(format!("{}", line_idx + 1)).size(TEXT_XS).color(OVERLAY_2))
                         .width(Length::Fixed(36.0))
                         .align_right(Length::Fixed(36.0))
                         .into();
@@ -161,24 +162,25 @@ impl App {
                                 style.foreground.b,
                                 style.foreground.a as f32 / 255.0,
                             ))
-                            .size(11.0),
+                            .size(self.editor_preferences.editor_font_size)
+                            .font(self.editor_preferences.code_font()),
                     );
                 }
 
                 line_elements
-                    .push(row![line_num, iced::widget::rich_text(spans)].spacing(8).into());
+                    .push(row![line_num, iced::widget::rich_text(spans)].spacing(SPACE_2).into());
             }
 
             let preview_header = container(
                 text(preview_path.file_name().unwrap_or_default().to_string_lossy().to_string())
-                    .size(11)
-                    .color(theme().text_dim),
+                    .size(TEXT_XS)
+                    .color(theme().text_muted),
             )
             .padding(iced::Padding {
-                top: 8.0,
-                right: 12.0,
+                top: SPACE_2,
+                right: SPACE_3,
                 bottom: 6.0,
-                left: 12.0,
+                left: SPACE_3,
             });
 
             let preview_sep = container(Space::new())
@@ -191,10 +193,10 @@ impl App {
 
             let preview_content =
                 scrollable(column(line_elements).spacing(0).padding(iced::Padding {
-                    top: 4.0,
-                    right: 8.0,
-                    bottom: 8.0,
-                    left: 8.0,
+                    top: SPACE_1,
+                    right: SPACE_2,
+                    bottom: SPACE_2,
+                    left: SPACE_2,
                 }))
                 .height(Length::Fill);
 
@@ -203,7 +205,7 @@ impl App {
                 .height(Length::Fill)
                 .into()
         } else {
-            container(text("No preview available").size(13).color(theme().text_dim))
+            container(text("No preview available").size(TEXT_MD).color(theme().text_muted))
                 .width(Length::Fill)
                 .height(Length::Fill)
                 .center_x(Length::Fill)
@@ -249,11 +251,11 @@ impl App {
         let input = text_input("Go to file...", &self.file_finder_query)
             .id(self.file_finder_input_id.clone())
             .on_input(Message::FileFinderQueryChanged)
-            .size(15)
+            .size(TEXT_LG)
             .padding(iced::Padding {
-                top: 16.0,
+                top: SPACE_4,
                 right: 18.0,
-                bottom: 16.0,
+                bottom: SPACE_4,
                 left: 18.0,
             })
             .style(search_input_style)
@@ -264,11 +266,11 @@ impl App {
         if self.file_finder_query.is_empty() {
             if !self.recent_files.is_empty() {
                 items.push(
-                    container(text("Recent Files").size(10).color(theme().text_dim))
+                    container(text("Recent Files").size(TEXT_XS).color(theme().text_muted))
                         .padding(iced::Padding {
-                            top: 8.0,
-                            right: 8.0,
-                            bottom: 4.0,
+                            top: SPACE_2,
+                            right: SPACE_2,
+                            bottom: SPACE_1,
                             left: 14.0,
                         })
                         .into(),
@@ -290,12 +292,12 @@ impl App {
                 items.push(
                     button(
                         row![
-                            text(display).size(13).color(if is_selected {
+                            text(display).size(TEXT_MD).color(if is_selected {
                                 theme().text_primary
                             } else {
                                 theme().text_muted
                             }),
-                            text(parent).size(11).color(theme().text_dim),
+                            text(parent).size(TEXT_XS).color(theme().text_muted),
                         ]
                         .spacing(10)
                         .align_y(iced::Alignment::Center),
@@ -317,7 +319,7 @@ impl App {
                 let is_selected = idx == self.file_finder_selected;
                 let path = abs_path.clone();
                 items.push(
-                    button(text(display).size(13).color(if is_selected {
+                    button(text(display).size(TEXT_MD).color(if is_selected {
                         theme().text_primary
                     } else {
                         theme().text_muted

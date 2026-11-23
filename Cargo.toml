@@ -3,7 +3,7 @@ members = [".", "crates/iced-code-editor"]
 
 [package]
 name = "pinel"
-version = "0.8.0"
+version = "0.9.0"
 edition = "2021"
 authors = ["Kashyap Sukshavas"]
 description = "A lightweight editor built with rust"
@@ -40,7 +40,7 @@ tree-sitter-javascript = "0.23"
 tree-sitter-typescript = "0.23"
 tree-sitter-python = "0.23"
 
-iced = { version = "0.14.0", features = ["svg", "image", "advanced", "markdown", "tokio"] }
+iced = { version = "0.14.0", features = ["svg", "image", "advanced", "markdown", "tokio", "canvas"] }
 iced_term = "0.7.0"
 syntect = { version = "5", default-features = false, features = ["default-syntaxes", "regex-onig"] }
 rfd = "0.15"
@@ -58,7 +58,7 @@ tokio-lsp = "0.1.1"
 tokio = { version = "1", features = ["rt-multi-thread", "process", "io-util", "sync", "time"] }
 url = "2.5"
 ropey = "1.6"
-iced-code-editor = { path = "crates/iced-code-editor", features = ["lsp-process"] }
+iced-code-editor = { package = "pinel-code-editor", version = "0.1.0", path = "crates/iced-code-editor", features = ["lsp-process"] }
 frostmark = "0.3"
 
 quinn-proto = "0.11.15"
@@ -70,3 +70,4 @@ rodio = { version = "0.17", features = ["mp3", "wav", "vorbis", "flac"] }
 discord-rich-presence = "1.1.0"
 
 rustls-webpki = "0.103.13"
+trash = "5.2.9"

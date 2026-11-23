@@ -42,6 +42,7 @@ pub struct Style {
     pub gutter_background: Color,
     pub gutter_border: Color,
     pub line_number_color: Color,
+    pub line_number_active_color: Color,
     pub scrollbar_background: Color,
     pub scroller_color: Color,
     pub current_line_highlight: Color,
@@ -117,7 +118,8 @@ That is the place to change how `base`, `surface0`, `surface1`, `overlay2`, and 
 - `text_color`: fallback text color used by the widget
 - `gutter_background`: line-number column background
 - `gutter_border`: divider between gutter and code area
-- `line_number_color`: line-number text
+- `line_number_color`: line-number text (inactive lines)
+- `line_number_active_color`: line number of the line holding the cursor
 - `scrollbar_background`: scrollbar track background
 - `scroller_color`: scrollbar thumb color
 - `current_line_highlight`: highlight behind the active line

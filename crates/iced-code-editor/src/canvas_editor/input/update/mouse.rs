@@ -208,7 +208,7 @@ mod tests {
         editor.search_state.set_query("foo".to_owned(), &editor.buffer);
         assert_eq!(editor.search_state.current_match_index, Some(0));
 
-        let text_start = editor.gutter_width() + 5.0;
+        let text_start = editor.text_start_x();
         let char_width = editor.char_width;
         let line_y = editor.line_height / 2.0;
         let point_at_col =
@@ -243,7 +243,7 @@ mod tests {
         editor.search_state.set_query("foo".to_owned(), &editor.buffer);
         assert_eq!(editor.search_state.current_match_index, Some(0));
 
-        let line_start = iced::Point::new(editor.gutter_width() + 5.0, editor.line_height * 1.5);
+        let line_start = iced::Point::new(editor.text_start_x(), editor.line_height * 1.5);
         let _ = editor.update(&Message::MouseClick(line_start));
         let _ = editor.update(&Message::MouseRelease);
 
@@ -283,7 +283,7 @@ mod tests {
         editor.cursors.primary_mut().anchor = Some((0, 0));
         editor.cursors.primary_mut().position = (0, 5);
         let point = iced::Point::new(
-            editor.gutter_width() + 5.0 + editor.char_width * 2.0,
+            editor.text_start_x() + editor.char_width * 2.0,
             editor.line_height / 2.0,
         );
 
@@ -301,7 +301,7 @@ mod tests {
         editor.cursors.primary_mut().anchor = Some((0, 0));
         editor.cursors.primary_mut().position = (0, 5);
         let point = iced::Point::new(
-            editor.gutter_width() + 5.0 + editor.char_width * 8.0,
+            editor.text_start_x() + editor.char_width * 8.0,
             editor.line_height / 2.0,
         );
 

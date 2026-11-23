@@ -20,9 +20,9 @@ use crate::{
 };
 
 const ROW_ACTION_PADDING: iced::Padding = iced::Padding {
-    top: 4.0,
+    top: SPACE_1,
     right: 6.0,
-    bottom: 4.0,
+    bottom: SPACE_1,
     left: 6.0,
 };
 
@@ -89,7 +89,7 @@ fn view_chat_history<'a>(
     rename_input_id: iced::widget::Id,
     width: f32,
 ) -> Element<'a, Message> {
-    let new_chat_button = button(text("+ New Chat").size(13))
+    let new_chat_button = button(text("+ New Chat").size(TEXT_MD))
         .style(tree_button_style)
         .on_press(Message::ChatNewSession)
         .padding(ROW_PADDING)
@@ -102,10 +102,10 @@ fn view_chat_history<'a>(
             container(
                 column![
                     text("Seems like you have no providers set up.")
-                        .size(13)
+                        .size(TEXT_MD)
                         .color(theme().text_primary),
-                    text("Would you like to set it up?").size(12).color(theme().text_muted),
-                    button(text("Set Up a Provider").size(12))
+                    text("Would you like to set it up?").size(TEXT_SM).color(theme().text_muted),
+                    button(text("Set Up a Provider").size(TEXT_MD))
                         .style(tree_button_style)
                         .on_press(Message::OpenProviderSettings)
                         .padding(ROW_PADDING),
@@ -123,10 +123,10 @@ fn view_chat_history<'a>(
     let history: Element<'a, Message> = if sessions.is_empty() {
         container(
             column![
-                text("No chats yet").size(13).color(theme().text_muted),
-                text("Start a new chat to begin").size(11).color(theme().text_placeholder),
+                text("No chats yet").size(TEXT_MD).color(theme().text_muted),
+                text("Start a new chat to begin").size(TEXT_XS).color(theme().text_muted),
             ]
-            .spacing(4)
+            .spacing(SPACE_1)
             .align_x(iced::Alignment::Center),
         )
         .width(Length::Fill)
@@ -156,7 +156,7 @@ fn view_chat_history<'a>(
     content_items.push(new_chat_button.into());
     content_items.push(history);
 
-    let content = column(content_items).spacing(8).height(Length::Fill);
+    let content = column(content_items).spacing(SPACE_2).height(Length::Fill);
 
     container(content)
         .width(Length::Fixed(width))
@@ -165,7 +165,7 @@ fn view_chat_history<'a>(
             top: 14.0,
             right: 2.0,
             bottom: 2.0,
-            left: 4.0,
+            left: SPACE_1,
         })
         .style(sidebar_container_style)
         .into()
@@ -173,16 +173,16 @@ fn view_chat_history<'a>(
 
 fn render_history_row(session: &ChatSession, is_active: bool) -> Element<'_, Message> {
     row![
-        button(text(session.title.as_str()).size(13))
+        button(text(session.title.as_str()).size(TEXT_MD))
             .style(tab_button_style(is_active))
             .on_press(Message::ChatSelectSession(session.id.clone()))
             .padding(ROW_PADDING)
             .width(Length::Fill),
-        button(text("Rename").size(10).color(theme().text_dim))
+        button(text("Rename").size(TEXT_XS).color(theme().text_muted))
             .style(tree_button_style)
             .on_press(Message::ChatRenameStart(session.id.clone()))
             .padding(ROW_ACTION_PADDING),
-        button(text("Delete").size(10).color(Color::from_rgb(0.86, 0.35, 0.35)))
+        button(text("Delete").size(TEXT_XS).color(Color::from_rgb(0.86, 0.35, 0.35)))
             .style(tree_button_style)
             .on_press(Message::ChatDeleteSession(session.id.clone()))
             .padding(ROW_ACTION_PADDING),
@@ -201,21 +201,21 @@ fn render_rename_row<'a>(
             .id(rename_input_id)
             .on_input(Message::ChatRenameInputChanged)
             .on_submit(Message::ChatRenameSubmit)
-            .size(13)
+            .size(TEXT_MD)
             .padding(iced::Padding {
-                top: 4.0,
+                top: SPACE_1,
                 right: 6.0,
-                bottom: 4.0,
+                bottom: SPACE_1,
                 left: 6.0,
             })
             .style(rename_input_style)
             .width(Length::Fill),
-        button(text("Cancel").size(10).color(theme().text_dim))
+        button(text("Cancel").size(TEXT_XS).color(theme().text_muted))
             .style(tree_button_style)
             .on_press(Message::ChatRenameCancel)
             .padding(ROW_ACTION_PADDING),
     ]
-    .spacing(4)
+    .spacing(SPACE_1)
     .align_y(iced::Alignment::Center)
     .into()
 }
@@ -232,18 +232,18 @@ fn view_chat_conversation<'a>(
     width: f32,
 ) -> Element<'a, Message> {
     let header = row![
-        button(text("< Chats").size(12).color(theme().text_muted))
+        button(text("< Chats").size(TEXT_SM).color(theme().text_muted))
             .style(tree_button_style)
             .on_press(Message::ChatBackToHistory)
             .padding(iced::Padding {
-                top: 4.0,
+                top: SPACE_1,
                 right: 6.0,
-                bottom: 4.0,
+                bottom: SPACE_1,
                 left: 6.0,
             }),
-        text(session.title.as_str()).size(13).color(theme().text_primary),
+        text(session.title.as_str()).size(TEXT_MD).color(theme().text_primary),
     ]
-    .spacing(8)
+    .spacing(SPACE_2)
     .align_y(iced::Alignment::Center);
 
     let thread = message_thread(session, sending);
@@ -254,12 +254,12 @@ fn view_chat_conversation<'a>(
         text_input("Message", input_value)
             .on_input(Message::ChatInputChanged)
             .on_submit(Message::ChatSend)
-            .size(13)
+            .size(TEXT_MD)
             .padding(iced::Padding {
                 top: 6.0,
-                right: 8.0,
+                right: SPACE_2,
                 bottom: 6.0,
-                left: 8.0,
+                left: SPACE_2,
             })
             .style(rename_input_style)
             .width(Length::Fill),
@@ -269,7 +269,7 @@ fn view_chat_conversation<'a>(
             } else {
                 "Send"
             })
-            .size(12)
+            .size(TEXT_MD)
         )
         .style(tree_button_style)
         .on_press_maybe((!sending).then_some(Message::ChatSend))
@@ -310,7 +310,7 @@ fn view_chat_conversation<'a>(
             top: 14.0,
             right: 2.0,
             bottom: 2.0,
-            left: 4.0,
+            left: SPACE_1,
         })
         .style(sidebar_container_style)
         .into()
@@ -324,8 +324,8 @@ fn message_thread<'a>(session: &'a ChatSession, sending: bool) -> Element<'a, Me
     if session.messages.is_empty() && !sending {
         return container(
             text("Send a message to start the conversation")
-                .size(12)
-                .color(theme().text_placeholder),
+                .size(TEXT_SM)
+                .color(theme().text_muted),
         )
         .width(Length::Fill)
         .height(Length::Fill)
@@ -338,12 +338,12 @@ fn message_thread<'a>(session: &'a ChatSession, sending: bool) -> Element<'a, Me
         session.messages.iter().map(message_bubble).collect();
     if sending {
         bubbles.push(
-            container(text("Assistant is typing...").size(12).color(theme().text_placeholder))
+            container(text("Assistant is typing...").size(TEXT_SM).color(theme().text_muted))
                 .padding(iced::Padding {
                     top: 6.0,
-                    right: 8.0,
+                    right: SPACE_2,
                     bottom: 6.0,
-                    left: 8.0,
+                    left: SPACE_2,
                 })
                 .into(),
         );
@@ -360,17 +360,20 @@ fn message_bubble(message: &ChatMessage) -> Element<'_, Message> {
 
     container(
         column![
-            text(role_label).size(10).color(theme().text_dim),
-            text(message.content.as_str()).size(13).color(theme().text_primary),
+            text(role_label).size(TEXT_XS).color(theme().text_muted),
+            text(message.content.as_str())
+                .size(TEXT_BODY)
+                .line_height(1.5)
+                .color(theme().text_primary),
         ]
         .spacing(2),
     )
     .width(Length::Fill)
     .padding(iced::Padding {
         top: 6.0,
-        right: 8.0,
+        right: SPACE_2,
         bottom: 6.0,
-        left: 8.0,
+        left: SPACE_2,
     })
     .style(chat_message_bubble_style)
     .into()
@@ -387,15 +390,15 @@ fn model_trigger_button(session: &ChatSession, is_open: bool) -> Element<'_, Mes
 
     button(
         row![
-            text(label).size(12).color(theme().text_primary),
+            text(label).size(TEXT_MD).color(theme().text_primary),
             Space::new().width(Length::Fill),
             text(if is_open {
                 "^"
             } else {
                 "v"
             })
-            .size(10)
-            .color(theme().text_dim),
+            .size(TEXT_XS)
+            .color(theme().text_muted),
         ]
         .align_y(iced::Alignment::Center),
     )
@@ -418,16 +421,16 @@ fn model_picker<'a>(
         .iter()
         .map(|provider| {
             let is_active = provider.name == browse_provider;
-            button(text(provider.badge).size(11))
+            button(text(provider.badge).size(TEXT_XS))
                 .style(tab_button_style(is_active))
                 .on_press(Message::ChatPickerProviderSelected(
                     provider.name.to_string(),
                 ))
                 .padding(iced::Padding {
-                    top: 8.0,
-                    right: 4.0,
-                    bottom: 8.0,
-                    left: 4.0,
+                    top: SPACE_2,
+                    right: SPACE_1,
+                    bottom: SPACE_2,
+                    left: SPACE_1,
                 })
                 .width(Length::Fixed(32.0))
                 .into()
@@ -438,23 +441,22 @@ fn model_picker<'a>(
     let state =
         chat_providers::by_name(browse_provider).and_then(|p| provider_model_state.get(p.id));
 
+    let loading = matches!(state, Some(ModelFetchState::Loading(_)));
     let model_list: Element<'a, Message> = match state {
         None => container(
-            text("No API key attached. Add one in Settings → Providers.")
-                .size(11)
-                .color(theme().text_placeholder),
+            text("Model list hasn’t been loaded.").size(TEXT_XS).color(theme().text_muted),
         )
         .padding(ROW_PADDING)
         .into(),
-        Some(ModelFetchState::Loading) => {
-            container(text("Loading models...").size(11).color(theme().text_placeholder))
+        Some(ModelFetchState::Loading(_)) => {
+            container(text("Loading models...").size(TEXT_XS).color(theme().text_muted))
                 .padding(ROW_PADDING)
                 .into()
         },
         Some(ModelFetchState::Error(message)) => container(
             text(format!("Failed to load models: {message}"))
-                .size(11)
-                .color(theme().text_placeholder),
+                .size(TEXT_XS)
+                .color(theme().text_muted),
         )
         .padding(ROW_PADDING)
         .into(),
@@ -466,7 +468,7 @@ fn model_picker<'a>(
                 .collect();
 
             if matching_models.is_empty() {
-                container(text("No models found").size(11).color(theme().text_placeholder))
+                container(text("No models found").size(TEXT_XS).color(theme().text_muted))
                     .padding(ROW_PADDING)
                     .into()
             } else {
@@ -474,7 +476,7 @@ fn model_picker<'a>(
                 let rows: Vec<Element<'a, Message>> = matching_models
                     .into_iter()
                     .map(|model| {
-                        button(text(model).size(12))
+                        button(text(model).size(TEXT_MD))
                             .style(tree_button_style)
                             .on_press(Message::ChatModelPicked(
                                 provider_owned.clone(),
@@ -492,26 +494,31 @@ fn model_picker<'a>(
 
     let search_box = text_input("Search models...", search)
         .on_input(Message::ChatModelSearchChanged)
-        .size(12)
+        .size(TEXT_MD)
         .padding(iced::Padding {
-            top: 4.0,
+            top: SPACE_1,
             right: 6.0,
-            bottom: 4.0,
+            bottom: SPACE_1,
             left: 6.0,
         })
         .style(rename_input_style)
         .width(Length::Fill);
 
-    let right_column = column![search_box, model_list].spacing(6).width(Length::Fill);
+    let refresh = button(text("Refresh").size(TEXT_XS))
+        .style(tree_button_style)
+        .on_press_maybe((!loading).then(|| Message::ChatRefreshModels(browse_provider.to_string())))
+        .padding(ROW_PADDING);
+    let search_row = row![search_box, refresh].spacing(SPACE_1).align_y(iced::Alignment::Center);
+    let right_column = column![search_row, model_list].spacing(6).width(Length::Fill);
 
-    let picker_body = row![column(provider_column).spacing(2), right_column].spacing(8);
+    let picker_body = row![column(provider_column).spacing(2), right_column].spacing(SPACE_2);
 
     container(picker_body)
         .padding(iced::Padding {
-            top: 8.0,
-            right: 8.0,
-            bottom: 8.0,
-            left: 8.0,
+            top: SPACE_2,
+            right: SPACE_2,
+            bottom: SPACE_2,
+            left: SPACE_2,
         })
         .width(Length::Fill)
         .style(context_menu_panel_style)

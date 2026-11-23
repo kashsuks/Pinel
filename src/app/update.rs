@@ -3,10 +3,76 @@ use std::path::Path;
 use iced_code_editor::Message as EditorMessage;
 use rodio::Source;
 
+use super::view_tabs::scroll_editor_tabs_by;
 use super::*;
 use crate::autocomplete::engine::Autocomplete;
+use crate::features::ai_client::{list_models, normalize_base_url, ModelFetchState};
 
 impl App {
+    /// The directory used to refresh status for the workspace or the active standalone file.
+    pub(super) fn git_status_directory(&self) -> Option<&Path> {
+        self.file_tree.as_ref().map(|tree| tree.root.as_path()).or_else(|| {
+            let tab = self.active_tab.and_then(|index| self.tabs.get(index))?;
+            tab.path.is_absolute().then_some(tab.path.as_path())?.parent()
+        })
+    }
+
+    fn update_tab_drag_target(&mut self) {
+        if let Some(index) = self.tab_drag_index {
+            let offset =
+                self.last_cursor_position.x + self.tab_bar_scroll_x - self.tab_drag_start_x;
+            let widths = (0..self.tabs.len()).map(|slot| self.editor_tab_width(slot));
+            self.tab_drag_target = Some(tab_drop_index(widths, index, offset));
+        }
+    }
+
+    /// Walks `root` for the search and fuzzy finder file lists off the UI
+    /// thread, tagging the result with a fresh generation so stale walks are
+    /// dropped.
+    fn index_workspace_task(&mut self, root: PathBuf) -> iced::Task<Message> {
+        self.workspace_index_generation = self.workspace_index_generation.wrapping_add(1);
+        let generation = self.workspace_index_generation;
+        iced::Task::perform(
+            async move {
+                let walk_root = root.clone();
+                let result = tokio::task::spawn_blocking(move || {
+                    (
+                        crate::features::search::collect_all_files(&walk_root),
+                        crate::features::fuzzy_finder::scan_folder(&walk_root),
+                    )
+                })
+                .await
+                .map_err(|e| e.to_string());
+                (generation, root, result)
+            },
+            |(generation, root, result)| Message::WorkspaceIndexed(generation, root, result),
+        )
+    }
+
+    /// Reads the open folder's git branch for the status bar off the UI
+    /// thread.
+    ///
+    /// Does nothing with no folder open, or while an earlier read is still
+    /// running. The result carries a fresh generation and the folder it read,
+    /// so it can be dropped if the folder changes before it lands.
+    fn git_branch_task(&mut self) -> iced::Task<Message> {
+        let Some(root) = self.file_tree.as_ref().map(|tree| tree.root.clone()) else {
+            return iced::Task::none();
+        };
+        if !self.git_branch_guard.try_start() {
+            return iced::Task::none();
+        }
+        self.git_branch_generation = self.git_branch_generation.wrapping_add(1);
+        let generation = self.git_branch_generation;
+        iced::Task::perform(
+            async move {
+                let branch = crate::features::git::load_branch_async(root.clone()).await;
+                (generation, root, branch)
+            },
+            |(generation, root, branch)| Message::GitBranchLoaded(generation, root, branch),
+        )
+    }
+
     fn should_confirm_sensitive_open(path: &std::path::Path) -> bool {
         path.file_name()
             .and_then(|name| name.to_str())
@@ -126,6 +192,35 @@ impl App {
         )
     }
 
+    /// Whether `path` opens in a media tab rather than as text. Video only
+    /// counts when the `video` feature is on; without it a video file goes
+    /// through the text path and is refused as unreadable.
+    fn is_media_path(path: &std::path::Path) -> bool {
+        Self::is_image_path(path)
+            || (cfg!(feature = "video") && Self::is_video_path(path))
+            || Self::is_audio_path(path)
+    }
+
+    /// Gives up on opening `path`: shows `message` as a toast and drops any
+    /// tab focus, cursor restore or definition jump queued for it.
+    fn abandon_open(&mut self, path: &Path, message: String) {
+        self.notification = Some(Notification {
+            message,
+            shown_at: Instant::now(),
+        });
+        if self.pending_active_tab_path.as_deref() == Some(path) {
+            self.pending_active_tab_path = None;
+        }
+        self.pending_cursor_restores.remove(path);
+        if self
+            .pending_definition_jump
+            .as_ref()
+            .is_some_and(|(jump_path, _)| jump_path == path)
+        {
+            self.pending_definition_jump = None;
+        }
+    }
+
     fn active_tab_supports_markdown_preview(&self) -> bool {
         self.active_tab.and_then(|idx| self.tabs.get(idx)).is_some_and(|tab| {
             matches!(tab.kind, TabKind::Editor { .. }) && Self::is_markdown_path(&tab.path)
@@ -157,11 +252,74 @@ impl App {
         }
     }
 
+    /// Opens the card for `hash` beside the cursor and starts reading its details.
+    fn show_git_card(&mut self, hash: String) -> iced::Task<Message> {
+        self.git_card = Some(GitCard {
+            hash: hash.clone(),
+            anchor: self.last_cursor_position,
+        });
+        self.fetch_commit_detail(hash)
+    }
+
+    /// Starts reading a commit's details unless they are cached or already on their way.
+    pub(super) fn fetch_commit_detail(&mut self, hash: String) -> iced::Task<Message> {
+        if self.git_commit_details.contains_key(&hash)
+            || !self.git_detail_loading.insert(hash.clone())
+        {
+            return iced::Task::none();
+        }
+        let root = self.file_tree.as_ref().map(|t| t.root.clone());
+        iced::Task::perform(
+            crate::features::git_commit::load_commit_detail_async(root, hash.clone()),
+            move |detail| Message::GitCommitDetailLoaded(hash.clone(), detail),
+        )
+    }
+
+    /// Writes the window size to disk if it changed since the last write.
+    fn flush_window_size(&mut self) {
+        if self.window_size_dirty {
+            self.window_size_dirty = false;
+            // a failed size save is non-fatal and the next save retries
+            let _ = prefs::save_preferences(&self.editor_preferences);
+        }
+    }
+
+    /// Closes the card after a short grace period, unless the cursor comes back.
+    fn schedule_git_card_hide(&mut self) -> iced::Task<Message> {
+        self.git_hover_token = self.git_hover_token.wrapping_add(1);
+        let token = self.git_hover_token;
+        iced::Task::perform(
+            async move {
+                tokio::time::sleep(GIT_CARD_CLOSE_DELAY).await;
+                token
+            },
+            Message::GitCardHide,
+        )
+    }
+
+    /// The tab title for a commit: its short hash and a cut-down subject.
+    fn commit_tab_name(&self, hash: &str) -> String {
+        let short = &hash[..hash.len().min(7)];
+        match self.git_history.iter().find(|c| c.hash == hash) {
+            Some(commit) => {
+                format!(
+                    "{short} {}",
+                    crate::ui::git_graph::truncate_subject(&commit.subject, 24)
+                )
+            },
+            None => short.to_string(),
+        }
+    }
+
     pub(super) fn open_path_task(path: PathBuf) -> iced::Task<Message> {
         iced::Task::perform(
             async move {
-                let content = std::fs::read_to_string(&path)
-                    .unwrap_or_else(|_| String::from("Could not read file"));
+                // media tabs never use the text, so skip reading them
+                let content = if Self::is_media_path(&path) {
+                    Ok(String::new())
+                } else {
+                    crate::fs_util::read_text_file(&path)
+                };
                 (path, content)
             },
             |(path, content)| Message::FileOpened(path, content),
@@ -205,11 +363,41 @@ impl App {
 
         iced::Task::perform(
             async move {
-                let result = std::fs::write(&write_path, write_content).map_err(|e| e.to_string());
+                let result = crate::fs_util::write_atomic(&write_path, write_content)
+                    .map_err(|e| e.to_string());
                 (path, saved_content, result)
             },
             |(path, saved_content, result)| Message::AutosaveFinished(path, saved_content, result),
         )
+    }
+
+    /// Blurs the active editor so keys the palette's input doesn't consume
+    /// (arrows, Enter, Home/End...) don't also move the editor cursor.
+    fn blur_editor_for_palette(&mut self) {
+        if let Some(TabKind::Editor {
+            ref mut code_editor,
+            ..
+        }) = self.active_tab.and_then(|idx| self.tabs.get_mut(idx)).map(|t| &mut t.kind)
+        {
+            code_editor.lose_focus();
+        }
+    }
+
+    /// Closes the command palette and hands keyboard focus back to the
+    /// editor, unless the terminal owns focus.
+    fn close_command_palette(&mut self) {
+        self.command_palette.close();
+        if self.terminal_open && self.focused_pane == FocusPane::Terminal {
+            return;
+        }
+        if let Some(TabKind::Editor {
+            ref mut code_editor,
+            ..
+        }) = self.active_tab.and_then(|idx| self.tabs.get_mut(idx)).map(|t| &mut t.kind)
+        {
+            code_editor.request_focus();
+            let _ = code_editor.update(&EditorMessage::CanvasFocusGained);
+        }
     }
 
     pub(super) fn vim_refresh_cursor_style(&mut self) {
@@ -266,6 +454,48 @@ impl App {
         iced::Task::none()
     }
 
+    /// Closes the tab at `idx`, releasing its resources and keeping
+    /// `active_tab` pointing at a valid tab. Out-of-range indices are a no-op.
+    fn close_tab(&mut self, idx: usize, remember: bool) {
+        if idx >= self.tabs.len() {
+            return;
+        }
+        let path = self.tabs[idx].path.clone();
+        if remember {
+            self.record_closed_tab(idx);
+        }
+        if let TabKind::Editor {
+            ref mut code_editor,
+            ..
+        } = self.tabs[idx].kind
+        {
+            code_editor.detach_lsp();
+        }
+        if let TabKind::Audio { ref sink, .. } = self.tabs[idx].kind {
+            if let Some(s) = sink.lock().unwrap_or_else(|e| e.into_inner()).as_ref() {
+                s.stop();
+            }
+        }
+        if self
+            .markdown_preview
+            .as_ref()
+            .is_some_and(|preview| preview.source_path == path)
+        {
+            self.markdown_preview = None;
+        }
+        self.lsp_diagnostics.remove(&path);
+        self.lsp_server_keys.remove(&path);
+        self.tab_drag_index = None;
+        self.tab_drag_target = None;
+        self.tab_pointer_press = None;
+        self.tab_hover_index = None;
+        self.tabs.remove(idx);
+        self.active_tab = active_tab_after_close(self.active_tab, idx, self.tabs.len());
+        self.lsp_overlay = iced_code_editor::LspOverlayState::new();
+        self.pending_hover_request = None;
+        self.vim_refresh_cursor_style();
+    }
+
     fn create_file_tree_entry(&mut self, is_folder: bool) -> iced::Task<Message> {
         let Some(target) = self.context_menu.take() else {
             return iced::Task::none();
@@ -315,7 +545,29 @@ impl App {
     /// * `message` - The event to process.
     #[allow(clippy::arc_with_non_send_sync)]
     pub fn update(&mut self, message: Message) -> iced::Task<Message> {
+        let previous = (
+            self.active_tab,
+            self.tabs.len(),
+            self.settings_open,
+            self.startup_page_open,
+        );
         let task = self.update_message(message);
+        let current = (
+            self.active_tab,
+            self.tabs.len(),
+            self.settings_open,
+            self.startup_page_open,
+        );
+        let task = if previous != current && !self.settings_open && !self.startup_page_open {
+            if let Some(index) = self.active_tab {
+                iced::Task::batch([task, self.reveal_editor_tab(index)])
+            } else {
+                self.tab_bar_scroll_x = 0.0;
+                task
+            }
+        } else {
+            task
+        };
         self.sync_activity_state(task)
     }
 
@@ -382,20 +634,13 @@ impl App {
                 .map(|name| name.to_string_lossy().to_string())
                 .unwrap_or_else(|| path.to_string_lossy().to_string())
         });
-        let details = match &file_name {
-            Some(file_name) => format!("Editing {file_name}"),
-            None => "Idle".to_string(),
-        };
+        let (details, icon_key) = presence_details(file_name.as_deref());
         let state = self
             .activity_state
             .workspace_name
             .as_deref()
             .map(|name| format!("Workspace: {name}"));
 
-        let icon_key = file_name
-            .as_deref()
-            .map(crate::features::icons::file_icon_key)
-            .unwrap_or("pinel");
         let icon_text = prettify_icon_key(icon_key);
         let large_image = Some(crate::discord_rpc::LargeImage {
             key: icon_key,
@@ -438,6 +683,20 @@ impl App {
                 iced::Task::none()
             },
             Message::CodeEditorEvent(event) => {
+                if let EditorMessage::JumpClick(point) = &event {
+                    if self.lsp_enabled {
+                        if let Some(tab) = self.active_tab.and_then(|idx| self.tabs.get_mut(idx)) {
+                            if let TabKind::Editor {
+                                ref mut code_editor,
+                                ..
+                            } = tab.kind
+                            {
+                                code_editor.lsp_request_definition_at(*point);
+                            }
+                        }
+                    }
+                    return iced::Task::none();
+                }
                 if matches!(event, EditorMessage::CharacterInput(_))
                     && (self.modifier_state.command() || self.modifier_state.control())
                 {
@@ -489,7 +748,7 @@ impl App {
                             {
                                 if let Some(suggestion) = self.autocomplete.get_selected().cloned()
                                 {
-                                    let prefix_len = self.autocomplete.prefix.len();
+                                    let prefix_len = self.autocomplete.prefix.chars().count();
                                     for _ in 0..prefix_len {
                                         let _ = code_editor.update(&EditorMessage::Backspace);
                                     }
@@ -499,8 +758,9 @@ impl App {
                                     }
                                     let after = code_editor.content();
                                     buffer.set_text(&after);
-                                    self.cursor_col = self.cursor_col.saturating_sub(prefix_len)
-                                        + suggestion.text.len();
+                                    let (line_idx, col_idx) = code_editor.cursor_position();
+                                    self.cursor_line = line_idx + 1;
+                                    self.cursor_col = col_idx + 1;
                                     self.autocomplete.cancel();
                                     lsp_path = Some(tab.path.clone());
                                     lsp_content = Some(after);
@@ -519,19 +779,8 @@ impl App {
                                         .lines()
                                         .nth(self.cursor_line.saturating_sub(1))
                                         .unwrap_or("");
-                                    let before_cursor =
-                                        &line[..self.cursor_col.saturating_sub(1).min(line.len())];
-
-                                    let chars: Vec<char> = before_cursor.chars().collect();
-                                    let word_start = chars
-                                        .iter()
-                                        .enumerate()
-                                        .rev()
-                                        .find(|(_, c)| !c.is_alphanumeric() && **c != '_')
-                                        .map(|(i, _)| i + 1)
-                                        .unwrap_or(0);
-
-                                    let prefix_len = before_cursor.len() - word_start;
+                                    let prefix = word_prefix_before(line, self.cursor_col);
+                                    let prefix_len = prefix.chars().count();
                                     for _ in 0..prefix_len {
                                         let _ = code_editor.update(&EditorMessage::Backspace);
                                     }
@@ -541,8 +790,9 @@ impl App {
                                     }
                                     let after = code_editor.content();
                                     buffer.set_text(&after);
-                                    self.cursor_col =
-                                        self.cursor_col.saturating_sub(prefix_len) + selected.len();
+                                    let (line_idx, col_idx) = code_editor.cursor_position();
+                                    self.cursor_line = line_idx + 1;
+                                    self.cursor_col = col_idx + 1;
                                     self.lsp_overlay = iced_code_editor::LspOverlayState::new();
                                     self.autocomplete.cancel();
                                     lsp_path = Some(tab.path.clone());
@@ -587,6 +837,7 @@ impl App {
 
                         if before != after {
                             self.queue_autosave_for_active_tab();
+                            self.schedule_symbol_refresh(super::SYMBOL_REFRESH_DELAY);
                         }
                     }
                     if !matches!(event, EditorMessage::MouseHover(_)) {
@@ -738,19 +989,8 @@ impl App {
                                             .lines()
                                             .nth(self.cursor_line.saturating_sub(1))
                                             .unwrap_or("");
-                                        let before_cursor = &line_text[..self
-                                            .cursor_col
-                                            .saturating_sub(1)
-                                            .min(line_text.len())];
-                                        let chars: Vec<char> = before_cursor.chars().collect();
-                                        let word_start = chars
-                                            .iter()
-                                            .enumerate()
-                                            .rev()
-                                            .find(|(_, c)| !c.is_alphanumeric() && **c != '_')
-                                            .map(|(i, _)| i + 1)
-                                            .unwrap_or(0);
-                                        let prefix_len = before_cursor.len() - word_start;
+                                        let prefix = word_prefix_before(line_text, self.cursor_col);
+                                        let prefix_len = prefix.chars().count();
 
                                         // Delete prefix
                                         for _ in 0..prefix_len {
@@ -763,9 +1003,9 @@ impl App {
                                         }
                                         buffer.set_text(&code_editor.content());
 
-                                        self.cursor_col =
-                                            self.cursor_col.saturating_sub(prefix_len)
-                                                + completion.len();
+                                        let (line_idx, col_idx) = code_editor.cursor_position();
+                                        self.cursor_line = line_idx + 1;
+                                        self.cursor_col = col_idx + 1;
                                     }
                                 }
                             }
@@ -813,9 +1053,11 @@ impl App {
                     tree.select(path.clone());
                 }
                 if let Some(idx) = self.tabs.iter().position(|t| t.path == path) {
-                    self.active_tab = Some(idx);
-                    self.vim_refresh_cursor_style();
-                    return iced::Task::none();
+                    if self.active_tab == Some(idx) {
+                        self.vim_refresh_cursor_style();
+                        return iced::Task::none();
+                    }
+                    return self.update_message(Message::TabSelected(idx));
                 }
                 if Self::should_confirm_sensitive_open(&path) {
                     self.pending_sensitive_open = Some(path);
@@ -848,7 +1090,7 @@ impl App {
                                 }
                             }
                         }
-                        return None;
+                        None
                     }
                     #[cfg(not(target_os = "macos"))]
                     {
@@ -873,82 +1115,17 @@ impl App {
                 },
             ),
             Message::TabClosed(idx) => {
-                if idx < self.tabs.len() {
-                    let path = self.tabs[idx].path.clone();
-                    self.record_closed_tab(idx);
-                    if let TabKind::Editor {
-                        ref mut code_editor,
-                        ..
-                    } = self.tabs[idx].kind
-                    {
-                        code_editor.detach_lsp();
-                    }
-                    if let TabKind::Audio { ref sink, .. } = self.tabs[idx].kind {
-                        if let Some(s) = sink.lock().unwrap_or_else(|e| e.into_inner()).as_ref() {
-                            s.stop();
-                        }
-                    }
-                    if self
-                        .markdown_preview
-                        .as_ref()
-                        .is_some_and(|preview| preview.source_path == path)
-                    {
-                        self.markdown_preview = None;
-                    }
-                    self.lsp_diagnostics.remove(&path);
-                    self.lsp_server_keys.remove(&path);
-                    self.tabs.remove(idx);
-                    if self.tabs.is_empty() {
-                        self.active_tab = None;
-                    } else if let Some(active) = self.active_tab {
-                        if active >= self.tabs.len() {
-                            self.active_tab = Some(self.tabs.len() - 1);
-                        } else if active > idx {
-                            self.active_tab = Some(active - 1);
-                        }
-                    }
+                let was_active = self.active_tab == Some(idx);
+                self.close_tab(idx, true);
+                if let Some(next) = self.active_tab.filter(|_| was_active) {
+                    return self.update_message(Message::TabSelected(next));
                 }
-                self.lsp_overlay = iced_code_editor::LspOverlayState::new();
-                self.pending_hover_request = None;
-                self.vim_refresh_cursor_style();
                 iced::Task::none()
             },
             Message::CloseActiveTab => {
                 if let Some(idx) = self.active_tab {
-                    let path = self.tabs[idx].path.clone();
-                    self.record_closed_tab(idx);
-                    if let TabKind::Editor {
-                        ref mut code_editor,
-                        ..
-                    } = self.tabs[idx].kind
-                    {
-                        code_editor.detach_lsp();
-                    }
-                    if let TabKind::Audio { ref sink, .. } = self.tabs[idx].kind {
-                        if let Some(s) = sink.lock().unwrap_or_else(|e| e.into_inner()).as_ref() {
-                            s.stop();
-                        }
-                    }
-                    if self
-                        .markdown_preview
-                        .as_ref()
-                        .is_some_and(|preview| preview.source_path == path)
-                    {
-                        self.markdown_preview = None;
-                    }
-
-                    self.lsp_diagnostics.remove(&path);
-                    self.lsp_server_keys.remove(&path);
-                    self.tabs.remove(idx);
-                    if self.tabs.is_empty() {
-                        self.active_tab = None;
-                    } else if idx >= self.tabs.len() {
-                        self.active_tab = Some(self.tabs.len() - 1);
-                    }
+                    return self.update_message(Message::TabClosed(idx));
                 }
-                self.lsp_overlay = iced_code_editor::LspOverlayState::new();
-                self.pending_hover_request = None;
-                self.vim_refresh_cursor_style();
                 iced::Task::none()
             },
             Message::ReopenClosedTab => {
@@ -977,10 +1154,14 @@ impl App {
                     return iced::Task::none();
                 }
 
-                let effective_content = if content.is_empty() && path.exists() {
-                    std::fs::read_to_string(&path).unwrap_or_default()
-                } else {
-                    content
+                let name = path.file_name().unwrap_or_default().to_string_lossy().to_string();
+                let content = match content {
+                    Ok(content) => content,
+                    Err(err) if !Self::is_media_path(&path) => {
+                        self.abandon_open(&path, format!("Can't open {name}: {err}"));
+                        return iced::Task::none();
+                    },
+                    Err(_) => String::new(),
                 };
 
                 self.recent_files.retain(|p| p != &path);
@@ -994,7 +1175,6 @@ impl App {
                 self.last_wakatime_entity = Some(entity);
                 self.last_wakatime_sent_at = Some(Instant::now());
 
-                let name = path.file_name().unwrap_or_default().to_string_lossy().to_string();
                 let opened_path = path.clone();
                 let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("txt").to_string();
 
@@ -1016,10 +1196,8 @@ impl App {
                         Ok(player) => TabKind::Video { player },
                         Err(message) => {
                             eprintln!("{message}");
-                            TabKind::Editor {
-                                code_editor: self.configured_code_editor("", &ext),
-                                buffer: crate::features::editor_buffer::EditorBuffer::from_text(""),
-                            }
+                            self.abandon_open(&path, format!("Can't play {name}: {message}"));
+                            return iced::Task::none();
                         },
                     }
                 } else if Self::is_audio_path(&path) {
@@ -1041,7 +1219,7 @@ impl App {
                             TabKind::Audio {
                                 file_path: path.clone(),
                                 sink: std::sync::Arc::new(std::sync::Mutex::new(sink)),
-                                stream: std::sync::Arc::new((stream, stream_handle)),
+                                stream: std::rc::Rc::new((stream, stream_handle)),
                                 playing: false,
                                 duration_secs,
                                 position_secs: 0.0,
@@ -1049,18 +1227,14 @@ impl App {
                         },
                         Err(e) => {
                             eprintln!("Audio init error: {e}");
-                            TabKind::Editor {
-                                code_editor: self.configured_code_editor("", &ext),
-                                buffer: crate::features::editor_buffer::EditorBuffer::from_text(""),
-                            }
+                            self.abandon_open(&path, format!("Can't play {name}: {e}"));
+                            return iced::Task::none();
                         },
                     }
                 } else {
                     TabKind::Editor {
-                        code_editor: { self.configured_code_editor(&effective_content, &ext) },
-                        buffer: crate::features::editor_buffer::EditorBuffer::from_text(
-                            &effective_content,
-                        ),
+                        code_editor: { self.configured_code_editor(&content, &ext) },
+                        buffer: crate::features::editor_buffer::EditorBuffer::from_text(&content),
                     }
                 };
 
@@ -1088,7 +1262,7 @@ impl App {
                             TabKind::Audio {
                                 file_path: path.clone(),
                                 sink: std::sync::Arc::new(std::sync::Mutex::new(sink)),
-                                stream: std::sync::Arc::new((stream, stream_handle)),
+                                stream: std::rc::Rc::new((stream, stream_handle)),
                                 playing: false,
                                 duration_secs,
                                 position_secs: 0.0,
@@ -1096,18 +1270,14 @@ impl App {
                         },
                         Err(e) => {
                             eprintln!("Audio init error: {e}");
-                            TabKind::Editor {
-                                code_editor: self.configured_code_editor("", &ext),
-                                buffer: crate::features::editor_buffer::EditorBuffer::from_text(""),
-                            }
+                            self.abandon_open(&path, format!("Can't play {name}: {e}"));
+                            return iced::Task::none();
                         },
                     }
                 } else {
                     TabKind::Editor {
-                        code_editor: { self.configured_code_editor(&effective_content, &ext) },
-                        buffer: crate::features::editor_buffer::EditorBuffer::from_text(
-                            &effective_content,
-                        ),
+                        code_editor: { self.configured_code_editor(&content, &ext) },
+                        buffer: crate::features::editor_buffer::EditorBuffer::from_text(&content),
                     }
                 };
 
@@ -1148,6 +1318,17 @@ impl App {
                     }
                 }
 
+                let mut definition_task = iced::Task::none();
+                let jump_is_for_this_file = self
+                    .pending_definition_jump
+                    .as_ref()
+                    .is_some_and(|(path, _)| *path == opened_path);
+                if jump_is_for_this_file {
+                    if let Some((_, position)) = self.pending_definition_jump.take() {
+                        definition_task = self.jump_to_position(self.tabs.len() - 1, position);
+                    }
+                }
+
                 self.pending_hover_request = None;
                 self.vim_refresh_cursor_style();
 
@@ -1162,7 +1343,7 @@ impl App {
                         let root_hint = opened_path.parent();
                         match self.lsp.create_client(language.server_key, root_hint) {
                             Ok(client) => {
-                                let uri = format!("file://{}", opened_path.display());
+                                let uri = crate::features::lsp::document_uri(&opened_path);
                                 let document =
                                     iced_code_editor::LspDocument::new(uri, language.language_id);
                                 if let Some(tab) = self.tabs.last_mut() {
@@ -1176,6 +1357,8 @@ impl App {
                                     }
                                 }
                                 self.lsp_server_keys.insert(opened_path, language.server_key);
+                                self.symbols_empty_replies = 0;
+                                self.schedule_symbol_refresh(super::SYMBOL_REFRESH_DELAY);
                                 self.dev_log(format!(
                                     "LSP: Successfully attached {} server",
                                     language.server_key
@@ -1199,7 +1382,31 @@ impl App {
                         opened_path.is_absolute()
                     ));
                 }
+                definition_task
+            },
+            Message::GoToDefinition => {
+                if self.lsp_enabled {
+                    if let Some(tab) = self.active_tab.and_then(|idx| self.tabs.get_mut(idx)) {
+                        if let TabKind::Editor {
+                            ref mut code_editor,
+                            ..
+                        } = tab.kind
+                        {
+                            code_editor.lsp_request_definition();
+                        }
+                    }
+                }
                 iced::Task::none()
+            },
+            Message::SessionRestoreFinished(active) => {
+                self.pending_active_tab_path = None;
+                let idx = active.and_then(|path| {
+                    tab_index_for_path(self.tabs.iter().map(|t| t.path.as_path()), &path)
+                });
+                match idx {
+                    Some(idx) => self.update(Message::TabSelected(idx)),
+                    None => iced::Task::none(),
+                }
             },
             Message::TabSelected(idx) => {
                 if idx < self.tabs.len() {
@@ -1237,7 +1444,7 @@ impl App {
                             let root_hint = tab_path.parent();
                             match self.lsp.create_client(server_key, root_hint) {
                                 Ok(client) => {
-                                    let uri = format!("file://{}", tab_path.display());
+                                    let uri = crate::features::lsp::document_uri(&tab_path);
                                     if let Some(language) =
                                         iced_code_editor::lsp_language_for_path(&tab_path)
                                     {
@@ -1274,6 +1481,9 @@ impl App {
                             if let Some((client, document, server_key)) = lsp_client_data {
                                 code_editor.set_lsp_enabled(true);
                                 code_editor.attach_lsp(client, document);
+                                self.symbols_empty_replies = 0;
+                                self.symbols_refresh_at =
+                                    Some(Instant::now() + super::SYMBOL_REFRESH_DELAY);
                                 self.dev_log(format!(
                                     "LSP: Successfully reattached {} server",
                                     server_key
@@ -1287,25 +1497,38 @@ impl App {
                 iced::Task::none()
             },
             Message::FileTreeRefresh => {
+                let mut root = None;
                 if let Some(ref mut tree) = self.file_tree {
                     tree.refresh();
-
-                    self.all_workspace_files =
-                        crate::features::search::collect_all_files(&tree.root);
-                    self.fuzzy_finder.set_folder(tree.root.clone());
 
                     if let Some(selected) = tree.selected.clone() {
                         if !selected.exists() {
                             tree.selected = None;
                         }
                     }
+                    root = Some(tree.root.clone());
                 }
 
-                iced::Task::none()
+                // Re-index off the UI thread; the old lists stay until it lands.
+                let index_task = match root {
+                    Some(root) => self.index_workspace_task(root),
+                    None => iced::Task::none(),
+                };
+                let git_task = if self.git_status_directory().is_some() {
+                    self.update_message(Message::RefreshGitStatus)
+                } else {
+                    iced::Task::none()
+                };
+                iced::Task::batch([index_task, git_task])
             },
             Message::CursorPositionTracked(x, y) => {
-                self.last_cursor_position = iced::Point::new(x, y); // ensure this is global and
-                                                                    // possible to reference
+                self.last_cursor_position = iced::Point::new(x, y);
+                if let Some((index, origin)) = self.tab_pointer_press {
+                    if self.tab_drag_index.is_none() && (x - origin.x).abs() >= 5.0 {
+                        self.tab_drag_index = Some(index);
+                    }
+                }
+                self.update_tab_drag_target();
                 iced::Task::none()
             },
             Message::FileTreeContextMenuOpen(path, is_dir) => {
@@ -1346,17 +1569,34 @@ impl App {
             },
             Message::FileTreeRenameSubmit => {
                 if let Some((old_path, _is_dir)) = self.rename_target.take() {
-                    let new_name = self.rename_input.trim();
+                    let new_name = self.rename_input.trim().to_string();
                     if !new_name.is_empty() {
                         if let Some(parent) = old_path.parent() {
-                            let new_path = parent.join(new_name);
-                            if new_path != old_path && std::fs::rename(&old_path, &new_path).is_ok()
-                            {
-                                for tab in &mut self.tabs {
-                                    if tab.path == old_path {
-                                        tab.path = new_path.clone();
-                                        tab.name = new_name.to_string();
-                                    }
+                            let new_path = parent.join(&new_name);
+                            if new_path != old_path {
+                                match crate::fs_util::rename_no_clobber(&old_path, &new_path) {
+                                    Ok(()) => {
+                                        for tab in &mut self.tabs {
+                                            if tab.path == old_path {
+                                                tab.path = new_path.clone();
+                                                tab.name = new_name.clone();
+                                            }
+                                        }
+                                    },
+                                    Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => {
+                                        self.notification = Some(Notification {
+                                            message: format!(
+                                                "A file or folder named \"{new_name}\" already exists"
+                                            ),
+                                            shown_at: Instant::now(),
+                                        });
+                                    },
+                                    Err(err) => {
+                                        self.notification = Some(Notification {
+                                            message: format!("Rename failed: {err}"),
+                                            shown_at: Instant::now(),
+                                        });
+                                    },
                                 }
                             }
                         }
@@ -1399,17 +1639,71 @@ impl App {
                 iced::Task::none()
             },
             Message::FileTreeDelete => {
-                if let Some(target) = self.context_menu.take() {
-                    let removed = if target.is_dir {
-                        std::fs::remove_dir_all(&target.path)
-                    } else {
-                        std::fs::remove_file(&target.path)
-                    };
-                    if removed.is_ok() {
-                        self.tabs.retain(|tab| !tab.path.starts_with(&target.path));
-                        if let Some(ref mut tree) = self.file_tree {
-                            tree.refresh();
+                let Some(target) = self.context_menu.take() else {
+                    return iced::Task::none();
+                };
+                let (path, is_dir) = (target.path, target.is_dir);
+                iced::Task::perform(
+                    async move {
+                        let trash_path = path.clone();
+                        let trashed =
+                            tokio::task::spawn_blocking(move || trash::delete(&trash_path))
+                                .await
+                                .map(|result| result.is_ok())
+                                .unwrap_or(false);
+                        if trashed {
+                            return (path, true);
                         }
+
+                        // no usable trash (eg unsupported filesystem)
+                        // only delete for good if the user agrees
+                        let name = path
+                            .file_name()
+                            .map(|n| n.to_string_lossy().into_owned())
+                            .unwrap_or_else(|| path.display().to_string());
+                        let answer = rfd::AsyncMessageDialog::new()
+                            .set_level(rfd::MessageLevel::Warning)
+                            .set_title("Could not move to trash")
+                            .set_description(format!(
+                                "\"{name}\" could not be moved to trash. Delete it permanently instead? This cannot be undone."
+                            ))
+                            .set_buttons(rfd::MessageButtons::YesNo)
+                            .show()
+                            .await;
+                        if answer != rfd::MessageDialogResult::Yes {
+                            return (path, false);
+                        }
+
+                        let remove_path = path.clone();
+                        let removed = tokio::task::spawn_blocking(move || {
+                            if is_dir {
+                                std::fs::remove_dir_all(&remove_path)
+                            } else {
+                                std::fs::remove_file(&remove_path)
+                            }
+                        })
+                        .await
+                        .map(|result| result.is_ok())
+                        .unwrap_or(false);
+                        (path, removed)
+                    },
+                    |(path, removed)| Message::FileTreeDeleted(path, removed),
+                )
+            },
+            Message::FileTreeDeleted(path, removed) => {
+                if removed {
+                    let doomed: Vec<usize> = self
+                        .tabs
+                        .iter()
+                        .enumerate()
+                        .filter(|(_, tab)| tab.path.starts_with(&path))
+                        .map(|(i, _)| i)
+                        .collect();
+                    for i in doomed.into_iter().rev() {
+                        self.close_tab(i, false);
+                    }
+                    if let Some(ref mut tree) = self.file_tree {
+                        tree.refresh();
                     }
                 }
                 iced::Task::none()
@@ -1428,13 +1722,38 @@ impl App {
                 },
             ),
             Message::FolderOpened(path) => {
+                if self.file_tree.as_ref().map(|tree| tree.root.as_path()) != Some(path.as_path()) {
+                    // The old folder's branch is wrong here, and so is any
+                    // read of it still running.
+                    self.git_branch = None;
+                    self.git_branch_generation = self.git_branch_generation.wrapping_add(1);
+                }
                 self.file_tree = Some(FileTree::new(path.clone()));
-                self.all_workspace_files = crate::features::search::collect_all_files(&path);
-                self.fuzzy_finder.set_folder(path.clone());
+                self.git_changes.clear();
+                self.git_tab_changes.clear();
+                self.all_workspace_files.clear();
+                self.fuzzy_finder.set_folder_files(path.clone(), Vec::new());
                 self.lsp.set_workspace_root(path.clone());
                 self.lsp_enabled = true;
                 self.chat_sessions = crate::config::chat_store::load_sessions(Some(&path));
                 self.active_chat_session = self.chat_sessions.first().map(|s| s.id.clone());
+                iced::Task::batch([
+                    self.index_workspace_task(path),
+                    self.update_message(Message::RefreshGitStatus),
+                ])
+            },
+            Message::WorkspaceIndexed(generation, root, result) => {
+                let current = generation == self.workspace_index_generation
+                    && self.file_tree.as_ref().is_some_and(|t| t.root == root);
+                if current {
+                    match result {
+                        Ok((files, fuzzy_files)) => {
+                            self.all_workspace_files = files;
+                            self.fuzzy_finder.set_folder_files(root, fuzzy_files);
+                        },
+                        Err(e) => eprintln!("Workspace indexing failed: {e}"),
+                    }
+                }
                 iced::Task::none()
             },
             Message::SaveFile => {
@@ -1454,9 +1773,16 @@ impl App {
                             if path == Path::new("untitled") {
                                 return iced::Task::perform(async {}, |_| Message::SaveAs);
                             }
+                            let write_path = path.clone();
+                            let write_content = content.clone();
                             return iced::Task::perform(
-                                async move { std::fs::write(&path, content).map_err(|e| e.to_string()) },
-                                Message::FileSaved,
+                                async move {
+                                    let result =
+                                        crate::fs_util::write_atomic(&write_path, write_content)
+                                            .map_err(|e| e.to_string());
+                                    (path, content, result)
+                                },
+                                |(path, content, result)| Message::FileSaved(path, content, result),
                             );
                         }
                     }
@@ -1474,13 +1800,14 @@ impl App {
                             let content = code_editor.content();
                             return iced::Task::perform(
                                 async move {
-                                    std::fs::write(&path, content)
-                                        .map(|_| path)
-                                        .map_err(|e| e.to_string())
+                                    let result =
+                                        crate::fs_util::write_atomic(&path, content.clone())
+                                            .map_err(|e| e.to_string());
+                                    (path, content, result)
                                 },
-                                |result| match result {
-                                    Ok(path) => Message::CurrentFileSavedAs(path),
-                                    Err(err) => Message::FileSaved(Err(err)),
+                                |(path, content, result)| match result {
+                                    Ok(()) => Message::CurrentFileSavedAs(path),
+                                    Err(err) => Message::FileSaved(path, content, Err(err)),
                                 },
                             );
                         }
@@ -1521,37 +1848,26 @@ impl App {
 
                 iced::Task::none()
             },
-            Message::FileSaved(result) => {
-                if let Err(e) = result {
-                    eprintln!("Failed to save file: {}", e);
-                } else if let Some(idx) = self.active_tab {
-                    if let Some(tab) = self.tabs.get_mut(idx) {
-                        if let TabKind::Editor {
-                            ref mut code_editor,
-                            ..
-                        } = tab.kind
-                        {
-                            code_editor.mark_saved();
-                            code_editor.lsp_did_save();
-                        }
-                        tab.autosave_requested_at = None;
-                        tab.autosave_in_flight = false;
-                    }
+            Message::FileSaved(path, saved_content, result) => {
+                match result {
+                    Err(e) => eprintln!("Failed to save {}: {}", path.display(), e),
+                    Ok(()) => {
+                        mark_tab_saved(&mut self.tabs, &path, &saved_content);
+                    },
                 }
                 iced::Task::none()
             },
             Message::SidebarResizeStart => {
                 self.resizing_sidebar = true;
                 self.resize_start_x = None;
-                self.resize_start_width = self.sidebar_width;
+                self.resize_start_width = self.active_panel_width();
                 iced::Task::none()
             },
             Message::SidebarResizing(x) => {
                 if self.resizing_sidebar {
                     if let Some(start_x) = self.resize_start_x {
                         let delta = x - start_x;
-                        self.sidebar_width = (self.resize_start_width + delta)
-                            .clamp(SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH);
+                        self.set_active_panel_width(self.resize_start_width + delta);
                     } else {
                         self.resize_start_x = Some(x);
                     }
@@ -1559,52 +1875,346 @@ impl App {
                 iced::Task::none()
             },
             Message::SidebarResizeEnd => {
+                if self.resizing_sidebar {
+                    let _ = prefs::save_preferences(&self.editor_preferences);
+                }
                 self.resizing_sidebar = false;
                 self.resize_start_x = None;
                 iced::Task::none()
             },
             Message::SetActivePanel(panel) => {
                 use crate::app::ActivePanel;
+                // the git panel's scrollable starts from the top whenever it is rebuilt
+                self.git_scroll_offset = 0.0;
+                self.git_show_all_changes = false;
                 if self.active_panel == panel {
                     self.sidebar_visible = !self.sidebar_visible;
                 } else {
                     self.active_panel = panel;
                     self.sidebar_visible = true;
                     if panel == ActivePanel::Git {
-                        return iced::Task::perform(async {}, |_| Message::RefreshGitStatus);
+                        return iced::Task::batch([
+                            iced::Task::done(Message::RefreshGitStatus),
+                            iced::Task::done(Message::RefreshGitHistory),
+                        ]);
                     }
                 }
                 iced::Task::none()
             },
             Message::RefreshGitStatus => {
+                let branch = self.git_branch_task();
+                if !self.git_status_guard.try_start() {
+                    return branch;
+                }
+                let scope = self.git_status_directory().map(Path::to_path_buf);
+                let status = iced::Task::perform(
+                    crate::features::git::load_status_async(scope.clone()),
+                    move |(repo, changes)| Message::GitStatusLoaded(scope.clone(), repo, changes),
+                );
+                iced::Task::batch([status, branch])
+            },
+            Message::GitStatusLoaded(scope, repo, changes) => {
+                self.git_status_guard.finish();
+                if scope.as_deref() != self.git_status_directory() {
+                    return self.update_message(Message::RefreshGitStatus);
+                }
+                self.git_tab_changes.clear();
+                if let Some(repo) = repo {
+                    self.git_tab_changes.extend(changes.iter().filter_map(|change| {
+                        let kind = change.unstaged_kind().or_else(|| change.staged_kind())?;
+                        Some((repo.join(&change.path), kind))
+                    }));
+                }
+                self.git_changes = changes;
+                iced::Task::none()
+            },
+            Message::GitBranchTick => self.git_branch_task(),
+            Message::GitBranchLoaded(generation, root, branch) => {
+                self.git_branch_guard.finish();
+                let open_root = self.file_tree.as_ref().map(|tree| tree.root.as_path());
+                if git_branch_result_is_current(
+                    generation,
+                    &root,
+                    self.git_branch_generation,
+                    open_root,
+                ) {
+                    self.git_branch = branch;
+                    iced::Task::none()
+                } else {
+                    // A read for a folder that is no longer open; read the
+                    // one that is (if any) instead of waiting for the tick.
+                    self.git_branch_task()
+                }
+            },
+            Message::RefreshGitHistory => {
+                if !self.git_history_guard.try_start() {
+                    return iced::Task::none();
+                }
+                // pages still on their way belong to the old history
+                self.git_history_generation = self.git_history_generation.wrapping_add(1);
+                self.git_history_page_loading = false;
                 let root = self.file_tree.as_ref().map(|t| t.root.clone());
                 iced::Task::perform(
-                    async move {
-                        let mut cmd = std::process::Command::new("git");
-                        cmd.arg("status").arg("--porcelain");
-                        if let Some(dir) = root {
-                            cmd.current_dir(dir);
-                        }
-                        let output = cmd.output().ok();
-                        let mut changes = Vec::new();
-                        if let Some(out) = output {
-                            let text = String::from_utf8_lossy(&out.stdout).to_string();
-                            for line in text.lines() {
-                                if line.len() < 3 {
-                                    continue;
-                                }
-                                let status = line[..2].trim().to_string();
-                                let file = line[3..].to_string();
-                                changes.push((status, file));
-                            }
-                        }
-                        changes
-                    },
-                    Message::GitStatusLoaded,
+                    crate::features::git::load_history_page_async(
+                        root,
+                        self.git_history_generation,
+                        0,
+                        crate::features::git_graph::GraphBuilder::default(),
+                    ),
+                    Message::GitHistoryLoaded,
                 )
             },
-            Message::GitStatusLoaded(changes) => {
-                self.git_changes = changes;
+            Message::LoadMoreGitHistory => {
+                if self.git_history_exhausted
+                    || self.git_history_page_loading
+                    || self.git_history_guard.is_running()
+                    || self.git_history.is_empty()
+                {
+                    return iced::Task::none();
+                }
+                self.git_history_page_loading = true;
+                let root = self.file_tree.as_ref().map(|t| t.root.clone());
+                iced::Task::perform(
+                    crate::features::git::load_history_page_async(
+                        root,
+                        self.git_history_generation,
+                        self.git_history.len(),
+                        self.git_graph_builder.clone(),
+                    ),
+                    Message::GitHistoryLoaded,
+                )
+            },
+            Message::GitHistoryLoaded(page) => {
+                if page.generation != self.git_history_generation {
+                    return iced::Task::none();
+                }
+                if page.skip == 0 {
+                    self.git_history_guard.finish();
+                    self.git_graph = page.graph;
+                    self.git_history = page.commits;
+                } else if page.skip == self.git_history.len() {
+                    self.git_history_page_loading = false;
+                    self.git_graph.extend(page.graph);
+                    self.git_history.extend(page.commits);
+                } else {
+                    // a page for a position the list has already moved past
+                    return iced::Task::none();
+                }
+                self.git_graph_builder = page.builder;
+                self.git_history_exhausted = page.exhausted;
+                iced::Task::none()
+            },
+            Message::GitShowAllChanges => {
+                self.git_show_all_changes = true;
+                iced::Task::none()
+            },
+            Message::GitPanelScrolled {
+                offset,
+                viewport,
+                content,
+            } => {
+                // iced also reports a scroll when the widget tree is rebuilt, which
+                // the card's own opening does, so only a changed offset counts
+                if (offset - self.git_scroll_offset).abs() > f32::EPSILON {
+                    // rows move under a still cursor, so the card would point at the wrong commit
+                    self.git_card = None;
+                    self.git_card_hovered = false;
+                }
+                self.git_scroll_offset = offset;
+                self.git_viewport_h = viewport;
+                let margin = crate::ui::sidebar::HISTORY_PREFETCH_ROWS as f32
+                    * crate::ui::git_graph::ROW_HEIGHT;
+                if crate::features::virtual_list::near_end(offset, viewport, content, margin) {
+                    // ignored unless the panel has another page to fetch
+                    return iced::Task::done(Message::LoadMoreGitHistory);
+                }
+                iced::Task::none()
+            },
+            Message::GitCommitHovered(hash) => {
+                self.git_hover_token = self.git_hover_token.wrapping_add(1);
+                self.git_hover_hash = Some(hash.clone());
+                if self.git_card.is_some() {
+                    // moving between rows while a card is open swaps it at once
+                    return self.show_git_card(hash);
+                }
+                let token = self.git_hover_token;
+                iced::Task::perform(
+                    async move {
+                        tokio::time::sleep(GIT_CARD_OPEN_DELAY).await;
+                        token
+                    },
+                    Message::GitCardShow,
+                )
+            },
+            Message::GitCommitUnhovered => {
+                self.git_hover_hash = None;
+                self.schedule_git_card_hide()
+            },
+            Message::GitCardShow(token) => {
+                if token != self.git_hover_token {
+                    return iced::Task::none();
+                }
+                match self.git_hover_hash.clone() {
+                    Some(hash) => self.show_git_card(hash),
+                    None => iced::Task::none(),
+                }
+            },
+            Message::GitCardHide(token) => {
+                if token == self.git_hover_token && !self.git_card_hovered {
+                    self.git_card = None;
+                }
+                iced::Task::none()
+            },
+            Message::GitCardHovered(hovered) => {
+                self.git_card_hovered = hovered;
+                if hovered {
+                    // cancels any close timer already running
+                    self.git_hover_token = self.git_hover_token.wrapping_add(1);
+                    iced::Task::none()
+                } else {
+                    self.schedule_git_card_hide()
+                }
+            },
+            Message::GitCommitDetailLoaded(hash, detail) => {
+                self.git_detail_loading.remove(&hash);
+                if let Some(detail) = detail {
+                    self.git_commit_details.insert(hash, detail);
+                }
+                iced::Task::none()
+            },
+            Message::OpenUrl(url) => {
+                // the card builds these itself; refuse anything that is not a web link
+                if url.starts_with("https://") {
+                    #[cfg(target_os = "macos")]
+                    let _ = std::process::Command::new("open").arg(&url).spawn();
+                    #[cfg(target_os = "windows")]
+                    let _ = std::process::Command::new("rundll32")
+                        .arg("url.dll,FileProtocolHandler")
+                        .arg(&url)
+                        .spawn();
+                    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+                    let _ = std::process::Command::new("xdg-open").arg(&url).spawn();
+                }
+                iced::Task::none()
+            },
+            Message::CopyText(text) => iced::clipboard::write(text),
+            Message::OpenCommitTab(hash) => {
+                // the card is in the way once a click has opened the commit info
+                self.git_card = None;
+                self.git_card_hovered = false;
+
+                let path = PathBuf::from(format!("commit:{hash}"));
+                let idx = match self.tabs.iter().position(|t| t.path == path) {
+                    // already open, whether pinned or as the current preview
+                    Some(idx) => idx,
+                    None => {
+                        let name = self.commit_tab_name(&hash);
+                        let kind = TabKind::Commit {
+                            hash: hash.clone(),
+                            diff: None,
+                            collapsed: std::collections::HashSet::new(),
+                            preview: true,
+                        };
+                        let preview_slot = self
+                            .tabs
+                            .iter()
+                            .position(|t| matches!(t.kind, TabKind::Commit { preview: true, .. }));
+                        match preview_slot {
+                            // the preview tab moves on to this commit
+                            Some(idx) => {
+                                let tab = &mut self.tabs[idx];
+                                tab.path = path;
+                                tab.name = name;
+                                tab.kind = kind;
+                                idx
+                            },
+                            None => {
+                                self.tabs.push(Tab {
+                                    path,
+                                    name,
+                                    kind,
+                                    autosave_requested_at: None,
+                                    autosave_in_flight: false,
+                                });
+                                self.tabs.len() - 1
+                            },
+                        }
+                    },
+                };
+
+                let needs_diff = matches!(&self.tabs[idx].kind, TabKind::Commit { diff: None, .. });
+                let select = self.update(Message::TabSelected(idx));
+                let details = self.fetch_commit_detail(hash.clone());
+                if !needs_diff {
+                    return iced::Task::batch([select, details]);
+                }
+                let root = self.file_tree.as_ref().map(|t| t.root.clone());
+                let diff = iced::Task::perform(
+                    crate::features::git_diff::load_commit_diff_async(root, hash.clone()),
+                    move |files| Message::GitCommitDiffLoaded(hash.clone(), files),
+                );
+                iced::Task::batch([select, details, diff])
+            },
+            Message::PinCommit(hash) => {
+                for tab in &mut self.tabs {
+                    if let TabKind::Commit {
+                        hash: shown,
+                        preview,
+                        ..
+                    } = &mut tab.kind
+                    {
+                        if *shown == hash {
+                            *preview = false;
+                        }
+                    }
+                }
+                iced::Task::none()
+            },
+            Message::PreviewTabPressed(idx) => {
+                let double =
+                    self.preview_tab_pressed_at.is_some_and(|at| at.elapsed() < DOUBLE_CLICK);
+
+                // a third press should start counting again, not pin twice
+                self.preview_tab_pressed_at = if double {
+                    None
+                } else {
+                    Some(Instant::now())
+                };
+                if double {
+                    if let Some(Tab {
+                        kind: TabKind::Commit { preview, .. },
+                        ..
+                    }) = self.tabs.get_mut(idx)
+                    {
+                        *preview = false;
+                    }
+                }
+                self.update(Message::TabSelected(idx))
+            },
+            Message::GitCommitDiffLoaded(hash, files) => {
+                // the preview tab may have moved on to another commit by now
+                let slot = self.tabs.iter_mut().find_map(|tab| match &mut tab.kind {
+                    TabKind::Commit {
+                        hash: shown, diff, ..
+                    } if *shown == hash => Some(diff),
+                    _ => None,
+                });
+                if let Some(diff) = slot {
+                    *diff = Some(files);
+                }
+                iced::Task::none()
+            },
+            Message::ToggleCommitFile(file) => {
+                let active = self.active_tab.and_then(|idx| self.tabs.get_mut(idx));
+                if let Some(Tab {
+                    kind: TabKind::Commit { collapsed, .. },
+                    ..
+                }) = active
+                {
+                    if !collapsed.remove(&file) {
+                        collapsed.insert(file);
+                    }
+                }
                 iced::Task::none()
             },
             Message::ChatNewSession => {
@@ -1636,23 +2246,43 @@ impl App {
                     let browse_provider = self.chat_picker_provider.clone().unwrap_or_else(|| {
                         crate::features::chat_providers::PROVIDERS[0].name.to_string()
                     });
-                    self.ensure_models_fetched(&browse_provider)
+                    self.ensure_models_fetched(&browse_provider, false)
                 } else {
                     iced::Task::none()
                 }
             },
             Message::ChatPickerProviderSelected(provider) => {
                 self.chat_picker_provider = Some(provider.clone());
-                self.ensure_models_fetched(&provider)
+                self.ensure_models_fetched(&provider, false)
             },
+            Message::ChatRefreshModels(provider) => self.ensure_models_fetched(&provider, true),
             Message::ChatModelSearchChanged(text) => {
                 self.chat_model_search = text;
                 iced::Task::none()
             },
-            Message::ChatModelPicked(provider, model) => {
+            Message::ChatModelPicked(provider_name, model) => {
+                let Some(provider) = crate::features::chat_providers::by_name(&provider_name)
+                else {
+                    return iced::Task::none();
+                };
+                if !matches!(
+                    self.provider_model_state.get(provider.id),
+                    Some(ModelFetchState::Loaded(models)) if models.contains(&model)
+                ) {
+                    return iced::Task::none();
+                }
+                let local_base_url = if provider.requires_api_key {
+                    None
+                } else {
+                    let Ok(url) = normalize_base_url(self.provider_base_url(provider)) else {
+                        return iced::Task::none();
+                    };
+                    Some(url)
+                };
                 if let Some(session) = self.active_chat_session_mut() {
-                    session.provider = provider;
+                    session.provider = provider_name;
                     session.model = model;
+                    session.local_base_url = local_base_url;
                 }
                 self.chat_model_picker_open = false;
                 self.chat_model_search.clear();
@@ -1669,18 +2299,38 @@ impl App {
                     return iced::Task::none();
                 }
 
+                let Some(session) = self.active_chat_session() else {
+                    return iced::Task::none();
+                };
+                let provider = crate::features::chat_providers::by_name(&session.provider);
+                if let Some(provider) = provider {
+                    if !provider.requires_api_key
+                        && !session.model.is_empty()
+                        && !matches!(
+                            normalize_base_url(self.provider_base_url(provider)),
+                            Ok(url) if session.local_base_url.as_deref() == Some(url.as_str())
+                        )
+                    {
+                        self.notification = Some(Notification {
+                            message: format!(
+                                "Choose your {} model again to confirm its server before sending.",
+                                provider.name
+                            ),
+                            shown_at: Instant::now(),
+                        });
+                        return iced::Task::none();
+                    }
+                }
+
                 let Some(session) = self.active_chat_session_mut() else {
                     return iced::Task::none();
                 };
                 session.push(crate::features::chat::ChatMessage::user(content));
-                self.chat_input.clear();
-                self.persist_chat_sessions();
-
-                let session = self.active_chat_session().expect("just pushed to it");
                 let session_id = session.id.clone();
-                let provider = crate::features::chat_providers::by_name(&session.provider);
                 let model = session.model.clone();
                 let history = session.messages.clone();
+                self.chat_input.clear();
+                self.persist_chat_sessions();
 
                 let Some(provider) = provider.filter(|_| !model.is_empty()) else {
                     if let Some(session) = self.active_chat_session_mut() {
@@ -1705,7 +2355,7 @@ impl App {
                 }
 
                 self.chat_sending = true;
-                let base_url = self.provider_base_url(provider.id);
+                let base_url = self.provider_base_url(provider).to_string();
                 let api = provider.api;
 
                 iced::Task::perform(
@@ -1733,12 +2383,10 @@ impl App {
                 self.persist_chat_sessions();
                 iced::Task::none()
             },
-            Message::ProviderModelsFetched(provider_id, result) => {
-                let state = match result {
-                    Ok(models) => crate::features::ai_client::ModelFetchState::Loaded(models),
-                    Err(error) => crate::features::ai_client::ModelFetchState::Error(error),
-                };
-                self.provider_model_state.insert(provider_id, state);
+            Message::ProviderModelsFetched(provider_id, request_id, result) => {
+                if let Some(state) = self.provider_model_state.get_mut(&provider_id) {
+                    state.finish(request_id, result);
+                }
                 iced::Task::none()
             },
             Message::ChatDeleteSession(id) => {
@@ -1848,15 +2496,20 @@ impl App {
                 if let Some(ref tree) = self.file_tree {
                     let root = tree.root.clone();
                     iced::Task::perform(
-                        async move { crate::features::search::search_workspace(&root, &query) },
-                        Message::SearchCompleted,
+                        async move {
+                            let results = crate::features::search::search_workspace(&root, &query);
+                            (query, results)
+                        },
+                        |(query, results)| Message::SearchCompleted(query, results),
                     )
                 } else {
                     iced::Task::none()
                 }
             },
-            Message::SearchCompleted(results) => {
-                self.search_results = results;
+            Message::SearchCompleted(query, results) => {
+                if search_results_are_current(&self.search_query, &query) {
+                    self.search_results = results;
+                }
                 iced::Task::none()
             },
             Message::SearchResultClicked(path, _line_number) => {
@@ -1985,7 +2638,7 @@ impl App {
                         self.command_palette.filtered_commands.get(self.command_palette_selected)
                     {
                         let command_name = cmd.name.clone();
-                        self.command_palette.close();
+                        self.close_command_palette();
                         return self.execute_palette_command(&command_name);
                     }
                     return iced::Task::none();
@@ -2006,7 +2659,7 @@ impl App {
                     self.lsp_overlay = iced_code_editor::LspOverlayState::new();
                     self.pending_hover_request = None;
                 } else if self.command_palette.open {
-                    self.command_palette.close();
+                    self.close_command_palette();
                 } else if self.pending_sensitive_open.is_some() {
                     self.pending_sensitive_open = None;
                 } else if self.command_input.open {
@@ -2046,10 +2699,10 @@ impl App {
                 self.command_palette.toggle(include_markdown_render);
                 self.command_palette_selected = 0;
                 if self.command_palette.open {
-                    self.vim_refresh_cursor_style();
+                    self.blur_editor_for_palette();
                     return iced::widget::operation::focus(self.command_palette_input_id.clone());
                 }
-                self.vim_refresh_cursor_style();
+                self.close_command_palette();
                 iced::Task::none()
             },
             Message::CommandPaletteQueryChanged(query) => {
@@ -2060,7 +2713,7 @@ impl App {
                 iced::widget::operation::focus(self.command_palette_input_id.clone())
             },
             Message::CommandPaletteSelect(command_name) => {
-                self.command_palette.close();
+                self.close_command_palette();
                 self.execute_palette_command(&command_name)
             },
             Message::CommandPaletteNavigate(delta) => {
@@ -2127,6 +2780,7 @@ impl App {
                 iced::Task::none()
             },
             Message::ReplaceOne => {
+                let mut edited = None;
                 if let Some(idx) = self.active_tab {
                     if let Some(tab) = self.tabs.get_mut(idx) {
                         if let TabKind::Editor {
@@ -2136,16 +2790,34 @@ impl App {
                         } = tab.kind
                         {
                             let mut text = code_editor.content();
+                            // Refresh the byte ranges so they match the current
+                            // text, not a stale search from before an edit.
+                            self.find_replace.find_matches(&text);
+                            if self.find_replace.current_match >= self.find_replace.matches.len() {
+                                self.find_replace.current_match =
+                                    self.find_replace.matches.len().saturating_sub(1);
+                            }
                             self.find_replace.replace_next(&mut text);
-                            let _ = code_editor.reset(&text);
+                            let task = code_editor.replace_content(&text);
                             buffer.set_text(&text);
+                            edited = Some((task, code_editor.cursor_position()));
                         }
                     }
                 }
                 self.vim_refresh_cursor_style();
-                iced::Task::none()
+                match edited {
+                    Some((task, (line, col))) => {
+                        self.cursor_line = line + 1;
+                        self.cursor_col = col + 1;
+                        self.queue_autosave_for_active_tab();
+                        self.schedule_symbol_refresh(super::SYMBOL_REFRESH_DELAY);
+                        task.map(Message::CodeEditorEvent)
+                    },
+                    None => iced::Task::none(),
+                }
             },
             Message::ReplaceAll => {
+                let mut edited = None;
                 if let Some(idx) = self.active_tab {
                     if let Some(tab) = self.tabs.get_mut(idx) {
                         if let TabKind::Editor {
@@ -2155,14 +2827,27 @@ impl App {
                         } = tab.kind
                         {
                             let mut text = code_editor.content();
+                            // Refresh the byte ranges so they match the current
+                            // text, not a stale search from before an edit.
+                            self.find_replace.find_matches(&text);
                             self.find_replace.replace_all(&mut text);
-                            let _ = code_editor.reset(&text);
+                            let task = code_editor.replace_content(&text);
                             buffer.set_text(&text);
+                            edited = Some((task, code_editor.cursor_position()));
                         }
                     }
                 }
                 self.vim_refresh_cursor_style();
-                iced::Task::none()
+                match edited {
+                    Some((task, (line, col))) => {
+                        self.cursor_line = line + 1;
+                        self.cursor_col = col + 1;
+                        self.queue_autosave_for_active_tab();
+                        self.schedule_symbol_refresh(super::SYMBOL_REFRESH_DELAY);
+                        task.map(Message::CodeEditorEvent)
+                    },
+                    None => iced::Task::none(),
+                }
             },
             Message::ToggleCaseSensitive => {
                 self.find_replace.case_sensitive = !self.find_replace.case_sensitive;
@@ -2208,6 +2893,32 @@ impl App {
                 self.vim_refresh_cursor_style();
                 iced::Task::none()
             },
+            Message::SettingsUiScaleChanged(value) => {
+                if value.is_finite() {
+                    self.editor_preferences.ui_scale = value.clamp(0.8, 1.5);
+                }
+                iced::Task::none()
+            },
+            Message::SettingsEditorFontSizeChanged(value) => {
+                if value.is_finite() {
+                    self.editor_preferences.editor_font_size = value.clamp(12.0, 24.0);
+                    self.apply_typography_to_tabs();
+                }
+                iced::Task::none()
+            },
+            Message::SettingsTerminalFontSizeChanged(value) => {
+                if value.is_finite() {
+                    self.editor_preferences.terminal_font_size = value.clamp(12.0, 24.0);
+                    self.apply_typography_to_tabs();
+                }
+                iced::Task::none()
+            },
+            Message::SettingsToggleCodeWeight => {
+                self.editor_preferences.medium_code_font =
+                    !self.editor_preferences.medium_code_font;
+                self.apply_typography_to_tabs();
+                iced::Task::none()
+            },
             Message::SettingsTabSizeChanged(val) => {
                 if let Ok(size) = val.parse::<usize>() {
                     self.editor_preferences.tab_size = size.clamp(1, 16);
@@ -2223,6 +2934,20 @@ impl App {
                 self.editor_preferences.auto_indent_enabled =
                     !self.editor_preferences.auto_indent_enabled;
                 self.apply_auto_indent_to_tabs();
+                iced::Task::none()
+            },
+            Message::SettingsToggleShowWhitespace => {
+                self.editor_preferences.show_whitespace = !self.editor_preferences.show_whitespace;
+                self.apply_show_whitespace_to_tabs();
+                iced::Task::none()
+            },
+            Message::SettingsToggleShowBreadcrumbs => {
+                self.editor_preferences.show_breadcrumbs =
+                    !self.editor_preferences.show_breadcrumbs;
+                if self.editor_preferences.show_breadcrumbs {
+                    self.symbols_empty_replies = 0;
+                    self.schedule_symbol_refresh(Duration::ZERO);
+                }
                 iced::Task::none()
             },
             Message::SettingsToggleVimMode => {
@@ -2272,6 +2997,8 @@ impl App {
                 let _ = prefs::save_preferences(&self.editor_preferences);
                 self.apply_indent_style_to_tabs();
                 self.apply_auto_indent_to_tabs();
+                self.apply_show_whitespace_to_tabs();
+                self.apply_line_number_width_to_tabs();
                 self.apply_vim_mode_to_tabs();
                 self.notification = Some(Notification {
                     message: "Preferences saved".to_string(),
@@ -2377,12 +3104,29 @@ impl App {
                 iced::Task::none()
             },
             Message::WindowResized(width, height) => {
-                self.editor_preferences.window_width = (width as f32).max(640.0);
-                self.editor_preferences.window_height = (height as f32).max(480.0);
-                let _ = prefs::save_preferences(&self.editor_preferences);
+                // Resize events use zoomed logical coordinates; persist OS logical size.
+                self.editor_preferences.window_width = (width as f32 * self.ui_scale()).max(640.0);
+                self.editor_preferences.window_height =
+                    (height as f32 * self.ui_scale()).max(480.0);
+                self.window_size_dirty = true;
+                self.window_size_save_token = self.window_size_save_token.wrapping_add(1);
+                let token = self.window_size_save_token;
+                iced::Task::perform(
+                    async move {
+                        tokio::time::sleep(WINDOW_SIZE_SAVE_DELAY).await;
+                        token
+                    },
+                    Message::WindowSizeSave,
+                )
+            },
+            Message::WindowSizeSave(token) => {
+                if token == self.window_size_save_token && self.window_size_dirty {
+                    self.flush_window_size();
+                }
                 iced::Task::none()
             },
             Message::WindowCloseRequested(id) => {
+                self.flush_window_size();
                 if self.editor_preferences.restore_session_enabled {
                     self.sync_session_state();
                 }
@@ -2412,86 +3156,60 @@ impl App {
                 self.tab_hover_index = Some(idx);
                 iced::Task::none()
             },
-            Message::TabHoverExit => {
-                self.tab_hover_index = None;
-                iced::Task::none()
-            },
-            Message::TabDragInitiate => {
-                // just record when the hold started
-                // drag only activates after the hold threshold is reached
-                if let Some(idx) = self.tab_hover_index {
-                    self.tab_hold_started_at = Some(Instant::now());
-                    self.tab_hold_index = Some(idx);
+            Message::TabHoverExit(idx) => {
+                if self.tab_hover_index == Some(idx) {
+                    self.tab_hover_index = None;
                 }
                 iced::Task::none()
             },
-            Message::TabHoldTick => {
-                const HOLD_THRESHOLD: Duration = Duration::from_millis(300);
-
-                if self.tab_drag_index.is_some() {
-                    return iced::Task::none();
-                }
-
-                if let (Some(started_at), Some(idx)) =
-                    (self.tab_hold_started_at, self.tab_hold_index)
-                {
-                    if started_at.elapsed() >= HOLD_THRESHOLD {
-                        self.tab_drag_index = Some(idx);
-                        self.tab_drag_start_x = self.tab_drag_curent_x;
-                        self.tab_drag_target = Some(idx);
-                        self.tab_drag_cursor_pos = None;
-                        self.tab_hold_started_at = None;
-                        self.tab_hold_index = None;
-                    }
-                }
+            Message::TabPointerPressed(index) => {
+                let origin = self.last_cursor_position;
+                self.tab_pointer_press = Some((index, origin));
+                self.tab_drag_start_x = origin.x + self.tab_bar_scroll_x;
                 iced::Task::none()
             },
-            Message::TabDragMove(abs_x) => {
-                self.tab_drag_curent_x = abs_x;
-                if let Some(drag_idx) = self.tab_drag_index {
-                    let offset = abs_x - self.tab_drag_start_x;
-                    const TAB_WIDTH: f32 = 120.0;
-                    let slot_offset = (offset / TAB_WIDTH).round() as i32;
-                    let raw_target = drag_idx as i32 + slot_offset;
-                    let clamped = raw_target.clamp(0, self.tabs.len() as i32 - 1) as usize;
-                    self.tab_drag_target = Some(clamped);
-                }
+            Message::TabBarScrolled(x) => {
+                self.tab_bar_scroll_x = x;
+                self.update_tab_drag_target();
                 iced::Task::none()
             },
-            Message::TabDragFloatMove(abs_x, abs_y) => {
-                self.tab_drag_curent_x = abs_x;
-                if let Some(drag_idx) = self.tab_drag_index {
-                    self.tab_drag_cursor_pos = Some((abs_x, abs_y));
-                    let offset = abs_x - self.tab_drag_start_x;
-                    const TAB_WIDTH: f32 = 120.0;
-                    let slot_offset = (offset / TAB_WIDTH).round() as i32;
-                    let raw_target = drag_idx as i32 + slot_offset;
-                    let clamped = raw_target.clamp(0, self.tabs.len() as i32 - 1) as usize;
-                    self.tab_drag_target = Some(clamped);
-                }
+            Message::TabBarWheel(x) => scroll_editor_tabs_by(x),
+            Message::TabDragCancelled => {
+                self.tab_pointer_press = None;
+                self.tab_drag_index = None;
+                self.tab_drag_target = None;
                 iced::Task::none()
             },
             Message::TabDragEnd => {
-                // cancel a pending hold that never crossed the threshold
-                self.tab_hold_started_at = None;
-                self.tab_hold_index = None;
-
-                if let (Some(from), Some(to)) = (self.tab_drag_index, self.tab_drag_target) {
-                    if from != to {
-                        self.tabs.swap(from, to);
-                        if let Some(active) = self.active_tab {
+                let pressed = self.tab_pointer_press.take();
+                if let Some(from) = self.tab_drag_index.take() {
+                    if let Some(to) = self.tab_drag_target.take().filter(|&to| to != from) {
+                        let tab = self.tabs.remove(from);
+                        self.tabs.insert(to, tab);
+                        self.active_tab = self.active_tab.map(|active| {
                             if active == from {
-                                self.active_tab = Some(to);
-                            } else if active == to {
-                                self.active_tab = Some(from);
+                                to
+                            } else if from < active && active <= to {
+                                active - 1
+                            } else if to <= active && active < from {
+                                active + 1
+                            } else {
+                                active
                             }
+                        });
+                    }
+                } else if let Some((index, _)) =
+                    pressed.filter(|(index, _)| self.tab_hover_index == Some(*index))
+                {
+                    if let Some(tab) = self.tabs.get(index) {
+                        if matches!(tab.kind, TabKind::Commit { preview: true, .. }) {
+                            return self.update_message(Message::PreviewTabPressed(index));
+                        }
+                        if self.active_tab != Some(index) {
+                            return self.update_message(Message::TabSelected(index));
                         }
                     }
                 }
-                self.tab_drag_index = None;
-                self.tab_drag_start_x = 0.0;
-                self.tab_drag_target = None;
-                self.tab_drag_cursor_pos = None;
                 iced::Task::none()
             },
             Message::SelectTabByIndex(idx) => {
@@ -2541,6 +3259,7 @@ impl App {
             },
             Message::ProvidersApiKeyChanged(key) => {
                 self.providers_key_input = key;
+                self.provider_connection_test = None;
                 iced::Task::none()
             },
             Message::ProvidersToggleKeyVisibility => {
@@ -2549,41 +3268,37 @@ impl App {
             },
             Message::ProvidersBaseUrlChanged(url) => {
                 self.providers_base_url_input = url;
+                self.provider_connection_test = None;
                 iced::Task::none()
             },
             Message::ProvidersSave => {
-                let provider_id = self.providers_selected.clone();
+                let Some(provider) =
+                    crate::features::chat_providers::by_id(&self.providers_selected)
+                else {
+                    return iced::Task::none();
+                };
+                let base_url = match self.provider_form_base_url(provider) {
+                    Ok(url) => url,
+                    Err(error) => {
+                        self.provider_connection_test = Some(ModelFetchState::Error(error));
+                        return iced::Task::none();
+                    },
+                };
                 let key = self.providers_key_input.trim().to_string();
-                let base_url_input = self.providers_base_url_input.trim().to_string();
-                let requires_key = crate::features::chat_providers::by_id(&provider_id)
-                    .map(|p| p.requires_api_key)
-                    .unwrap_or(true);
-                let default_base_url = crate::features::chat_providers::by_id(&provider_id)
-                    .map(|p| p.base_url)
-                    .unwrap_or_default();
-
-                self.provider_credentials.retain(|c| c.provider_id != provider_id);
-                // Always keep an entry for providers that don't need a key
-                // (saving with a blank key is how you mark "I'm using
-                // this local provider"). Hosted providers only get an
-                // entry when a key was actually entered.
-                if !key.is_empty() || !requires_key {
-                    let base_url =
-                        if base_url_input.is_empty() || base_url_input == default_base_url {
-                            None
-                        } else {
-                            Some(base_url_input)
-                        };
+                self.provider_credentials
+                    .retain(|credential| credential.provider_id != provider.id);
+                if !key.is_empty() || !provider.requires_api_key {
                     self.provider_credentials.push(
                         crate::config::provider_store::ProviderCredential {
-                            provider_id: provider_id.clone(),
+                            provider_id: provider.id.to_string(),
                             api_key: key,
-                            base_url,
+                            base_url: (base_url != provider.base_url).then_some(base_url),
                         },
                     );
                 }
                 self.persist_provider_credentials();
-                self.provider_model_state.remove(&provider_id);
+                self.provider_model_state.remove(provider.id);
+                self.refresh_providers_key_input();
                 iced::Task::none()
             },
             Message::ProvidersRemove(provider_id) => {
@@ -2591,46 +3306,47 @@ impl App {
                 self.persist_provider_credentials();
                 self.provider_model_state.remove(&provider_id);
                 if self.providers_selected == provider_id {
-                    self.providers_key_input.clear();
-                    self.providers_base_url_input =
-                        crate::features::chat_providers::by_id(&provider_id)
-                            .map(|p| p.base_url.to_string())
-                            .unwrap_or_default();
+                    self.refresh_providers_key_input();
                 }
                 iced::Task::none()
             },
-            Message::ProvidersTestConnection(provider_id) => {
-                self.provider_model_state.remove(&provider_id);
-                let Some(provider) = crate::features::chat_providers::by_id(&provider_id) else {
+            Message::ProvidersTestConnection => {
+                let Some(provider) =
+                    crate::features::chat_providers::by_id(&self.providers_selected)
+                else {
                     return iced::Task::none();
                 };
-                let api_key = self.provider_api_key(&provider_id).unwrap_or_default().to_string();
+                let api_key = self.providers_key_input.trim().to_string();
                 if provider.requires_api_key && api_key.is_empty() {
-                    self.provider_model_state.insert(
-                        provider_id,
-                        crate::features::ai_client::ModelFetchState::Error(
-                            "no API key attached".to_string(),
-                        ),
-                    );
+                    self.provider_connection_test = Some(ModelFetchState::Error(
+                        "Enter an API key to test this provider.".to_string(),
+                    ));
                     return iced::Task::none();
                 }
+                let base_url = match self.provider_form_base_url(provider) {
+                    Ok(url) => url,
+                    Err(error) => {
+                        self.provider_connection_test = Some(ModelFetchState::Error(error));
+                        return iced::Task::none();
+                    },
+                };
 
-                self.provider_model_state.insert(
-                    provider_id.clone(),
-                    crate::features::ai_client::ModelFetchState::Loading,
-                );
-
-                let base_url = self.provider_base_url(&provider_id);
-                let api = provider.api;
+                let request_id = self.next_provider_request_id();
+                self.provider_connection_test = Some(ModelFetchState::Loading(request_id));
 
                 iced::Task::perform(
-                    async move {
-                        let result =
-                            crate::features::ai_client::list_models(api, &base_url, &api_key).await;
-                        (provider_id, result)
-                    },
-                    |(provider_id, result)| Message::ProviderModelsFetched(provider_id, result),
+                    async move { list_models(provider.api, &base_url, &api_key).await },
+                    move |result| Message::ProviderConnectionTested(request_id, result),
                 )
+            },
+            Message::ProviderConnectionTested(request_id, result) => {
+                if let Some(state) = &mut self.provider_connection_test {
+                    state.finish(
+                        request_id,
+                        result.map_err(|error| format!("Connection failed: {error}")),
+                    );
+                }
+                iced::Task::none()
             },
             Message::DismissNotification => {
                 self.notification = None;
@@ -2638,6 +3354,7 @@ impl App {
             },
             Message::LspTick => {
                 if self.lsp_enabled {
+                    self.request_due_document_symbols();
                     if let Some(pending) = self.pending_hover_request.as_mut() {
                         if !pending.requested
                             && pending.started_at.elapsed() >= super::HOVER_TRIGGER_DELAY
@@ -2679,6 +3396,7 @@ impl App {
                 }
 
                 // Drain LSP events from the shared channel
+                let mut definition_task = iced::Task::none();
                 for event in self.lsp.drain_events() {
                     match event {
                         iced_code_editor::LspEvent::Hover { text } => {
@@ -2712,18 +3430,7 @@ impl App {
                                                 .lines()
                                                 .nth(self.cursor_line.saturating_sub(1))
                                                 .unwrap_or("");
-                                            let before = &line[..self
-                                                .cursor_col
-                                                .saturating_sub(1)
-                                                .min(line.len())];
-                                            before
-                                                .chars()
-                                                .rev()
-                                                .take_while(|c| c.is_alphanumeric() || *c == '_')
-                                                .collect::<String>()
-                                                .chars()
-                                                .rev()
-                                                .collect::<String>()
+                                            word_prefix_before(line, self.cursor_col)
                                         } else {
                                             String::new()
                                         }
@@ -2757,9 +3464,20 @@ impl App {
                         },
                         iced_code_editor::LspEvent::Definition { uri, range } => {
                             self.dev_log(format!("LSP: Definition at {} {:?}", uri, range));
-                            eprintln!("Definition: {} at {:?}", uri, range);
+                            definition_task = self.open_definition(&uri, range.start);
                         },
                         iced_code_editor::LspEvent::Progress { .. } => {},
+                        iced_code_editor::LspEvent::Diagnostics { uri, diagnostics } => {
+                            self.receive_diagnostics(&uri, diagnostics);
+                        },
+                        iced_code_editor::LspEvent::DocumentSymbols { uri, symbols } => {
+                            self.dev_log(format!(
+                                "LSP: {} document symbols for {}",
+                                symbols.len(),
+                                uri
+                            ));
+                            self.receive_document_symbols(uri, symbols);
+                        },
                         iced_code_editor::LspEvent::Log {
                             server_key,
                             message,
@@ -2769,32 +3487,29 @@ impl App {
                         },
                     }
                 }
-                iced::Task::none()
+                definition_task
             },
             Message::AutosaveTick => {
                 if !self.editor_preferences.autosave_enabled {
                     return iced::Task::none();
                 }
 
-                let Some(idx) = self.active_tab else {
+                let interval = Duration::from_millis(
+                    self.editor_preferences.autosave_interval_ms.clamp(30, 1000),
+                );
+                let due = due_autosave_indices(
+                    self.tabs.iter().map(|t| t.autosave_requested_at),
+                    Instant::now(),
+                    interval,
+                );
+
+                if due.is_empty() {
                     return iced::Task::none();
-                };
-
-                let should_save =
-                    self.tabs.get(idx).and_then(|tab| tab.autosave_requested_at).is_some_and(
-                        |requested_at| {
-                            requested_at.elapsed()
-                                >= Duration::from_millis(
-                                    self.editor_preferences.autosave_interval_ms.clamp(30, 1000),
-                                )
-                        },
-                    );
-
-                if should_save {
-                    return self.autosave_task_for_tab(idx);
                 }
 
-                iced::Task::none()
+                let tasks: Vec<_> =
+                    due.into_iter().map(|idx| self.autosave_task_for_tab(idx)).collect();
+                iced::Task::batch(tasks)
             },
             Message::DiscordRpcTick => {
                 if !self.editor_preferences.discord_rpc_enabled {
@@ -3030,8 +3745,49 @@ impl App {
                 if self.editor_preferences.discord_rpc_enabled {
                     self.sync_discord_presence();
                 }
+                if self.file_tree.is_none() && self.git_status_directory().is_some() {
+                    return self.update_message(Message::RefreshGitStatus);
+                }
                 iced::Task::none()
             },
+        }
+    }
+
+    fn receive_diagnostics(
+        &mut self,
+        uri: &str,
+        diagnostics: Vec<iced_code_editor::LspDiagnostic>,
+    ) {
+        use crate::features::lsp::InlineDiagnostic;
+        use lsp_types::DiagnosticSeverity;
+
+        let Some(path) = url::Url::parse(uri).ok().and_then(|url| url.to_file_path().ok()) else {
+            return;
+        };
+        if !self.tabs.iter().any(|tab| tab.path == path) {
+            return;
+        }
+        let items: Vec<_> = diagnostics
+            .into_iter()
+            .filter_map(|item| {
+                let severity = match item.severity {
+                    None | Some(1) => DiagnosticSeverity::ERROR,
+                    Some(2) => DiagnosticSeverity::WARNING,
+                    Some(3) => DiagnosticSeverity::INFORMATION,
+                    Some(4) => DiagnosticSeverity::HINT,
+                    _ => return None,
+                };
+                Some(InlineDiagnostic {
+                    line: item.line.saturating_add(1),
+                    severity,
+                    message: item.message,
+                })
+            })
+            .collect();
+        if items.is_empty() {
+            self.lsp_diagnostics.remove(&path);
+        } else {
+            self.lsp_diagnostics.insert(path, items);
         }
     }
 
@@ -3077,7 +3833,7 @@ impl App {
                 .and_then(Autocomplete::detect_language);
             self.autocomplete.trigger(content, cursor_idx, lang.as_deref());
             // Only keep suggestions when prefix is at least 2 characters
-            if self.autocomplete.prefix.len() <= 1 {
+            if self.autocomplete.prefix.chars().count() <= 1 {
                 self.autocomplete.cancel();
             }
         }
@@ -3228,6 +3984,112 @@ impl App {
     }
 }
 
+/// The Rich Presence details line and large image key for the active tab's
+/// file name. A commit tab's synthetic `commit:<hash>` name shows as
+/// "Viewing commit: <short hash>" with the git logo.
+fn presence_details(file_name: Option<&str>) -> (String, &'static str) {
+    match file_name {
+        Some(name) => match name.strip_prefix("commit:") {
+            Some(hash) => (
+                format!(
+                    "Viewing commit: {}",
+                    hash.chars().take(7).collect::<String>()
+                ),
+                "git",
+            ),
+            None => (
+                format!("Editing {name}"),
+                crate::features::icons::file_icon_key(name),
+            ),
+        },
+        None => ("Idle".to_string(), "pinel"),
+    }
+}
+
+/// Returns the identifier-like word (alphanumeric or `_`) that ends right
+/// before the 1-based character column `cursor_col` in `line`. Works on chars,
+/// never byte offsets, so multibyte text is safe.
+fn word_prefix_before(line: &str, cursor_col: usize) -> String {
+    let before: Vec<char> = line.chars().take(cursor_col.saturating_sub(1)).collect();
+    let start = before
+        .iter()
+        .rposition(|c| !c.is_alphanumeric() && *c != '_')
+        .map_or(0, |i| i + 1);
+    before[start..].iter().collect()
+}
+
+/// Positions of tabs whose autosave was requested at least `interval` before
+/// `now`. Tabs with no pending request (`None`) are never due.
+fn due_autosave_indices(
+    requested: impl IntoIterator<Item = Option<Instant>>,
+    now: Instant,
+    interval: Duration,
+) -> Vec<usize> {
+    requested
+        .into_iter()
+        .enumerate()
+        .filter_map(|(idx, requested_at)| {
+            requested_at
+                .filter(|t| now.saturating_duration_since(*t) >= interval)
+                .map(|_| idx)
+        })
+        .collect()
+}
+
+/// Whether results from a search for `completed_query` still match the
+/// query currently in the search box; stale results must be discarded.
+fn search_results_are_current(current_query: &str, completed_query: &str) -> bool {
+    current_query == completed_query
+}
+
+// Find the slot beneath the dragged tab's center in the original strip.
+fn tab_drop_index(widths: impl Iterator<Item = f32> + Clone, source: usize, offset: f32) -> usize {
+    let center = widths.clone().take(source).sum::<f32>()
+        + widths.clone().nth(source).unwrap_or_default() / 2.0;
+    let mut right = 0.0;
+    let mut target = 0;
+    for (index, width) in widths.enumerate() {
+        target = index;
+        right += width;
+        if center + offset < right {
+            break;
+        }
+    }
+    target
+}
+
+/// The position of the first path in `paths` equal to `target`, if any.
+fn tab_index_for_path<'a>(
+    paths: impl IntoIterator<Item = &'a Path>,
+    target: &Path,
+) -> Option<usize> {
+    paths.into_iter().position(|path| path == target)
+}
+
+/// Marks the first tab at `path` as saved after a manual save wrote
+/// `saved_content` to disk.
+///
+/// Always clears the tab's in-flight autosave flag. The editor is only marked
+/// saved when its current content still equals `saved_content`, so edits
+/// typed while the write was in progress keep the tab modified. Returns
+/// `true` if the tab was marked saved.
+fn mark_tab_saved(tabs: &mut [Tab], path: &Path, saved_content: &str) -> bool {
+    let Some(tab) = tabs.iter_mut().find(|tab| tab.path == path) else {
+        return false;
+    };
+    tab.autosave_in_flight = false;
+    let TabKind::Editor { code_editor, .. } = &mut tab.kind else {
+        return false;
+    };
+    if code_editor.content() != saved_content {
+        return false;
+    }
+    code_editor.mark_saved();
+    code_editor.lsp_did_save();
+    tab.autosave_requested_at = None;
+    true
+}
+
 /// Turns an icon/asset key like "cpp-h" or "javascript" into a readable
 /// tooltip like "Cpp H" / "Javascript" for the Discord large image hover text.
 fn prettify_icon_key(key: &str) -> String {
@@ -3241,4 +4103,370 @@ fn prettify_icon_key(key: &str) -> String {
         })
         .collect::<Vec<_>>()
         .join(" ")
+}
+
+/// Whether a finished branch read still describes the open folder: it is the
+/// latest read started (`generation` matches) and it read the folder that is
+/// open now.
+fn git_branch_result_is_current(
+    generation: u64,
+    root: &Path,
+    current_generation: u64,
+    open_root: Option<&Path>,
+) -> bool {
+    generation == current_generation && open_root == Some(root)
+}
+
+/// The active tab index after closing the tab at `closed`, given the number
+/// of tabs `remaining` once it is removed.
+fn active_tab_after_close(active: Option<usize>, closed: usize, remaining: usize) -> Option<usize> {
+    if remaining == 0 {
+        return None;
+    }
+    match active {
+        None => None,
+        Some(a) if a >= remaining => Some(remaining - 1),
+        Some(a) if a > closed => Some(a - 1),
+        Some(a) => Some(a),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn editor_tab(path: &str, content: &str) -> Tab {
+        Tab {
+            path: PathBuf::from(path),
+            name: path.to_string(),
+            kind: TabKind::Editor {
+                code_editor: iced_code_editor::CodeEditor::new(content, "txt"),
+                buffer: crate::features::editor_buffer::EditorBuffer::from_text(content),
+            },
+            autosave_requested_at: None,
+            autosave_in_flight: false,
+        }
+    }
+
+    /// Types `text` into the tab's editor so it becomes modified, and returns
+    /// the editor's new content.
+    fn modify_tab(tab: &mut Tab, text: &str) -> String {
+        match &mut tab.kind {
+            TabKind::Editor { code_editor, .. } => {
+                let _ = code_editor.update(&EditorMessage::Paste(text.to_string()));
+                code_editor.content()
+            },
+            _ => String::new(),
+        }
+    }
+
+    fn tab_is_modified(tab: &Tab) -> bool {
+        match &tab.kind {
+            TabKind::Editor { code_editor, .. } => code_editor.is_modified(),
+            _ => false,
+        }
+    }
+
+    #[test]
+    fn test_mark_tab_saved_only_marks_matching_path() {
+        let mut tabs = vec![
+            editor_tab("/tmp/a.txt", "aaa"),
+            editor_tab("/tmp/b.txt", "bbb"),
+        ];
+        let a_content = modify_tab(&mut tabs[0], "x");
+        let _ = modify_tab(&mut tabs[1], "y");
+        assert!(tab_is_modified(&tabs[0]));
+        assert!(tab_is_modified(&tabs[1]));
+
+        assert!(mark_tab_saved(
+            &mut tabs,
+            Path::new("/tmp/a.txt"),
+            &a_content
+        ));
+
+        assert!(!tab_is_modified(&tabs[0]));
+        assert!(tab_is_modified(&tabs[1]));
+    }
+
+    #[test]
+    fn test_mark_tab_saved_keeps_tab_modified_when_content_changed() {
+        let mut tabs = vec![editor_tab("/tmp/a.txt", "aaa")];
+        let saved_content = modify_tab(&mut tabs[0], "x");
+        let _ = modify_tab(&mut tabs[0], "z");
+        assert!(tab_is_modified(&tabs[0]));
+
+        assert!(!mark_tab_saved(
+            &mut tabs,
+            Path::new("/tmp/a.txt"),
+            &saved_content
+        ));
+        assert!(tab_is_modified(&tabs[0]));
+    }
+
+    #[test]
+    fn test_mark_tab_saved_unknown_path_returns_false() {
+        let mut tabs = vec![editor_tab("/tmp/a.txt", "aaa")];
+        let _ = modify_tab(&mut tabs[0], "x");
+
+        assert!(!mark_tab_saved(
+            &mut tabs,
+            Path::new("/tmp/missing.txt"),
+            "xaaa"
+        ));
+        assert!(tab_is_modified(&tabs[0]));
+    }
+
+    #[test]
+    fn test_is_media_path_text_and_unknown_files_are_not_media() {
+        assert!(!App::is_media_path(Path::new("notes.txt")));
+        assert!(!App::is_media_path(Path::new("report.pdf")));
+        assert!(!App::is_media_path(Path::new("Makefile")));
+    }
+
+    #[test]
+    fn test_is_media_path_images_and_audio_are_media() {
+        assert!(App::is_media_path(Path::new("photo.png")));
+        assert!(App::is_media_path(Path::new("song.mp3")));
+    }
+
+    #[test]
+    fn test_is_media_path_video_depends_on_feature() {
+        assert_eq!(
+            App::is_media_path(Path::new("clip.mp4")),
+            cfg!(feature = "video")
+        );
+    }
+
+    #[test]
+    fn test_due_autosave_indices_includes_inactive_due_tab() {
+        let start = Instant::now();
+        let now = start + Duration::from_millis(600);
+        let due = due_autosave_indices([None, Some(start)], now, Duration::from_millis(500));
+        assert_eq!(due, vec![1]);
+    }
+
+    #[test]
+    fn test_due_autosave_indices_excludes_not_yet_due() {
+        let start = Instant::now();
+        let now = start + Duration::from_millis(100);
+        let due = due_autosave_indices([Some(start)], now, Duration::from_millis(500));
+        assert!(due.is_empty());
+    }
+
+    #[test]
+    fn test_due_autosave_indices_multiple_tabs() {
+        let start = Instant::now();
+        let now = start + Duration::from_millis(600);
+        let requested = [Some(start), None, Some(start + Duration::from_millis(400))];
+        let due = due_autosave_indices(requested, now, Duration::from_millis(500));
+        assert_eq!(due, vec![0]);
+    }
+
+    #[test]
+    fn test_due_autosave_indices_exactly_at_interval() {
+        let start = Instant::now();
+        let interval = Duration::from_millis(500);
+        let now = start + interval;
+        let due = due_autosave_indices([Some(start)], now, interval);
+        assert_eq!(due, vec![0]);
+    }
+
+    #[test]
+    fn test_search_results_are_current_matching_query() {
+        assert!(search_results_are_current("foo", "foo"));
+    }
+
+    #[test]
+    fn test_search_results_are_current_older_query_is_stale() {
+        assert!(!search_results_are_current("foo", "fo"));
+    }
+
+    #[test]
+    fn test_search_results_are_current_cleared_query_is_stale() {
+        assert!(!search_results_are_current("", "foo"));
+    }
+
+    #[test]
+    fn test_tab_drop_index_with_mixed_widths() {
+        let widths = [112.0, 220.0, 144.0];
+        assert_eq!(tab_drop_index(widths.into_iter(), 0, 55.0), 0);
+        assert_eq!(tab_drop_index(widths.into_iter(), 0, 57.0), 1);
+        assert_eq!(tab_drop_index(widths.into_iter(), 0, 278.0), 2);
+        assert_eq!(tab_drop_index(widths.into_iter(), 2, -400.0), 0);
+        assert_eq!(tab_drop_index(widths.into_iter(), 2, 400.0), 2);
+    }
+
+    #[test]
+    fn test_tab_index_for_path_finds_middle_tab() {
+        let paths = [Path::new("/a.rs"), Path::new("/b.rs"), Path::new("/c.rs")];
+        assert_eq!(tab_index_for_path(paths, Path::new("/b.rs")), Some(1));
+    }
+
+    #[test]
+    fn test_tab_index_for_path_missing_returns_none() {
+        let paths = [Path::new("/a.rs"), Path::new("/b.rs")];
+        assert_eq!(tab_index_for_path(paths, Path::new("/z.rs")), None);
+    }
+
+    #[test]
+    fn test_tab_index_for_path_empty_list_returns_none() {
+        let paths: [&Path; 0] = [];
+        assert_eq!(tab_index_for_path(paths, Path::new("/a.rs")), None);
+    }
+
+    #[test]
+    fn test_tab_index_for_path_duplicate_returns_first() {
+        let paths = [Path::new("/a.rs"), Path::new("/b.rs"), Path::new("/b.rs")];
+        assert_eq!(tab_index_for_path(paths, Path::new("/b.rs")), Some(1));
+    }
+
+    #[test]
+    fn test_word_prefix_before_ascii() {
+        assert_eq!(word_prefix_before("let foo", 8), "foo");
+    }
+
+    #[test]
+    fn test_word_prefix_before_non_ascii_issue_repro() {
+        assert_eq!(word_prefix_before("let café", 9), "café");
+    }
+
+    #[test]
+    fn test_word_prefix_before_mid_word_multibyte() {
+        assert_eq!(word_prefix_before("let café", 7), "ca");
+    }
+
+    #[test]
+    fn test_word_prefix_before_multibyte_before_word() {
+        assert_eq!(word_prefix_before("é = foo", 8), "foo");
+    }
+
+    #[test]
+    fn test_word_prefix_before_past_end() {
+        assert_eq!(word_prefix_before("let café", 50), "café");
+    }
+
+    #[test]
+    fn test_word_prefix_before_start_of_line() {
+        assert_eq!(word_prefix_before("let café", 1), "");
+        assert_eq!(word_prefix_before("let café", 0), "");
+    }
+
+    #[test]
+    fn test_word_prefix_before_after_separator() {
+        assert_eq!(word_prefix_before("foo.", 5), "");
+    }
+
+    #[test]
+    fn test_word_prefix_before_char_count_for_backspace() {
+        assert_eq!(word_prefix_before("let café", 9).chars().count(), 4);
+    }
+
+    #[test]
+    fn test_presence_details_commit_tab_shows_short_hash() {
+        let (details, icon) =
+            presence_details(Some("commit:34c2516f4c117e9aa18733fff7198feae7945a2a"));
+        assert_eq!(details, "Viewing commit: 34c2516");
+        assert_eq!(icon, "git");
+    }
+
+    #[test]
+    fn test_presence_details_short_commit_hash_is_kept_whole() {
+        let (details, _) = presence_details(Some("commit:abc"));
+        assert_eq!(details, "Viewing commit: abc");
+    }
+
+    #[test]
+    fn test_presence_details_file_tab_is_unchanged() {
+        let (details, icon) = presence_details(Some("update.rs"));
+        assert_eq!(details, "Editing update.rs");
+        assert_eq!(icon, crate::features::icons::file_icon_key("update.rs"));
+    }
+
+    #[test]
+    fn test_presence_details_non_ascii_name_does_not_panic() {
+        let (details, _) = presence_details(Some("commit:éééééééé"));
+        assert_eq!(details, "Viewing commit: ééééééé");
+    }
+
+    #[test]
+    fn test_presence_details_no_tab_is_idle() {
+        assert_eq!(presence_details(None), ("Idle".to_string(), "pinel"));
+    }
+
+    #[test]
+    fn test_active_tab_after_close_before_active() {
+        assert_eq!(active_tab_after_close(Some(1), 0, 1), Some(0));
+    }
+
+    #[test]
+    fn test_active_tab_after_close_after_active() {
+        assert_eq!(active_tab_after_close(Some(0), 1, 1), Some(0));
+    }
+
+    #[test]
+    fn test_active_tab_after_close_active_last() {
+        assert_eq!(active_tab_after_close(Some(2), 2, 2), Some(1));
+    }
+
+    #[test]
+    fn test_active_tab_after_close_active_middle() {
+        assert_eq!(active_tab_after_close(Some(1), 1, 2), Some(1));
+    }
+
+    #[test]
+    fn test_active_tab_after_close_only_tab() {
+        assert_eq!(active_tab_after_close(Some(0), 0, 0), None);
+    }
+
+    #[test]
+    fn test_active_tab_after_close_none_active() {
+        assert_eq!(active_tab_after_close(None, 0, 2), None);
+    }
+
+    #[test]
+    fn test_active_tab_after_close_two_deleted_before_active() {
+        let active = active_tab_after_close(Some(2), 1, 2);
+        let active = active_tab_after_close(active, 0, 1);
+        assert_eq!(active, Some(0));
+    }
+
+    #[test]
+    fn test_git_branch_result_is_current_same_read_and_folder(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let root = Path::new("/work/repo");
+        assert!(git_branch_result_is_current(3, root, 3, Some(root)));
+        Ok(())
+    }
+
+    #[test]
+    fn test_git_branch_result_is_current_older_generation() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let root = Path::new("/work/repo");
+        assert!(!git_branch_result_is_current(2, root, 3, Some(root)));
+        Ok(())
+    }
+
+    #[test]
+    fn test_git_branch_result_is_current_other_folder() -> Result<(), Box<dyn std::error::Error>> {
+        let open = Path::new("/work/other");
+        assert!(!git_branch_result_is_current(
+            3,
+            Path::new("/work/repo"),
+            3,
+            Some(open)
+        ));
+        Ok(())
+    }
+
+    #[test]
+    fn test_git_branch_result_is_current_no_folder_open() -> Result<(), Box<dyn std::error::Error>>
+    {
+        assert!(!git_branch_result_is_current(
+            3,
+            Path::new("/work/repo"),
+            3,
+            None
+        ));
+        Ok(())
+    }
 }

@@ -2,14 +2,20 @@
 
 pub mod activity_state;
 pub mod ai_client;
+pub mod breadcrumbs;
 pub mod chat;
 pub mod chat_providers;
 pub mod command_input;
 pub mod command_palette;
+pub mod definition;
 pub mod editor_buffer;
 pub mod file_tree;
 pub mod find_replace;
 pub mod fuzzy_finder;
+pub mod git;
+pub mod git_commit;
+pub mod git_diff;
+pub mod git_graph;
 pub mod icons;
 pub mod lsp;
 pub mod resources;
@@ -17,3 +23,4 @@ pub mod search;
 pub mod syntax;
 pub mod terminal;
 pub mod updater;
+pub mod virtual_list;

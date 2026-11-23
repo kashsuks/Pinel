@@ -1,0 +1,981 @@
+//! reading the state of the git repository the editor has open
+
+use std::path::{Path, PathBuf};
+
+/// what happened to a file, as reported by `git status`
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ChangeKind {
+    Added,
+    Modified,
+    Deleted,
+    Renamed,
+    Copied,
+    /// the file turned into a symlink, or a symlink turned into a file
+    TypeChanged,
+    Untracked,
+    Ignored,
+    Conflicted,
+}
+
+impl ChangeKind {
+    /// the single letter shown next to the file name in the git panel
+    pub fn letter(self) -> &'static str {
+        match self {
+            ChangeKind::Added => "A",
+            ChangeKind::Modified => "M",
+            ChangeKind::Deleted => "D",
+            ChangeKind::Renamed => "R",
+            ChangeKind::Copied => "C",
+            ChangeKind::TypeChanged => "T",
+            ChangeKind::Untracked => "U",
+            ChangeKind::Ignored => "I",
+            ChangeKind::Conflicted => "!",
+        }
+    }
+
+    /// The full status shown in a file tab's tooltip.
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Added => "Added",
+            Self::Modified => "Modified",
+            Self::Deleted => "Deleted",
+            Self::Renamed => "Renamed",
+            Self::Copied => "Copied",
+            Self::TypeChanged => "Type changed",
+            Self::Untracked => "Untracked",
+            Self::Ignored => "Ignored",
+            Self::Conflicted => "Merge conflict",
+        }
+    }
+
+    fn from_code(code: u8) -> Option<ChangeKind> {
+        match code {
+            b'A' => Some(ChangeKind::Added),
+            b'M' => Some(ChangeKind::Modified),
+            b'D' => Some(ChangeKind::Deleted),
+            b'R' => Some(ChangeKind::Renamed),
+            b'C' => Some(ChangeKind::Copied),
+            b'T' => Some(ChangeKind::TypeChanged),
+            b'?' => Some(ChangeKind::Untracked),
+            b'!' => Some(ChangeKind::Ignored),
+            _ => None,
+        }
+    }
+}
+
+/// one changed path in the working tree
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FileChange {
+    pub path: String,
+    pub original_path: Option<String>,
+    pub index: Option<ChangeKind>,
+    pub worktree: Option<ChangeKind>,
+    pub conflicted: bool,
+}
+
+impl FileChange {
+    /// the kind to show in the staged list, `None` if nothing is staged
+    pub fn staged_kind(&self) -> Option<ChangeKind> {
+        if self.is_staged() {
+            self.index
+        } else {
+            None
+        }
+    }
+
+    /// the kind to show in the unstaged list, `None` if the file is fully staged
+    pub fn unstaged_kind(&self) -> Option<ChangeKind> {
+        if self.conflicted {
+            Some(ChangeKind::Conflicted)
+        } else {
+            self.worktree
+        }
+    }
+
+    /// the directory part of [`path`](Self::path), empty for a top-level file
+    pub fn parent_dir(&self) -> &str {
+        let trimmed = self.path.trim_end_matches('/');
+        trimmed.rsplit_once('/').map_or("", |(dir, _)| dir)
+    }
+
+    /// whether any part of this change is staged for the next commit
+    pub fn is_staged(&self) -> bool {
+        !self.conflicted && self.index.is_some()
+    }
+
+    /// whether any part of this change is still only in the working tree
+    pub fn is_unstaged(&self) -> bool {
+        self.conflicted || self.worktree.is_some()
+    }
+
+    /// the part of [`path`](Self::path) to show when space is tight
+    ///
+    /// Untracked directories keep their trailing /
+    pub fn display_name(&self) -> &str {
+        let trimmed = self.path.trim_end_matches('/');
+        let name = trimmed.rsplit('/').next().unwrap_or(trimmed);
+        if self.path.ends_with('/') {
+            &self.path[self.path.len() - name.len() - 1..]
+        } else {
+            name
+        }
+    }
+}
+
+/// Parses the output of `git status --porcelain=v1 -z`.
+///
+/// `-z` is what makes this reliable. Without it git wraps any path holding
+/// a space or a non-ASCII byte in quotes and writes a rename as
+/// `old -> new` on one line, so a path cannot be told from its own
+/// punctuation. With `-z` every path is raw and NUL-terminated, and a
+/// rename or copy simply writes the original path as the next field.
+///
+/// Records that are too short to hold a status and a path are skipped
+/// rather than reported, since a partial read is not worth an error.
+pub fn parse_status(output: &[u8]) -> Vec<FileChange> {
+    let mut fields = output.split(|byte| *byte == 0);
+    let mut changes = Vec::new();
+
+    while let Some(record) = fields.next() {
+        // XY path is three bytes before the path even starts
+        if record.len() < 4 {
+            continue;
+        }
+
+        let (index_code, worktree_code) = (record[0], record[1]);
+        let path = String::from_utf8_lossy(&record[3..]).into_owned();
+
+        let original_path =
+            if matches!(index_code, b'R' | b'C') || matches!(worktree_code, b'R' | b'C') {
+                fields.next().map(|f| String::from_utf8_lossy(f).into_owned())
+            } else {
+                None
+            };
+
+        let conflicted = index_code == b'U'
+            || worktree_code == b'U'
+            || matches!((index_code, worktree_code), (b'D', b'D') | (b'A', b'A'));
+
+        // '??' and '!!' fill both columns, but an untracked file is not
+        // staged for anything, so it only counts as a working tree change
+        let (index, worktree) = match index_code {
+            b'?' | b'!' => (None, ChangeKind::from_code(index_code)),
+            _ => (
+                ChangeKind::from_code(index_code),
+                ChangeKind::from_code(worktree_code),
+            ),
+        };
+
+        changes.push(FileChange {
+            path,
+            original_path,
+            index,
+            worktree,
+            conflicted,
+        });
+    }
+
+    changes
+}
+
+/// Splits changes into the staged and unstaged lists.
+///
+/// A file changed both in the index and afterwards (`MM`) is in both, as
+/// it is in `git status`. A conflicted file is only ever unstaged.
+pub fn split_changes(changes: &[FileChange]) -> (Vec<&FileChange>, Vec<&FileChange>) {
+    let staged = changes.iter().filter(|c| c.is_staged()).collect();
+    let unstaged = changes.iter().filter(|c| c.is_unstaged()).collect();
+    (staged, unstaged)
+}
+
+/// Stops a refresh from starting while the previous one is still running.
+///
+/// Opening the panel, or any later trigger, can ask for a refresh faster
+/// than git answers on a large repository. Without this each request spawns
+/// another git process on top of the last.
+#[derive(Debug, Default)]
+pub struct RefreshGuard {
+    running: bool,
+}
+
+impl RefreshGuard {
+    /// Marks a refresh as started. Returns `false` if one is already running.
+    pub fn try_start(&mut self) -> bool {
+        if self.running {
+            return false;
+        }
+        self.running = true;
+        true
+    }
+
+    /// Marks the running refresh as done so the next request can start.
+    pub fn finish(&mut self) {
+        self.running = false;
+    }
+
+    /// Whether a refresh has started and not yet finished.
+    pub fn is_running(&self) -> bool {
+        self.running
+    }
+}
+
+/// The `git status` invocation behind [`load_status`].
+///
+/// `--no-optional-locks` keeps a background refresh from taking the index
+/// lock, which would make the user's own git commands fail while it runs.
+/// `--untracked-files=normal` is spelled out so a `status.showUntrackedFiles
+/// = all` setting cannot turn one untracked folder into thousands of rows.
+fn status_command(root: Option<&Path>) -> std::process::Command {
+    let mut cmd = std::process::Command::new("git");
+    cmd.arg("--no-optional-locks")
+        .arg("status")
+        .arg("--porcelain=v1")
+        .arg("-z")
+        .arg("--untracked-files=normal");
+    if let Some(dir) = root {
+        cmd.current_dir(dir);
+    }
+    cmd
+}
+
+/// Reads the changed files and the repository root their paths are relative to.
+fn load_status(root: Option<&Path>) -> (Option<PathBuf>, Vec<FileChange>) {
+    match status_command(root).output() {
+        Ok(out) if out.status.success() && !out.stdout.is_empty() => {
+            let mut command = std::process::Command::new("git");
+            command.args(["rev-parse", "--show-toplevel"]);
+            if let Some(dir) = root {
+                command.current_dir(dir);
+            }
+            let repo = command.output().ok().filter(|out| out.status.success()).map(|out| {
+                let path = String::from_utf8_lossy(&out.stdout);
+                PathBuf::from(path.strip_suffix('\n').unwrap_or(&path))
+            });
+            (repo, parse_status(&out.stdout))
+        },
+        _ => (None, Vec::new()),
+    }
+}
+
+/// Reads the repository status off the UI thread.
+pub async fn load_status_async(root: Option<PathBuf>) -> (Option<PathBuf>, Vec<FileChange>) {
+    tokio::task::spawn_blocking(move || load_status(root.as_deref()))
+        .await
+        .unwrap_or_default()
+}
+
+/// What `git symbolic-ref --short -q HEAD` reported about `HEAD`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum HeadRef {
+    /// `HEAD` points at this branch. The branch may have no commits yet.
+    Branch(String),
+    /// `HEAD` points straight at a commit.
+    Detached,
+    /// Not a repository, git failed, or it printed nothing usable.
+    Unavailable,
+}
+
+/// Interprets the exit code and stdout of `git symbolic-ref --short -q HEAD`.
+///
+/// Exit code 0 means `HEAD` is a branch, named on stdout; this holds even for
+/// a branch with no commits yet. 1 means `HEAD` is detached. Anything else,
+/// such as 128 outside a repository, or no exit code at all because git was
+/// killed by a signal, means there is nothing to show.
+fn parse_symbolic_ref(exit_code: Option<i32>, stdout: &[u8]) -> HeadRef {
+    match exit_code {
+        Some(0) => {
+            let name = String::from_utf8_lossy(stdout).trim().to_string();
+            if name.is_empty() {
+                HeadRef::Unavailable
+            } else {
+                HeadRef::Branch(name)
+            }
+        },
+        Some(1) => HeadRef::Detached,
+        _ => HeadRef::Unavailable,
+    }
+}
+
+/// Reads the abbreviated hash printed by `git rev-parse --short HEAD`.
+///
+/// Returns `None` when the command failed or printed nothing.
+fn parse_short_hash(success: bool, stdout: &[u8]) -> Option<String> {
+    if !success {
+        return None;
+    }
+    let hash = String::from_utf8_lossy(stdout).trim().to_string();
+    (!hash.is_empty()).then_some(hash)
+}
+
+/// A git command run in `root` without taking optional locks, so a
+/// background read never makes the user's own git commands fail.
+fn git_command_in(root: &Path) -> std::process::Command {
+    let mut cmd = std::process::Command::new("git");
+    cmd.arg("--no-optional-locks").current_dir(root);
+    cmd
+}
+
+/// The `git symbolic-ref` invocation behind [`load_branch`].
+fn symbolic_ref_command(root: &Path) -> std::process::Command {
+    let mut cmd = git_command_in(root);
+    cmd.args(["symbolic-ref", "--short", "-q", "HEAD"]);
+    cmd
+}
+
+/// The `git rev-parse` invocation [`load_branch`] uses for a detached `HEAD`.
+fn short_head_command(root: &Path) -> std::process::Command {
+    let mut cmd = git_command_in(root);
+    cmd.args(["rev-parse", "--short", "HEAD"]);
+    cmd
+}
+
+/// Returns the label for the repository's `HEAD` at `root`: the branch name,
+/// or the short commit hash when `HEAD` is detached.
+///
+/// Reads only `HEAD`, separately from [`load_status`], so it stays cheap
+/// enough to run every few seconds. Returns `None` when `root` is not in a
+/// repository or git is missing.
+pub fn load_branch(root: &Path) -> Option<String> {
+    let output = symbolic_ref_command(root).output().ok()?;
+    match parse_symbolic_ref(output.status.code(), &output.stdout) {
+        HeadRef::Branch(name) => Some(name),
+        HeadRef::Detached => {
+            let output = short_head_command(root).output().ok()?;
+            parse_short_hash(output.status.success(), &output.stdout)
+        },
+        HeadRef::Unavailable => None,
+    }
+}
+
+/// Runs [`load_branch`] off the UI thread.
+pub async fn load_branch_async(root: PathBuf) -> Option<String> {
+    tokio::task::spawn_blocking(move || load_branch(&root)).await.ok().flatten()
+}
+
+/// How many commits each page of history holds.
+///
+/// Several screens of a tall sidebar, so the first page fills the view and
+/// later pages load well before the scroll reaches them.
+pub const HISTORY_PAGE: usize = 200;
+
+/// What a name attached to a commit refers to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RefKind {
+    LocalBranch,
+    RemoteBranch,
+    Tag,
+    /// `HEAD` itself, with no branch under it. A detached checkout.
+    Head,
+}
+
+/// A branch, tag or `HEAD` pointing at a commit.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GitRef {
+    /// The name without its `refs/` prefix, such as `master`,
+    /// `origin/master` or `v1.0`.
+    pub name: String,
+    pub kind: RefKind,
+    /// Whether this is the ref the working tree is currently on.
+    pub is_head: bool,
+}
+
+/// One commit in the history, with what it points at.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Commit {
+    pub hash: String,
+    /// Parent hashes, oldest branch first. Empty for a root commit, two or
+    /// more for a merge.
+    pub parents: Vec<String>,
+    /// The first line of the commit message.
+    pub subject: String,
+    /// Branches and tags that point here. Usually empty.
+    pub refs: Vec<GitRef>,
+    pub author: String,
+    /// Author date, as seconds since the Unix epoch.
+    pub timestamp: i64,
+}
+
+// Nothing draws the history yet, so these are only exercised by tests.
+#[allow(dead_code)]
+impl Commit {
+    /// The abbreviated hash shown in the panel.
+    pub fn short_hash(&self) -> &str {
+        &self.hash[..self.hash.len().min(7)]
+    }
+
+    /// Whether this commit joins two or more lines of history.
+    pub fn is_merge(&self) -> bool {
+        self.parents.len() > 1
+    }
+}
+
+/// Separates the fields within one commit record.
+const FIELD: u8 = 0x1f;
+/// Separates one commit record from the next.
+const RECORD: u8 = 0x1e;
+
+/// Parses the `%D` decoration list of one commit.
+///
+/// Reads the output of `--decorate=full`, where every name arrives fully
+/// qualified. The short form cannot be read reliably, because a local
+/// branch called `feature/x` and a remote branch called `origin/x` both
+/// look like a name with a slash in it.
+fn parse_refs(decoration: &str) -> Vec<GitRef> {
+    let mut refs = Vec::new();
+
+    for entry in decoration.split(", ") {
+        let entry = entry.trim();
+        if entry.is_empty() {
+            continue;
+        }
+
+        // `HEAD -> refs/heads/main` means HEAD is on that branch.
+        let (is_head, name) = match entry.strip_prefix("HEAD -> ") {
+            Some(rest) => (true, rest),
+            None => (false, entry),
+        };
+
+        if name == "HEAD" {
+            refs.push(GitRef {
+                name: "HEAD".to_string(),
+                kind: RefKind::Head,
+                is_head: true,
+            });
+            continue;
+        }
+
+        let (kind, name) = if let Some(tag) = name.strip_prefix("tag: ") {
+            (RefKind::Tag, tag.strip_prefix("refs/tags/").unwrap_or(tag))
+        } else if let Some(remote) = name.strip_prefix("refs/remotes/") {
+            (RefKind::RemoteBranch, remote)
+        } else if let Some(local) = name.strip_prefix("refs/heads/") {
+            (RefKind::LocalBranch, local)
+        } else {
+            // Anything else is a ref namespace we do not model, such as
+            // refs/stash. Keep the name so it is at least visible.
+            (RefKind::LocalBranch, name)
+        };
+
+        refs.push(GitRef {
+            name: name.to_string(),
+            kind,
+            is_head,
+        });
+    }
+
+    refs
+}
+
+/// Parses the output of the `git log` run by [`load_history`].
+///
+/// Records are separated by `0x1e` and fields within them by `0x1f`,
+/// control bytes that cannot appear in a branch name or a commit subject.
+/// A record missing fields is skipped rather than guessed at.
+pub fn parse_log(output: &[u8]) -> Vec<Commit> {
+    let mut commits = Vec::new();
+
+    for record in output.split(|byte| *byte == RECORD) {
+        // git puts a newline after each record, which lands at the front
+        // of the next one.
+        let record: &[u8] = match record.iter().position(|b| !b" \n\r".contains(b)) {
+            Some(start) => &record[start..],
+            None => continue,
+        };
+
+        let fields: Vec<&[u8]> = record.split(|byte| *byte == FIELD).collect();
+        let [hash, parents, subject, decoration, author, timestamp] = fields[..] else {
+            continue;
+        };
+
+        let text = |bytes: &[u8]| String::from_utf8_lossy(bytes).into_owned();
+
+        commits.push(Commit {
+            hash: text(hash),
+            parents: text(parents).split_whitespace().map(str::to_string).collect(),
+            subject: text(subject),
+            refs: parse_refs(&text(decoration)),
+            author: text(author),
+            timestamp: text(timestamp).trim().parse().unwrap_or(0),
+        });
+    }
+
+    commits
+}
+
+/// Reads up to `limit` commits of history from the repository at `root`,
+/// after passing over the newest `skip`.
+///
+/// Asks for branches, remotes and tags rather than `--all`. `--all` also
+/// walks private ref namespaces that tools write into, such as the
+/// checkpoint refs some editors keep, and those commits would appear in
+/// the graph as unrelated roots.
+///
+/// Returns an empty list when there is no repository, no commits yet, or
+/// no git on the machine.
+pub fn load_history(root: Option<&Path>, skip: usize, limit: usize) -> Vec<Commit> {
+    let format = format!(
+        "--format=%H%x1f%P%x1f%s%x1f%D%x1f%an%x1f%at%x{:02x}",
+        RECORD
+    );
+
+    let mut cmd = std::process::Command::new("git");
+    cmd.arg("log")
+        .arg("--branches")
+        .arg("--remotes")
+        .arg("--tags")
+        .arg("--date-order")
+        .arg("--decorate=full")
+        .arg(format!("--skip={skip}"))
+        .arg(format!("--max-count={limit}"))
+        .arg(format);
+    if let Some(dir) = root {
+        cmd.current_dir(dir);
+    }
+
+    match cmd.output() {
+        Ok(out) if out.status.success() => parse_log(&out.stdout),
+        _ => Vec::new(),
+    }
+}
+
+/// One page of history with its graph rows, plus the builder state needed
+/// to continue the graph on the next page.
+#[derive(Debug, Clone, Default)]
+pub struct HistoryPage {
+    /// Which refresh asked for this page; pages from an older one are dropped.
+    pub generation: u64,
+    /// How many newer commits came before this page.
+    pub skip: usize,
+    /// Commits newest first, as `git log` reported them.
+    pub commits: Vec<Commit>,
+    /// One graph row per entry in `commits`.
+    pub graph: Vec<crate::features::git_graph::GraphRow>,
+    /// The lane state after this page, for laying out the next one.
+    pub builder: crate::features::git_graph::GraphBuilder,
+    /// Set when git returned less than a full page, so nothing older remains.
+    pub exhausted: bool,
+}
+
+/// Reads the page of history after the newest `skip` commits and continues
+/// `builder`'s graph over it, all off the UI thread.
+pub async fn load_history_page_async(
+    root: Option<PathBuf>,
+    generation: u64,
+    skip: usize,
+    mut builder: crate::features::git_graph::GraphBuilder,
+) -> HistoryPage {
+    tokio::task::spawn_blocking(move || {
+        let commits = load_history(root.as_deref(), skip, HISTORY_PAGE);
+        let graph = builder.extend(&commits);
+        let exhausted = commits.len() < HISTORY_PAGE;
+        HistoryPage {
+            generation,
+            skip,
+            commits,
+            graph,
+            builder,
+            exhausted,
+        }
+    })
+    .await
+    // a panicked task leaves nothing to page through
+    .unwrap_or_else(|_| HistoryPage {
+        generation,
+        skip,
+        exhausted: true,
+        ..HistoryPage::default()
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_status_empty_output() {
+        assert!(parse_status(b"").is_empty());
+    }
+
+    #[test]
+    fn test_parse_status_staged_and_unstaged() {
+        let changes = parse_status(b"MM a.rs\0 M b.rs\0A  c.rs\0");
+        assert_eq!(changes.len(), 3);
+        assert_eq!(changes[0].index, Some(ChangeKind::Modified));
+        assert_eq!(changes[0].worktree, Some(ChangeKind::Modified));
+        assert!(changes[1].is_unstaged() && !changes[1].is_staged());
+        assert!(changes[2].is_staged() && !changes[2].is_unstaged());
+    }
+
+    #[test]
+    fn test_parse_status_untracked_is_not_staged() {
+        let changes = parse_status(b"?? new.txt\0");
+        assert!(!changes[0].is_staged());
+        assert_eq!(changes[0].unstaged_kind(), Some(ChangeKind::Untracked));
+    }
+
+    #[test]
+    fn test_parse_status_rename_keeps_both_paths() {
+        let changes = parse_status(b"R  new name.txt\0old name.txt\0 M after.rs\0");
+        assert_eq!(changes.len(), 2);
+        assert_eq!(changes[0].path, "new name.txt");
+        assert_eq!(changes[0].original_path.as_deref(), Some("old name.txt"));
+        assert_eq!(changes[1].path, "after.rs");
+    }
+
+    #[test]
+    fn test_parse_status_conflicts() {
+        for record in [&b"UU f\0"[..], b"AA f\0", b"DD f\0", b"AU f\0"] {
+            let changes = parse_status(record);
+            assert!(changes[0].conflicted);
+            assert_eq!(changes[0].unstaged_kind(), Some(ChangeKind::Conflicted));
+        }
+    }
+
+    #[test]
+    fn test_parse_status_short_records_skipped() {
+        assert!(parse_status(b"M\0 M\0").is_empty());
+    }
+
+    #[test]
+    fn test_display_name_last_segment() {
+        let change = |path: &str| FileChange {
+            path: path.to_string(),
+            original_path: None,
+            index: None,
+            worktree: Some(ChangeKind::Modified),
+            conflicted: false,
+        };
+        assert_eq!(change("src/app.rs").display_name(), "app.rs");
+        assert_eq!(change("top.rs").display_name(), "top.rs");
+        assert_eq!(change("a/sub/").display_name(), "sub/");
+    }
+
+    fn change(path: &str, index: Option<ChangeKind>, worktree: Option<ChangeKind>) -> FileChange {
+        FileChange {
+            path: path.to_string(),
+            original_path: None,
+            index,
+            worktree,
+            conflicted: false,
+        }
+    }
+
+    #[test]
+    fn test_split_changes_both_sides_lists_file_twice() {
+        let m = Some(ChangeKind::Modified);
+        let all = [
+            change("a", m, m),
+            change("b", m, None),
+            change("c", None, m),
+        ];
+        let (staged, unstaged) = split_changes(&all);
+        let names = |v: &[&FileChange]| v.iter().map(|c| c.path.clone()).collect::<Vec<_>>();
+        assert_eq!(names(&staged), vec!["a", "b"]);
+        assert_eq!(names(&unstaged), vec!["a", "c"]);
+    }
+
+    #[test]
+    fn test_split_changes_conflict_is_unstaged_only() {
+        let mut conflict = change("f", Some(ChangeKind::Added), Some(ChangeKind::Added));
+        conflict.conflicted = true;
+        let all = [conflict];
+        let (staged, unstaged) = split_changes(&all);
+        assert!(staged.is_empty());
+        assert_eq!(unstaged.len(), 1);
+        assert_eq!(unstaged[0].unstaged_kind(), Some(ChangeKind::Conflicted));
+        assert_eq!(unstaged[0].staged_kind(), None);
+    }
+
+    #[test]
+    fn test_split_changes_untracked_is_unstaged() {
+        let all = [change("n", None, Some(ChangeKind::Untracked))];
+        let (staged, unstaged) = split_changes(&all);
+        assert!(staged.is_empty());
+        assert_eq!(unstaged[0].unstaged_kind(), Some(ChangeKind::Untracked));
+    }
+
+    #[test]
+    fn test_split_changes_empty() {
+        let (staged, unstaged) = split_changes(&[]);
+        assert!(staged.is_empty() && unstaged.is_empty());
+    }
+
+    #[test]
+    fn test_staged_kind_reports_index_side() {
+        let c = change("a", Some(ChangeKind::Deleted), Some(ChangeKind::Modified));
+        assert_eq!(c.staged_kind(), Some(ChangeKind::Deleted));
+        assert_eq!(c.unstaged_kind(), Some(ChangeKind::Modified));
+    }
+
+    #[test]
+    fn test_parent_dir() {
+        let c = |p: &str| change(p, None, Some(ChangeKind::Modified));
+        assert_eq!(c("src/ui/a.rs").parent_dir(), "src/ui");
+        assert_eq!(c("top.rs").parent_dir(), "");
+        assert_eq!(c("a/sub/").parent_dir(), "a");
+    }
+
+    fn record(hash: &str, parents: &str, subject: &str, decoration: &str) -> Vec<u8> {
+        format!("{hash}\x1f{parents}\x1f{subject}\x1f{decoration}\x1fAda\x1f1700000000\x1e\n")
+            .into_bytes()
+    }
+
+    #[test]
+    fn test_parse_log_keeps_all_six_fields() {
+        let commits = parse_log(&record("abcdef1234", "p1", "do thing", ""));
+        assert_eq!(commits.len(), 1);
+        assert_eq!(commits[0].hash, "abcdef1234");
+        assert_eq!(commits[0].short_hash(), "abcdef1");
+        assert_eq!(commits[0].parents, vec!["p1"]);
+        assert_eq!(commits[0].subject, "do thing");
+        assert_eq!(commits[0].author, "Ada");
+        assert_eq!(commits[0].timestamp, 1_700_000_000);
+    }
+
+    #[test]
+    fn test_parse_log_merge_keeps_parent_order() {
+        let commits = parse_log(&record("m", "first second", "merge", ""));
+        assert!(commits[0].is_merge());
+        assert_eq!(commits[0].parents, vec!["first", "second"]);
+    }
+
+    #[test]
+    fn test_parse_log_root_commit_has_no_parents() {
+        let commits = parse_log(&record("r", "", "init", ""));
+        assert!(commits[0].parents.is_empty());
+        assert!(!commits[0].is_merge());
+    }
+
+    #[test]
+    fn test_parse_log_newline_stays_out_of_next_hash() {
+        let mut out = record("aaa", "", "one", "");
+        out.extend(record("bbb", "aaa", "two", ""));
+        let commits = parse_log(&out);
+        assert_eq!(commits.len(), 2);
+        assert_eq!(commits[1].hash, "bbb");
+    }
+
+    #[test]
+    fn test_parse_refs_kinds_are_told_apart() {
+        let refs =
+            parse_refs("HEAD -> refs/heads/main, tag: refs/tags/v1.0, refs/remotes/origin/main");
+        assert_eq!(refs.len(), 3);
+        assert_eq!(refs[0].kind, RefKind::LocalBranch);
+        assert!(refs[0].is_head);
+        assert_eq!(refs[0].name, "main");
+        assert_eq!(refs[1].kind, RefKind::Tag);
+        assert_eq!(refs[1].name, "v1.0");
+        assert_eq!(refs[2].kind, RefKind::RemoteBranch);
+        assert_eq!(refs[2].name, "origin/main");
+    }
+
+    #[test]
+    fn test_parse_refs_slash_branch_is_not_remote() {
+        let refs = parse_refs("refs/heads/feature/x, refs/remotes/origin/x");
+        assert_eq!(refs[0].kind, RefKind::LocalBranch);
+        assert_eq!(refs[0].name, "feature/x");
+        assert_eq!(refs[1].kind, RefKind::RemoteBranch);
+    }
+
+    #[test]
+    fn test_parse_refs_detached_head() {
+        let refs = parse_refs("HEAD");
+        assert_eq!(refs.len(), 1);
+        assert_eq!(refs[0].kind, RefKind::Head);
+        assert!(refs[0].is_head);
+    }
+
+    #[test]
+    fn test_parse_log_subject_with_commas_and_arrows() {
+        let commits = parse_log(&record("h", "", "fix a, b -> c", "refs/heads/main"));
+        assert_eq!(commits[0].subject, "fix a, b -> c");
+        assert_eq!(commits[0].refs.len(), 1);
+    }
+
+    #[test]
+    fn test_parse_log_missing_fields_skipped() {
+        assert!(parse_log(b"abc\x1fparent\x1e\n").is_empty());
+    }
+
+    #[test]
+    fn test_parse_log_empty_output() {
+        assert!(parse_log(b"").is_empty());
+    }
+
+    #[test]
+    fn test_status_command_avoids_the_index_lock() {
+        let cmd = status_command(None);
+        let args: Vec<_> = cmd.get_args().collect();
+        // a global option, so it has to come before the subcommand
+        assert_eq!(
+            args.first(),
+            Some(&std::ffi::OsStr::new("--no-optional-locks"))
+        );
+        assert!(args.contains(&std::ffi::OsStr::new("status")));
+    }
+
+    #[test]
+    fn test_status_command_pins_untracked_mode() {
+        let cmd = status_command(None);
+        assert!(cmd.get_args().any(|a| a == "--untracked-files=normal"));
+    }
+
+    #[test]
+    fn test_load_status_from_subfolder_reports_paths_from_repository_root(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let dir = tempfile::tempdir()?;
+        let root = dir.path().canonicalize()?;
+        assert!(std::process::Command::new("git")
+            .args(["init", "-q"])
+            .current_dir(&root)
+            .status()?
+            .success());
+        let subfolder = root.join("source files");
+        std::fs::create_dir(&subfolder)?;
+        std::fs::write(subfolder.join("example.rs"), "")?;
+
+        let (repo, changes) = load_status(Some(&subfolder));
+        assert_eq!(repo.as_deref(), Some(root.as_path()));
+        assert_eq!(changes.len(), 1);
+        assert_eq!(changes[0].path, "source files/");
+        assert_eq!(changes[0].unstaged_kind(), Some(ChangeKind::Untracked));
+        Ok(())
+    }
+
+    #[test]
+    fn test_refresh_guard_rejects_overlap() {
+        let mut guard = RefreshGuard::default();
+        assert!(guard.try_start());
+        assert!(!guard.try_start());
+    }
+
+    #[test]
+    fn test_refresh_guard_allows_restart_after_finish() {
+        let mut guard = RefreshGuard::default();
+        assert!(guard.try_start());
+        guard.finish();
+        assert!(guard.try_start());
+    }
+
+    #[test]
+    fn test_refresh_guard_is_running_tracks_start_and_finish() {
+        let mut guard = RefreshGuard::default();
+        assert!(!guard.is_running());
+        assert!(guard.try_start());
+        assert!(guard.is_running());
+        guard.finish();
+        assert!(!guard.is_running());
+    }
+
+    #[test]
+    fn test_refresh_guard_finish_without_start_is_harmless() {
+        let mut guard = RefreshGuard::default();
+        guard.finish();
+        assert!(guard.try_start());
+    }
+
+    #[test]
+    fn test_load_history_empty_outside_repository() -> Result<(), Box<dyn std::error::Error>> {
+        let dir = std::env::temp_dir().join(format!("pinel-nogit-{}", std::process::id()));
+        std::fs::create_dir_all(&dir)?;
+        let commits = load_history(Some(&dir), 0, 10);
+        std::fs::remove_dir_all(&dir)?;
+        assert!(commits.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn test_parse_symbolic_ref_branch_name() -> Result<(), Box<dyn std::error::Error>> {
+        assert_eq!(
+            parse_symbolic_ref(Some(0), b"main\n"),
+            HeadRef::Branch("main".to_string())
+        );
+        assert_eq!(
+            parse_symbolic_ref(Some(0), b"feature/status-bar\n"),
+            HeadRef::Branch("feature/status-bar".to_string())
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_parse_symbolic_ref_detached_head() -> Result<(), Box<dyn std::error::Error>> {
+        assert_eq!(parse_symbolic_ref(Some(1), b""), HeadRef::Detached);
+        Ok(())
+    }
+
+    #[test]
+    fn test_parse_symbolic_ref_not_a_repository() -> Result<(), Box<dyn std::error::Error>> {
+        assert_eq!(parse_symbolic_ref(Some(128), b""), HeadRef::Unavailable);
+        // killed by a signal: no exit code at all
+        assert_eq!(parse_symbolic_ref(None, b"main\n"), HeadRef::Unavailable);
+        Ok(())
+    }
+
+    #[test]
+    fn test_parse_symbolic_ref_empty_output() -> Result<(), Box<dyn std::error::Error>> {
+        assert_eq!(parse_symbolic_ref(Some(0), b""), HeadRef::Unavailable);
+        assert_eq!(parse_symbolic_ref(Some(0), b" \n"), HeadRef::Unavailable);
+        Ok(())
+    }
+
+    #[test]
+    fn test_parse_short_hash_trims_output() -> Result<(), Box<dyn std::error::Error>> {
+        assert_eq!(
+            parse_short_hash(true, b"d1ba278\n"),
+            Some("d1ba278".to_string())
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_parse_short_hash_failure_or_empty() -> Result<(), Box<dyn std::error::Error>> {
+        assert_eq!(parse_short_hash(false, b"d1ba278\n"), None);
+        assert_eq!(parse_short_hash(true, b"\n"), None);
+        Ok(())
+    }
+
+    #[test]
+    fn test_symbolic_ref_command_avoids_the_index_lock() -> Result<(), Box<dyn std::error::Error>> {
+        let root = Path::new("/some/repo");
+        for cmd in [symbolic_ref_command(root), short_head_command(root)] {
+            let args: Vec<_> = cmd.get_args().collect();
+            assert_eq!(
+                args.first(),
+                Some(&std::ffi::OsStr::new("--no-optional-locks"))
+            );
+            assert_eq!(cmd.get_current_dir(), Some(root));
+        }
+        Ok(())
+    }
+
+    /// Whether a `git` binary can run here. Tests that need real git return
+    /// early without one.
+    fn git_available() -> bool {
+        std::process::Command::new("git")
+            .arg("--version")
+            .output()
+            .is_ok_and(|out| out.status.success())
+    }
+
+    #[test]
+    fn test_load_branch_unborn_branch_in_new_repository() -> Result<(), Box<dyn std::error::Error>>
+    {
+        if !git_available() {
+            return Ok(());
+        }
+        let dir = tempfile::tempdir()?;
+        let status = std::process::Command::new("git")
+            .args(["init", "-q", "-b", "main"])
+            .current_dir(dir.path())
+            // a git hook running the tests would point git at its own repository
+            .env_remove("GIT_DIR")
+            .env_remove("GIT_WORK_TREE")
+            .status()?;
+        if !status.success() {
+            return Err("`git init -b main` failed".into());
+        }
+
+        assert_eq!(load_branch(dir.path()), Some("main".to_string()));
+        Ok(())
+    }
+}

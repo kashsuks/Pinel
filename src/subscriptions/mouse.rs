@@ -29,21 +29,13 @@ pub fn sidebar_resize() -> Subscription<Message> {
     })
 }
 
+/// Finishes or cancels a tab gesture even when the pointer leaves the strip.
 pub fn tab_drag() -> Subscription<Message> {
     iced::event::listen_with(|event, _status, _id| match event {
-        Event::Mouse(iced::mouse::Event::CursorMoved { position }) => {
-            Some(Message::TabDragFloatMove(position.x, position.y))
-        },
-        Event::Mouse(iced::mouse::Event::ButtonPressed(iced::mouse::Button::Left)) => {
-            Some(Message::TabDragInitiate)
-        },
         Event::Mouse(iced::mouse::Event::ButtonReleased(iced::mouse::Button::Left)) => {
             Some(Message::TabDragEnd)
         },
+        Event::Window(iced::window::Event::Unfocused) => Some(Message::TabDragCancelled),
         _ => None,
     })
-}
-
-pub fn tab_hold_tick() -> Subscription<Message> {
-    iced::time::every(std::time::Duration::from_millis(16)).map(|_| Message::TabHoldTick)
 }

@@ -1,3 +1,4 @@
+use super::view_tabs::EDITOR_FRAME_WIDTH;
 use super::*;
 
 impl App {
@@ -12,16 +13,39 @@ impl App {
         let editor_area: Element<'_, Message> = if self.settings_open {
             self.view_settings_panel()
         } else {
-            let tab_bar = self.view_tab_bar();
-            let editor_widget = self.view_editor();
-
-            let mut editor_col_items: Vec<Element<'_, Message>> = Vec::new();
+            let mut editor_col_items = Vec::new();
+            let has_tabs = !self.tabs.is_empty();
+            if has_tabs {
+                editor_col_items.push(self.view_tab_bar());
+            }
+            let mut body = iced::widget::Column::new();
             if self.find_replace.open {
-                editor_col_items.push(self.view_find_replace_panel());
+                body = body.push(self.view_find_replace_panel());
             }
 
-            editor_col_items.push(tab_bar);
-            editor_col_items.push(editor_widget);
+            if let Some(breadcrumbs) = self.view_breadcrumbs() {
+                body = body.push(breadcrumbs);
+            }
+            let body = body.push(self.view_editor()).height(Length::Fill);
+            if has_tabs {
+                editor_col_items.push(
+                    container(
+                        container(body)
+                            .clip(true)
+                            .style(|_| container::Style::default().background(theme().bg_editor)),
+                    )
+                    .padding(iced::Padding {
+                        top: 0.0,
+                        right: EDITOR_FRAME_WIDTH,
+                        bottom: EDITOR_FRAME_WIDTH,
+                        left: EDITOR_FRAME_WIDTH,
+                    })
+                    .style(|_| container::Style::default().background(theme().border_subtle))
+                    .into(),
+                );
+            } else {
+                editor_col_items.push(body.into());
+            }
             if self.terminal_open {
                 editor_col_items.push(self.view_terminal_panel());
             }
@@ -84,7 +108,7 @@ impl App {
                         .style(move |_t| container::Style {
                             background: Some(Background::Color(bg)),
                             border: iced::Border {
-                                radius: 6.0.into(),
+                                radius: RADIUS_SM.into(),
                                 ..Default::default()
                             },
                             ..Default::default()
@@ -99,7 +123,7 @@ impl App {
                         _ => iced::Color::TRANSPARENT,
                     })),
                     border: iced::Border {
-                        radius: 6.0.into(),
+                        radius: RADIUS_SM.into(),
                         ..Default::default()
                     },
                     text_color: icon_color,
@@ -140,7 +164,7 @@ impl App {
                         .style(move |_t| container::Style {
                             background: Some(Background::Color(bg)),
                             border: iced::Border {
-                                radius: 6.0.into(),
+                                radius: RADIUS_SM.into(),
                                 ..Default::default()
                             },
                             ..Default::default()
@@ -155,7 +179,7 @@ impl App {
                         _ => iced::Color::TRANSPARENT,
                     })),
                     border: iced::Border {
-                        radius: 6.0.into(),
+                        radius: RADIUS_SM.into(),
                         ..Default::default()
                     },
                     text_color: icon_color,
@@ -173,12 +197,12 @@ impl App {
                 iced::widget::Space::new().height(Length::Fill),
                 make_bottom_icon(ICON_SETTINGS, Message::ToggleSettings, self.settings_open),
             ]
-            .spacing(4)
+            .spacing(SPACE_1)
             .padding(iced::Padding {
-                top: 8.0,
-                right: 4.0,
-                bottom: 4.0,
-                left: 4.0,
+                top: SPACE_2,
+                right: SPACE_1,
+                bottom: SPACE_1,
+                left: SPACE_1,
             }),
         )
         .width(Length::Fixed(48.0))
@@ -189,7 +213,7 @@ impl App {
         })
         .into();
 
-        let base_content: Element<'_, Message> = if self.sidebar_visible {
+        let base_content: Element<'_, Message> = if self.sidebar_visible && !self.settings_open {
             let panel: Element<'_, Message> = match self.active_panel {
                 ActivePanel::Files => view_sidebar(
                     self.file_tree.as_ref(),
@@ -198,9 +222,15 @@ impl App {
                     &self.rename_input,
                     self.rename_input_id.clone(),
                 ),
-                ActivePanel::Git => {
-                    crate::ui::view_git_panel(&self.git_changes, self.sidebar_width)
-                },
+                ActivePanel::Git => crate::ui::view_git_panel(
+                    &self.git_changes,
+                    &self.git_history,
+                    &self.git_graph,
+                    self.sidebar_width,
+                    self.git_scroll_offset,
+                    self.git_viewport_h,
+                    self.git_show_all_changes,
+                ),
                 ActivePanel::Chat => crate::ui::view_chat_panel(
                     &self.chat_sessions,
                     self.active_chat_session.as_deref(),
@@ -214,7 +244,7 @@ impl App {
                     self.chat_rename_target.as_deref(),
                     &self.chat_rename_input,
                     self.chat_rename_input_id.clone(),
-                    self.sidebar_width,
+                    self.chat_width,
                 ),
             };
 
@@ -228,17 +258,18 @@ impl App {
                 .height(Length::Fill)
                 .style(sidebar_editor_separator_style);
 
-            let resize_zone =
-                mouse_area(container(text("")).width(Length::Fixed(4.0)).height(Length::Fill))
-                    .on_press(Message::SidebarResizeStart)
-                    .interaction(iced::mouse::Interaction::ResizingHorizontally);
+            let resize_zone = mouse_area(iced::widget::Space::new().width(4).height(Length::Fill))
+                .on_press(Message::SidebarResizeStart)
+                .interaction(iced::mouse::Interaction::ResizingHorizontally);
+            let resizable_panel = stack![
+                row![panel, separator],
+                container(resize_zone).align_right(Length::Fill),
+            ];
 
             row![
                 activity_bar,
                 activity_separator,
-                panel,
-                separator,
-                resize_zone,
+                resizable_panel,
                 editor_area
             ]
             .into()
@@ -307,10 +338,17 @@ impl App {
                 with_notification
             };
 
+        // always a two-layer stack: if the tree changed shape when the card opened, iced
+        // would rebuild the sidebar's state and reset its scroll position
+        let git_card: Element<'_, Message> = self
+            .view_git_card_overlay()
+            .unwrap_or_else(|| iced::widget::Space::new().into());
+        let with_git_card: Element<'_, Message> = stack![with_drag_ghost, git_card].into();
+
         let with_context_menu: Element<'_, Message> = if self.context_menu.is_some() {
-            stack![with_drag_ghost, self.view_context_menu_overlay()].into()
+            stack![with_git_card, self.view_context_menu_overlay()].into()
         } else {
-            with_drag_ghost
+            with_git_card
         };
 
         if self.update_banner.is_some() {

@@ -3,8 +3,6 @@
 //! This module defines [`App`] and splits its behavior into focused submodules:
 //! event updates, subscriptions, commands, and view builders.
 
-#[cfg(feature = "unstable-comet")]
-use std::collections::VecDeque;
 use std::{
     collections::{HashMap, VecDeque},
     path::PathBuf,
@@ -46,6 +44,7 @@ mod commands;
 mod lifecycle;
 mod subscription;
 mod update;
+mod view_commit;
 mod view_editor;
 mod view_finders;
 mod view_integrations;
@@ -53,6 +52,7 @@ mod view_overlays;
 mod view_providers;
 mod view_root;
 mod view_settings;
+mod view_tabs;
 
 #[allow(clippy::large_enum_variant)]
 pub enum TabKind {
@@ -75,10 +75,21 @@ pub enum TabKind {
     Audio {
         file_path: std::path::PathBuf,
         sink: std::sync::Arc<std::sync::Mutex<Option<rodio::Sink>>>,
-        stream: std::sync::Arc<(rodio::OutputStream, rodio::OutputStreamHandle)>,
+        stream: std::rc::Rc<(rodio::OutputStream, rodio::OutputStreamHandle)>,
         playing: bool,
         duration_secs: f32,
         position_secs: f32,
+    },
+    /// One commit's diff, opened from the git graph. Its details come from
+    /// `App::git_commit_details`.
+    Commit {
+        hash: String,
+        /// `None` until `git show` answers.
+        diff: Option<Vec<crate::features::git_diff::FileDiff>>,
+        /// Files folded away, by index into `diff`.
+        collapsed: std::collections::HashSet<usize>,
+        /// Whether the next commit clicked in the graph replaces this tab.
+        preview: bool,
     },
 }
 
@@ -99,6 +110,7 @@ impl std::fmt::Debug for TabKind {
             #[cfg(feature = "video")]
             TabKind::Video { .. } => f.debug_struct("Video").finish_non_exhaustive(),
             TabKind::Audio { .. } => f.debug_struct("Audio").finish_non_exhaustive(),
+            TabKind::Commit { .. } => f.debug_struct("Commit").finish_non_exhaustive(),
         }
     }
 }
@@ -135,6 +147,27 @@ struct PendingHoverRequest {
 }
 
 const HOVER_TRIGGER_DELAY: Duration = Duration::from_secs(2);
+/// Quiet time after an edit or tab switch before the outline is re-requested.
+const SYMBOL_REFRESH_DELAY: Duration = Duration::from_millis(400);
+/// Wait before asking again when a server answers with an empty outline,
+/// which usually means it is still starting up.
+const SYMBOL_RETRY_DELAY: Duration = Duration::from_secs(2);
+/// Empty outline replies tolerated in a row before an empty outline is accepted.
+const SYMBOL_MAX_EMPTY_REPLIES: u8 = 3;
+/// How long the cursor rests on a commit before its card opens.
+const GIT_CARD_OPEN_DELAY: Duration = Duration::from_millis(300);
+/// How long the card stays after the cursor leaves the row and the card.
+const GIT_CARD_CLOSE_DELAY: Duration = Duration::from_millis(150);
+/// How long the window size must stay still before it is written to disk.
+const WINDOW_SIZE_SAVE_DELAY: Duration = Duration::from_millis(500);
+const DOUBLE_CLICK: Duration = Duration::from_millis(400);
+
+/// The commit card shown beside the git graph.
+struct GitCard {
+    hash: String,
+    /// Where the cursor was when the card opened, in window coordinates.
+    anchor: iced::Point,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ActivePanel {
@@ -154,6 +187,7 @@ pub struct App {
 
     sidebar_visible: bool,
     sidebar_width: f32,
+    chat_width: f32,
 
     resizing_sidebar: bool,
     resize_start_x: Option<f32>,
@@ -170,6 +204,9 @@ pub struct App {
     file_finder_selected: usize,
 
     all_workspace_files: Vec<(String, PathBuf)>,
+    /// Bumped each time a background workspace index starts; results tagged
+    /// with an older generation are stale and dropped.
+    workspace_index_generation: u64,
     recent_files: Vec<PathBuf>,
 
     file_finder_input_id: iced::widget::Id,
@@ -195,7 +232,41 @@ pub struct App {
     command_input_id: iced::widget::Id,
 
     active_panel: ActivePanel,
-    git_changes: Vec<(String, String)>,
+    git_changes: Vec<crate::features::git::FileChange>,
+    git_tab_changes: HashMap<PathBuf, crate::features::git::ChangeKind>,
+    git_history: Vec<crate::features::git::Commit>,
+    git_graph: Vec<crate::features::git_graph::GraphRow>,
+    git_graph_builder: crate::features::git_graph::GraphBuilder,
+    git_history_exhausted: bool,
+    git_history_generation: u64,
+    git_history_page_loading: bool,
+    git_scroll_offset: f32,
+    git_show_all_changes: bool,
+    git_status_guard: crate::features::git::RefreshGuard,
+    git_history_guard: crate::features::git::RefreshGuard,
+    /// The open folder's branch, or short hash when `HEAD` is detached, for
+    /// the status bar. `None` with no folder open or outside a repository.
+    git_branch: Option<String>,
+    /// Bumped when a branch read starts and when a different folder opens,
+    /// so a read that finishes for an older request is dropped.
+    git_branch_generation: u64,
+    /// Keeps a second branch read from starting while one is running.
+    git_branch_guard: crate::features::git::RefreshGuard,
+    git_viewport_h: f32,
+    /// Full details of commits the cursor has rested on. A commit never
+    /// changes, so entries are kept for the life of the app.
+    git_commit_details: HashMap<String, crate::features::git_commit::CommitDetail>,
+    git_detail_loading: std::collections::HashSet<String>,
+    git_hover_hash: Option<String>,
+    git_card: Option<GitCard>,
+    git_card_hovered: bool,
+    /// Bumped on every hover change, so a stale open or close timer is ignored.
+    git_hover_token: u64,
+    /// Bumped on every resize, so only the last resize's save timer writes.
+    window_size_save_token: u64,
+    /// The window size changed and has not been written to disk yet.
+    window_size_dirty: bool,
+    preview_tab_pressed_at: Option<Instant>,
 
     chat_sessions: Vec<crate::features::chat::ChatSession>,
     active_chat_session: Option<String>,
@@ -213,6 +284,8 @@ pub struct App {
 
     provider_credentials: Vec<crate::config::provider_store::ProviderCredential>,
     provider_model_state: HashMap<String, crate::features::ai_client::ModelFetchState>,
+    provider_connection_test: Option<crate::features::ai_client::ModelFetchState>,
+    provider_request_id: u64,
     providers_selected: String,
     providers_key_input: String,
     providers_key_visible: bool,
@@ -233,6 +306,8 @@ pub struct App {
 
     pending_active_tab_path: Option<std::path::PathBuf>,
     pending_cursor_restores: std::collections::HashMap<std::path::PathBuf, (usize, usize)>,
+    /// Definition target waiting for its file to finish opening.
+    pending_definition_jump: Option<(std::path::PathBuf, iced_code_editor::LspPosition)>,
 
     closed_tabs: VecDeque<(std::path::PathBuf, (usize, usize))>,
 
@@ -262,17 +337,21 @@ pub struct App {
     lsp_enabled: bool,
     lsp_server_keys: HashMap<PathBuf, &'static str>,
     pending_hover_request: Option<PendingHoverRequest>,
+    /// Outline of each open document, keyed by LSP document URI.
+    document_symbols: HashMap<String, Vec<iced_code_editor::LspSymbol>>,
+    /// When the active document's outline should next be requested.
+    symbols_refresh_at: Option<Instant>,
+    /// Empty outline replies received in a row for the active document.
+    symbols_empty_replies: u8,
 
     pending_sensitive_open: Option<PathBuf>,
 
+    tab_pointer_press: Option<(usize, iced::Point)>,
     tab_drag_index: Option<usize>,
     tab_drag_start_x: f32,
-    tab_drag_curent_x: f32,
     tab_drag_target: Option<usize>,
-    tab_drag_cursor_pos: Option<(f32, f32)>,
+    tab_bar_scroll_x: f32,
     tab_hover_index: Option<usize>,
-    tab_hold_started_at: Option<Instant>,
-    tab_hold_index: Option<usize>,
 
     autocomplete: Autocomplete,
     modifier_state: Modifiers,
@@ -322,7 +401,8 @@ impl Default for App {
             cursor_col: 1,
             file_tree: None,
             sidebar_visible: true,
-            sidebar_width: SIDEBAR_DEFAULT_WIDTH,
+            sidebar_width: editor_preferences.sidebar_width,
+            chat_width: editor_preferences.chat_width,
             resizing_sidebar: false,
             resize_start_x: None,
             resize_start_width: SIDEBAR_DEFAULT_WIDTH,
@@ -335,6 +415,7 @@ impl Default for App {
             file_finder_results: Vec::new(),
             file_finder_selected: 0,
             all_workspace_files: Vec::new(),
+            workspace_index_generation: 0, // no index started yet
             recent_files: Vec::new(),
             file_finder_input_id: iced::widget::Id::unique(),
             fuzzy_finder: FuzzyFinder::default(),
@@ -354,6 +435,7 @@ impl Default for App {
                 };
 
                 let settings = iced_term::settings::Settings {
+                    font: editor_preferences.terminal_font(),
                     backend: iced_term::settings::BackendSettings {
                         program: shell,
                         ..Default::default()
@@ -382,6 +464,31 @@ impl Default for App {
 
             active_panel: ActivePanel::Files,
             git_changes: Vec::new(),
+            git_tab_changes: HashMap::new(),
+            git_history: Vec::new(),
+            git_graph: Vec::new(),
+            git_graph_builder: crate::features::git_graph::GraphBuilder::default(),
+            git_history_exhausted: false,
+            git_history_generation: 0,
+            git_history_page_loading: false,
+            git_scroll_offset: 0.0,
+            git_show_all_changes: false,
+            git_status_guard: crate::features::git::RefreshGuard::default(),
+            git_history_guard: crate::features::git::RefreshGuard::default(),
+            git_branch: None,
+            git_branch_generation: 0,
+            git_branch_guard: crate::features::git::RefreshGuard::default(),
+            // generous until the first scroll event reports the real height
+            git_viewport_h: 1200.0,
+            git_commit_details: HashMap::new(),
+            git_detail_loading: std::collections::HashSet::new(),
+            git_hover_hash: None,
+            git_card: None,
+            git_card_hovered: false,
+            git_hover_token: 0,
+            window_size_save_token: 0,
+            window_size_dirty: false,
+            preview_tab_pressed_at: None,
 
             chat_sessions: crate::config::chat_store::load_sessions(None),
             active_chat_session: None,
@@ -396,6 +503,8 @@ impl Default for App {
 
             provider_credentials: crate::config::provider_store::load(),
             provider_model_state: HashMap::new(),
+            provider_connection_test: None,
+            provider_request_id: 0,
             providers_selected: crate::features::chat_providers::PROVIDERS[0].id.to_string(),
             providers_key_input: String::new(),
             providers_key_visible: false,
@@ -415,6 +524,7 @@ impl Default for App {
 
             pending_active_tab_path: None,
             pending_cursor_restores: std::collections::HashMap::new(),
+            pending_definition_jump: None,
             closed_tabs: VecDeque::new(),
 
             startup_page_open: editor_preferences.first_launch,
@@ -445,16 +555,17 @@ impl Default for App {
             lsp_server_keys: HashMap::new(),
 
             pending_hover_request: None,
+            document_symbols: HashMap::new(),
+            symbols_refresh_at: None,
+            symbols_empty_replies: 0,
             pending_sensitive_open: None,
 
+            tab_pointer_press: None,
             tab_drag_index: None,
             tab_drag_start_x: 0.0,
-            tab_drag_curent_x: 0.0,
             tab_drag_target: None,
-            tab_drag_cursor_pos: None,
+            tab_bar_scroll_x: 0.0,
             tab_hover_index: None,
-            tab_hold_started_at: None,
-            tab_hold_index: None,
 
             autocomplete: Autocomplete::new(),
             modifier_state: Modifiers::default(),
@@ -526,19 +637,58 @@ impl App {
     #[cfg(not(feature = "unstable-comet"))]
     pub fn dev_log(&mut self, _message: String) {}
 
+    /// Additional zoom applied on top of the operating system display scale.
+    pub fn ui_scale(&self) -> f32 {
+        self.editor_preferences.ui_scale
+    }
+
+    fn apply_typography_to_tabs(&mut self) {
+        let font = self.editor_preferences.code_font();
+        let size = self.editor_preferences.editor_font_size;
+        for tab in &mut self.tabs {
+            if let TabKind::Editor { code_editor, .. } = &mut tab.kind {
+                code_editor.set_font(font);
+                apply_code_metrics(code_editor, size);
+            }
+        }
+        if let Some(terminal) = &mut self.terminal_pane {
+            terminal.handle(iced_term::Command::ChangeFont(
+                self.editor_preferences.terminal_font(),
+            ));
+        }
+    }
+
+    /// Width of the active sidebar, with a separate conversation width.
+    fn active_panel_width(&self) -> f32 {
+        if self.active_panel == ActivePanel::Chat {
+            self.chat_width
+        } else {
+            self.sidebar_width
+        }
+    }
+
+    fn set_active_panel_width(&mut self, width: f32) {
+        if self.active_panel == ActivePanel::Chat {
+            self.chat_width = width.clamp(320.0, 640.0);
+            self.editor_preferences.chat_width = self.chat_width;
+        } else {
+            self.sidebar_width = width.clamp(SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH);
+            self.editor_preferences.sidebar_width = self.sidebar_width;
+        }
+    }
+
     pub(super) fn configured_code_editor(&self, content: &str, syntax: &str) -> CodeEditor {
         let mut editor = iced_code_editor::CodeEditor::new(content, syntax);
         editor.set_theme(theme().editor_style);
-        editor.set_font(iced::Font {
-            family: iced::font::Family::Name("Fira Code"),
-            weight: iced::font::Weight::Normal,
-            ..iced::Font::DEFAULT
-        });
+        editor.set_font(self.editor_preferences.code_font());
 
         editor.set_search_replace_enabled(false);
+        // Pinel draws its own themed palette (Cmd/Ctrl+Shift+P); stop the
+        // editor's built-in one from opening alongside it.
+        editor.set_command_palette_enabled(false);
         editor.set_line_numbers_enabled(true);
         editor.set_wrap_enabled(false);
-        editor.set_font_size(13.0, true);
+        apply_code_metrics(&mut editor, self.editor_preferences.editor_font_size);
 
         // iced-code-editor builtin indentation
         let indent_style = if self.editor_preferences.use_spaces {
@@ -548,7 +698,11 @@ impl App {
         };
         editor.set_indent_style(indent_style);
         editor.set_auto_indent_enabled(self.editor_preferences.auto_indent_enabled);
+        editor.set_show_whitespace(self.editor_preferences.show_whitespace);
+        editor.set_line_number_width(self.editor_preferences.line_number_width);
         editor.set_vim_enabled(self.editor_preferences.vim_mode_enabled);
+        // The app's status bar shows the mode, pending keys and command line.
+        editor.set_vim_status_line_visible(false);
 
         editor
     }
@@ -587,6 +741,147 @@ impl App {
         }
     }
 
+    /// Asks for the active document's outline once `delay` has passed.
+    ///
+    /// Calling again before then pushes the request back, so a burst of
+    /// keystrokes produces a single request.
+    pub(super) fn schedule_symbol_refresh(&mut self, delay: Duration) {
+        self.symbols_refresh_at = Some(Instant::now() + delay);
+    }
+
+    /// Sends the outline request scheduled by [`Self::schedule_symbol_refresh`]
+    /// once it is due. Does nothing while breadcrumbs are hidden.
+    pub(super) fn request_due_document_symbols(&mut self) {
+        let Some(due_at) = self.symbols_refresh_at else {
+            return;
+        };
+        if Instant::now() < due_at {
+            return;
+        }
+        self.symbols_refresh_at = None;
+        if !self.editor_preferences.show_breadcrumbs {
+            return;
+        }
+        if let Some(tab) = self.active_tab.and_then(|idx| self.tabs.get_mut(idx)) {
+            if let TabKind::Editor { code_editor, .. } = &mut tab.kind {
+                code_editor.lsp_request_document_symbols();
+            }
+        }
+    }
+
+    /// Stores an outline reply, retrying a few times when the active
+    /// document's server answers with nothing (common while it is indexing).
+    pub(super) fn receive_document_symbols(
+        &mut self,
+        uri: String,
+        symbols: Vec<iced_code_editor::LspSymbol>,
+    ) {
+        let is_active = self
+            .active_tab
+            .and_then(|idx| self.tabs.get(idx))
+            .is_some_and(|tab| crate::features::lsp::document_uri(&tab.path) == uri);
+
+        if symbols.is_empty() && is_active && self.symbols_empty_replies < SYMBOL_MAX_EMPTY_REPLIES
+        {
+            // Keep showing the previous outline until the retry answers.
+            self.symbols_empty_replies += 1;
+            self.schedule_symbol_refresh(SYMBOL_RETRY_DELAY);
+            return;
+        }
+
+        if !symbols.is_empty() {
+            self.symbols_empty_replies = 0;
+        }
+        self.document_symbols.insert(uri, symbols);
+    }
+
+    /// Opens the file a definition reply points at and moves the cursor there.
+    ///
+    /// If the file is already open, its tab is focused and the cursor moves
+    /// straight away. Otherwise the file is opened and the jump waits in
+    /// `pending_definition_jump` until `FileOpened` arrives.
+    pub(super) fn open_definition(
+        &mut self,
+        uri: &str,
+        position: iced_code_editor::LspPosition,
+    ) -> iced::Task<Message> {
+        let Some(path) = crate::features::definition::file_uri_to_path(uri) else {
+            self.dev_log(format!("LSP: can't open definition at {uri}"));
+            return iced::Task::none();
+        };
+
+        if let Some(idx) = self.tabs.iter().position(|tab| tab.path == path) {
+            // Selecting the tab that is already active would restart its
+            // language server (#114), so only switch when it's a different tab.
+            let select = if self.active_tab == Some(idx) {
+                iced::Task::none()
+            } else {
+                self.update(Message::TabSelected(idx))
+            };
+            return iced::Task::batch([select, self.jump_to_position(idx, position)]);
+        }
+
+        self.pending_definition_jump = Some((path.clone(), position));
+        self.update(Message::FileClicked(path))
+    }
+
+    /// Moves the cursor of the tab at `idx` to an LSP `position` and scrolls
+    /// it into view.
+    ///
+    /// The column is converted from UTF-16 code units to characters first.
+    pub(super) fn jump_to_position(
+        &mut self,
+        idx: usize,
+        position: iced_code_editor::LspPosition,
+    ) -> iced::Task<Message> {
+        let Some(tab) = self.tabs.get_mut(idx) else {
+            return iced::Task::none();
+        };
+        let TabKind::Editor {
+            ref mut code_editor,
+            ref buffer,
+        } = tab.kind
+        else {
+            return iced::Task::none();
+        };
+
+        let line = position.line as usize;
+        let line_text = if line < buffer.line_count() {
+            buffer.line(line)
+        } else {
+            String::new()
+        };
+
+        let col =
+            crate::features::definition::utf16_col_to_char_col(&line_text, position.character);
+
+        let task = code_editor.set_cursor(line, col);
+        let (line, col) = code_editor.cursor_position();
+        self.cursor_line = line + 1;
+        self.cursor_col = col + 1;
+        task.map(Message::CodeEditorEvent)
+    }
+
+    pub(super) fn apply_show_whitespace_to_tabs(&mut self) {
+        let enabled = self.editor_preferences.show_whitespace;
+
+        for tab in &mut self.tabs {
+            if let TabKind::Editor { code_editor, .. } = &mut tab.kind {
+                code_editor.set_show_whitespace(enabled);
+            }
+        }
+    }
+
+    pub(super) fn apply_line_number_width_to_tabs(&mut self) {
+        let width = self.editor_preferences.line_number_width;
+
+        for tab in &mut self.tabs {
+            if let TabKind::Editor { code_editor, .. } = &mut tab.kind {
+                code_editor.set_line_number_width(width);
+            }
+        }
+    }
+
     pub(super) fn apply_vim_mode_to_tabs(&mut self) {
         let enabled = self.editor_preferences.vim_mode_enabled;
 
@@ -602,8 +897,12 @@ impl App {
     pub(super) fn current_session_state(&self) -> crate::config::session::SessionState {
         let folder = self.file_tree.as_ref().map(|tree| tree.root.clone());
 
-        let open_tabs: Vec<std::path::PathBuf> =
-            self.tabs.iter().map(|tab| tab.path.clone()).collect();
+        let open_tabs: Vec<std::path::PathBuf> = self
+            .tabs
+            .iter()
+            .filter(|tab| !matches!(tab.kind, TabKind::Commit { .. }))
+            .map(|tab| tab.path.clone())
+            .collect();
 
         let cursor_position = self
             .tabs
@@ -622,6 +921,7 @@ impl App {
             active_tab_index: self
                 .active_tab
                 .and_then(|idx| self.tabs.get(idx))
+                .filter(|tab| !matches!(tab.kind, TabKind::Commit { .. }))
                 .map(|tab| tab.path.clone()),
             cursor_position,
         }
@@ -675,42 +975,61 @@ impl App {
         let _ = crate::config::provider_store::save(&self.provider_credentials);
     }
 
-    /// Resolves the base URL to actually send requests to for a provider:
-    /// a saved override if one exists, otherwise the catalog default.
-    /// Local providers (Ollama, LM Studio, Custom) are the main users of
-    /// the override, since their host/port depends on the user's setup.
-    pub(super) fn provider_base_url(&self, provider_id: &str) -> String {
+    /// Returns the saved local endpoint or the provider's default endpoint.
+    fn provider_base_url(&self, provider: &crate::features::chat_providers::ProviderInfo) -> &str {
+        if provider.requires_api_key {
+            return provider.base_url;
+        }
         self.provider_credentials
             .iter()
-            .find(|c| c.provider_id == provider_id)
-            .and_then(|c| c.base_url.clone())
-            .unwrap_or_else(|| {
-                crate::features::chat_providers::by_id(provider_id)
-                    .map(|p| p.base_url.to_string())
-                    .unwrap_or_default()
-            })
+            .find(|credential| credential.provider_id == provider.id)
+            .and_then(|credential| credential.base_url.as_deref())
+            .unwrap_or(provider.base_url)
     }
 
-    /// Reloads the Providers settings form's key and server URL fields
-    /// from whatever is saved for the currently selected provider, so
-    /// switching into the panel always reflects the on-disk state.
-    pub(super) fn refresh_providers_key_input(&mut self) {
-        let selected = self.providers_selected.clone();
-        self.providers_key_input = self.provider_api_key(&selected).unwrap_or_default().to_string();
-        self.providers_base_url_input = self.provider_base_url(&selected);
+    /// Returns the endpoint shown in the settings form, using the default for a blank URL.
+    fn provider_form_base_url(
+        &self,
+        provider: &crate::features::chat_providers::ProviderInfo,
+    ) -> Result<String, String> {
+        let input = self.providers_base_url_input.trim();
+        if provider.requires_api_key || input.is_empty() {
+            return Ok(provider.base_url.to_string());
+        }
+        crate::features::ai_client::normalize_base_url(input)
     }
 
-    /// Kicks off (or reuses a cached) model list fetch for the given
-    /// provider name, as shown in the chat model picker. No-ops if the
-    /// provider requires a key it doesn't have, or a fetch for it is
-    /// already in flight or done. Local providers (no key required) are
-    /// fetched even with no saved credential at all.
-    pub(super) fn ensure_models_fetched(&mut self, provider_name: &str) -> iced::Task<Message> {
+    /// Reloads the Providers settings form from the saved configuration.
+    fn refresh_providers_key_input(&mut self) {
+        let selected = &self.providers_selected;
+        self.providers_key_input = self.provider_api_key(selected).unwrap_or_default().to_string();
+        self.providers_base_url_input = crate::features::chat_providers::by_id(selected)
+            .map(|provider| self.provider_base_url(provider).to_string())
+            .unwrap_or_default();
+        self.provider_connection_test = None;
+    }
+
+    fn next_provider_request_id(&mut self) -> u64 {
+        self.provider_request_id = self.provider_request_id.wrapping_add(1);
+        self.provider_request_id
+    }
+
+    /// Fetches models for the picker, reusing a successful or pending lookup.
+    fn ensure_models_fetched(&mut self, provider_name: &str, refresh: bool) -> iced::Task<Message> {
+        use crate::features::ai_client::{list_models, ModelFetchState};
         let Some(provider) = crate::features::chat_providers::by_name(provider_name) else {
             return iced::Task::none();
         };
 
-        if self.provider_model_state.contains_key(provider.id) {
+        if matches!(
+            self.provider_model_state.get(provider.id),
+            Some(ModelFetchState::Loading(_))
+        ) || (!refresh
+            && matches!(
+                self.provider_model_state.get(provider.id),
+                Some(ModelFetchState::Loaded(_))
+            ))
+        {
             return iced::Task::none();
         }
 
@@ -718,28 +1037,23 @@ impl App {
         if provider.requires_api_key && api_key.is_empty() {
             self.provider_model_state.insert(
                 provider.id.to_string(),
-                crate::features::ai_client::ModelFetchState::Error(
-                    "no API key attached".to_string(),
-                ),
+                ModelFetchState::Error("Add an API key in Settings → Providers.".to_string()),
             );
             return iced::Task::none();
         }
 
-        let base_url = self.provider_base_url(provider.id);
-        let api = provider.api;
-        let provider_id = provider.id.to_string();
+        let base_url = self.provider_base_url(provider).to_string();
+        let request_id = self.next_provider_request_id();
         self.provider_model_state.insert(
-            provider_id.clone(),
-            crate::features::ai_client::ModelFetchState::Loading,
+            provider.id.to_string(),
+            ModelFetchState::Loading(request_id),
         );
 
         iced::Task::perform(
-            async move {
-                let result =
-                    crate::features::ai_client::list_models(api, &base_url, &api_key).await;
-                (provider_id, result)
+            async move { list_models(provider.api, &base_url, &api_key).await },
+            move |result| {
+                Message::ProviderModelsFetched(provider.id.to_string(), request_id, result)
             },
-            |(provider_id, result)| Message::ProviderModelsFetched(provider_id, result),
         )
     }
 
@@ -749,6 +1063,10 @@ impl App {
         let Some(tab) = self.tabs.get(idx) else {
             return;
         };
+
+        if matches!(tab.kind, TabKind::Commit { .. }) {
+            return;
+        }
 
         let cursor = match &tab.kind {
             TabKind::Editor { code_editor, .. } => code_editor.cursor_position(),
@@ -794,7 +1112,7 @@ impl App {
                 self.sidebar_visible = visible;
             },
             EditorCommand::SetSidebarWidth(width) => {
-                self.sidebar_width = width.clamp(SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH);
+                self.set_active_panel_width(width);
             },
         }
     }

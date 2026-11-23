@@ -3,6 +3,40 @@ use iced::widget::column;
 use super::*;
 
 impl App {
+    /// The commit card for the row the cursor rests on, if one is open.
+    pub(super) fn view_git_card_overlay(&self) -> Option<Element<'_, Message>> {
+        use crate::ui::commit_card::{view_commit_card, CARD_HEIGHT_ESTIMATE};
+
+        if !self.sidebar_visible || self.active_panel != ActivePanel::Git {
+            return None;
+        }
+        let card = self.git_card.as_ref()?;
+        let commit = self.git_history.iter().find(|c| c.hash == card.hash)?;
+        let body = view_commit_card(
+            commit,
+            self.git_commit_details.get(&card.hash),
+            crate::features::git_commit::unix_now(),
+        );
+
+        // just right of the sidebar and level with the row, kept inside the window
+        let left = self.sidebar_width + 60.0;
+        let max_top = (self.editor_preferences.window_height - CARD_HEIGHT_ESTIMATE).max(0.0);
+        let top = (card.anchor.y - 16.0).clamp(0.0, max_top);
+
+        Some(
+            container(body)
+                .padding(iced::Padding {
+                    top,
+                    right: 0.0,
+                    bottom: 0.0,
+                    left,
+                })
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .into(),
+        )
+    }
+
     pub(super) fn view_context_menu_overlay(&self) -> Element<'_, Message> {
         use iced::widget::{opaque, stack, Space};
 
@@ -34,61 +68,15 @@ impl App {
         if !self.editor_preferences.tab_drag_floating {
             return None;
         }
-        let (drag_idx, (cursor_x, cursor_y)) = match (self.tab_drag_index, self.tab_drag_cursor_pos)
-        {
-            (Some(i), Some(pos)) => (i, pos),
-            _ => return None,
-        };
-        let tab = self.tabs.get(drag_idx)?;
-        let is_modified =
-            matches!(&tab.kind, TabKind::Editor { code_editor, .. } if code_editor.is_modified());
-
-        let close_icon = if is_modified {
-            text("●").size(10).color(theme().text_muted)
-        } else {
-            text("x").size(10).color(theme().text_dim)
-        };
-
-        let ghost = container(
-            button(
-                row![
-                    text(&tab.name).size(12).color(theme().text_primary),
-                    button(close_icon).style(tab_close_button_style).padding(2),
-                ]
-                .spacing(8)
-                .align_y(iced::Alignment::Center),
-            )
-            .style(tab_button_style(true))
-            .padding(iced::Padding {
-                top: 8.0,
-                right: 16.0,
-                bottom: 8.0,
-                left: 16.0,
-            }),
-        )
-        .style(|_theme| container::Style {
-            background: Some(iced::Background::Color(iced::Color::from_rgba(
-                theme().bg_tab_active.r,
-                theme().bg_tab_active.g,
-                theme().bg_tab_active.b,
-                0.92,
-            ))),
-            border: iced::Border {
-                color: iced::Color::from_rgba(1.0, 1.0, 1.0, 0.22),
-                width: 1.0,
-                radius: 8.0.into(),
-            },
-            shadow: iced::Shadow {
-                color: iced::Color::from_rgba(0.0, 0.0, 0.0, 0.45),
-                offset: iced::Vector::new(0.0, 6.0),
-                blur_radius: 18.0,
-            },
-            ..Default::default()
-        });
-
-        // Center the ghost on the cursor (tabs are ~120px wide, ~36px tall).
-        let ghost_top = (cursor_y - 15.0).max(0.0);
-        let ghost_left = (cursor_x - 60.0).max(0.0);
+        let drag_idx = self.tab_drag_index?;
+        let iced::Point {
+            x: cursor_x,
+            y: cursor_y,
+        } = self.last_cursor_position;
+        self.tabs.get(drag_idx)?;
+        let ghost = self.view_editor_tab(drag_idx, true);
+        let ghost_top = (cursor_y - super::view_tabs::TAB_HEIGHT / 2.0).max(0.0);
+        let ghost_left = (cursor_x - self.editor_tab_width(drag_idx) / 2.0).max(0.0);
 
         let positioned = container(ghost)
             .padding(iced::Padding {
@@ -119,7 +107,8 @@ impl App {
                 ..Default::default()
             });
 
-        let label = text("Preferences saved").size(13).color(Color::from_rgb(0.85, 0.97, 0.88));
+        let label =
+            text("Preferences saved").size(TEXT_MD).color(Color::from_rgb(0.85, 0.97, 0.88));
 
         let dismiss_btn = button(text("×").size(14).color(Color::from_rgba(0.65, 0.90, 0.70, 0.7)))
             .on_press(Message::DismissNotification)
@@ -131,9 +120,9 @@ impl App {
             })
             .padding(iced::Padding {
                 top: 0.0,
-                right: 4.0,
+                right: SPACE_1,
                 bottom: 0.0,
-                left: 8.0,
+                left: SPACE_2,
             });
 
         let toast_inner = row![check_circle, label, dismiss_btn]
@@ -143,9 +132,9 @@ impl App {
         let toast = container(toast_inner)
             .padding(iced::Padding {
                 top: 10.0,
-                right: 16.0,
+                right: SPACE_4,
                 bottom: 10.0,
-                left: 12.0,
+                left: SPACE_3,
             })
             .style(|_theme| container::Style {
                 background: Some(Background::Color(Color::from_rgba(0.07, 0.20, 0.10, 0.96))),
@@ -183,28 +172,31 @@ impl App {
         };
 
         let label = text(format!("Pinel {} is available", info.version))
-            .size(13)
+            .size(TEXT_MD)
             .color(Color::from_rgb(0.85, 0.93, 1.0));
 
-        let open_btn =
-            button(text("Open release page →").size(12).color(Color::from_rgb(0.55, 0.75, 1.0)))
-                .on_press(Message::DismissUpdateBanner)
-                .style(|_theme, _status| button::Style {
-                    background: Some(Background::Color(Color::from_rgba(0.30, 0.55, 1.0, 0.15))),
-                    border: iced::Border {
-                        color: Color::from_rgba(0.40, 0.65, 1.0, 0.35),
-                        width: 1.0,
-                        radius: 6.0.into(),
-                    },
-                    text_color: Color::from_rgb(0.55, 0.75, 1.0),
-                    ..Default::default()
-                })
-                .padding(iced::Padding {
-                    top: 5.0,
-                    right: 12.0,
-                    bottom: 5.0,
-                    left: 12.0,
-                });
+        let open_btn = button(
+            text("Open release page →")
+                .size(TEXT_MD)
+                .color(Color::from_rgb(0.55, 0.75, 1.0)),
+        )
+        .on_press(Message::DismissUpdateBanner)
+        .style(|_theme, _status| button::Style {
+            background: Some(Background::Color(Color::from_rgba(0.30, 0.55, 1.0, 0.15))),
+            border: iced::Border {
+                color: Color::from_rgba(0.40, 0.65, 1.0, 0.35),
+                width: 1.0,
+                radius: RADIUS_SM.into(),
+            },
+            text_color: Color::from_rgb(0.55, 0.75, 1.0),
+            ..Default::default()
+        })
+        .padding(iced::Padding {
+            top: 5.0,
+            right: SPACE_3,
+            bottom: 5.0,
+            left: SPACE_3,
+        });
 
         let dismiss_btn = button(text("×").size(14).color(Color::from_rgba(0.65, 0.80, 1.0, 0.7)))
             .on_press(Message::DismissUpdateBanner)
@@ -216,20 +208,21 @@ impl App {
             })
             .padding(iced::Padding {
                 top: 0.0,
-                right: 4.0,
+                right: SPACE_1,
                 bottom: 0.0,
-                left: 8.0,
+                left: SPACE_2,
             });
 
-        let banner_inner =
-            row![label, open_btn, dismiss_btn].spacing(12).align_y(iced::Alignment::Center);
+        let banner_inner = row![label, open_btn, dismiss_btn]
+            .spacing(SPACE_3)
+            .align_y(iced::Alignment::Center);
 
         let banner = container(banner_inner)
             .padding(iced::Padding {
                 top: 10.0,
-                right: 16.0,
+                right: SPACE_4,
                 bottom: 10.0,
-                left: 16.0,
+                left: SPACE_4,
             })
             .style(|_theme| container::Style {
                 background: Some(Background::Color(Color::from_rgba(0.05, 0.10, 0.25, 0.96))),
@@ -267,11 +260,11 @@ impl App {
         let input = text_input("> Type a command...", &self.command_palette.input)
             .id(self.command_palette_input_id.clone())
             .on_input(Message::CommandPaletteQueryChanged)
-            .size(15)
+            .size(TEXT_LG)
             .padding(iced::Padding {
-                top: 16.0,
+                top: SPACE_4,
                 right: 18.0,
-                bottom: 16.0,
+                bottom: SPACE_4,
                 left: 18.0,
             })
             .style(search_input_style)
@@ -286,13 +279,13 @@ impl App {
             items.push(
                 button(
                     row![
-                        text(&cmd.name).size(13).color(if is_selected {
+                        text(&cmd.name).size(TEXT_MD).color(if is_selected {
                             theme().text_primary
                         } else {
                             theme().text_muted
                         }),
                         iced::widget::Space::new().width(Length::Fill),
-                        text(shortcut_text).size(11).color(theme().text_dim),
+                        text(shortcut_text).size(TEXT_XS).color(theme().text_dim),
                     ]
                     .align_y(iced::Alignment::Center),
                 )
@@ -354,12 +347,12 @@ impl App {
         let find_input = text_input("Find...", &self.find_replace.find_text)
             .id(self.find_input_id.clone())
             .on_input(Message::FindQueryChanged)
-            .size(13)
+            .size(TEXT_MD)
             .padding(iced::Padding {
-                top: 8.0,
-                right: 12.0,
-                bottom: 8.0,
-                left: 12.0,
+                top: SPACE_2,
+                right: SPACE_3,
+                bottom: SPACE_2,
+                left: SPACE_3,
             })
             .style(search_input_style)
             .width(Length::Fill);
@@ -367,17 +360,18 @@ impl App {
         let replace_input = text_input("Replace...", &self.find_replace.replace_text)
             .id(self.replace_input_id.clone())
             .on_input(Message::ReplaceQueryChanged)
-            .size(13)
+            .size(TEXT_MD)
             .padding(iced::Padding {
-                top: 8.0,
-                right: 12.0,
-                bottom: 8.0,
-                left: 12.0,
+                top: SPACE_2,
+                right: SPACE_3,
+                bottom: SPACE_2,
+                left: SPACE_3,
             })
             .style(search_input_style)
             .width(Length::Fill);
 
-        let match_info = text(self.find_replace.match_status()).size(11).color(theme().text_dim);
+        let match_info =
+            text(self.find_replace.match_status()).size(TEXT_XS).color(theme().text_dim);
 
         let case_btn = button(
             text(if self.find_replace.case_sensitive {
@@ -385,7 +379,7 @@ impl App {
             } else {
                 "aa"
             })
-            .size(11),
+            .size(TEXT_XS),
         )
         .on_press(Message::ToggleCaseSensitive)
         .style(tab_close_button_style)
@@ -396,7 +390,7 @@ impl App {
             left: 6.0,
         });
 
-        let prev_btn = button(text("↑").size(12))
+        let prev_btn = button(text("↑").size(TEXT_SM))
             .on_press(Message::FindPrev)
             .style(tab_close_button_style)
             .padding(iced::Padding {
@@ -406,7 +400,7 @@ impl App {
                 left: 6.0,
             });
 
-        let next_btn = button(text("↓").size(12))
+        let next_btn = button(text("↓").size(TEXT_SM))
             .on_press(Message::FindNext)
             .style(tab_close_button_style)
             .padding(iced::Padding {
@@ -416,27 +410,27 @@ impl App {
                 left: 6.0,
             });
 
-        let replace_btn = button(text("Replace").size(11).color(theme().text_muted))
+        let replace_btn = button(text("Replace").size(TEXT_XS).color(theme().text_muted))
             .on_press(Message::ReplaceOne)
             .style(tab_close_button_style)
             .padding(iced::Padding {
                 top: 3.0,
-                right: 8.0,
+                right: SPACE_2,
                 bottom: 3.0,
-                left: 8.0,
+                left: SPACE_2,
             });
 
-        let replace_all_btn = button(text("All").size(11).color(theme().text_muted))
+        let replace_all_btn = button(text("All").size(TEXT_XS).color(theme().text_muted))
             .on_press(Message::ReplaceAll)
             .style(tab_close_button_style)
             .padding(iced::Padding {
                 top: 3.0,
-                right: 8.0,
+                right: SPACE_2,
                 bottom: 3.0,
-                left: 8.0,
+                left: SPACE_2,
             });
 
-        let close_btn = button(text("✕").size(12).color(theme().text_muted))
+        let close_btn = button(text("✕").size(TEXT_SM).color(theme().text_muted))
             .on_press(Message::ToggleFindReplace)
             .style(tab_close_button_style)
             .padding(iced::Padding {

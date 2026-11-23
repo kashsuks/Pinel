@@ -1,16 +1,24 @@
 use iced::{
-    widget::{button, column, container, image, mouse_area, row, scrollable, text, text_input},
+    widget::{
+        button, column, container, image, mouse_area, row, scrollable, text, text_input, Space,
+    },
     Element, Length,
 };
 
 use crate::{
     features::{
         file_tree::{FileEntry, FileTree},
+        git::{split_changes, ChangeKind, Commit, FileChange},
+        git_graph::GraphRow,
         icons::{get_file_icon, get_folder_icon, icon_handle, IconAsset},
+        virtual_list::{clamp_offset, spacer_heights, visible_range},
     },
     message::Message,
     theme::*,
-    ui::styles::{rename_input_style, sidebar_container_style, tree_button_style},
+    ui::{
+        git_graph::{view_commit_row, ROW_HEIGHT},
+        styles::{rename_input_style, sidebar_container_style, tree_button_style},
+    },
 };
 
 /// Create an icon element from embedded bytes.
@@ -21,89 +29,310 @@ fn icon_widget<'a>(icon: IconAsset) -> Element<'a, Message> {
         .into()
 }
 
-pub fn view_git_panel<'a>(changes: &'a [(String, String)], width: f32) -> Element<'a, Message> {
-    let content: Element<'a, Message> = if changes.is_empty() {
-        container(
-            column![
-                text("No changes").size(13).color(theme().text_muted),
-                text("Working tree is clean").size(11).color(theme().text_placeholder),
-            ]
-            .spacing(4)
-            .align_x(iced::Alignment::Center),
-        )
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .center_x(Length::Fill)
-        .center_y(Length::Fill)
-        .into()
+/// The colour each status letter is drawn in.
+pub(crate) fn change_color(kind: ChangeKind) -> iced::Color {
+    let background = theme().bg_secondary;
+    if background.r * 0.2126 + background.g * 0.7152 + background.b * 0.0722 > 0.5 {
+        return match kind {
+            ChangeKind::Modified | ChangeKind::TypeChanged => iced::Color::from_rgb8(135, 85, 5),
+            ChangeKind::Added | ChangeKind::Untracked | ChangeKind::Copied => {
+                iced::Color::from_rgb8(24, 112, 60)
+            },
+            ChangeKind::Deleted | ChangeKind::Conflicted => iced::Color::from_rgb8(164, 40, 49),
+            ChangeKind::Renamed => iced::Color::from_rgb8(28, 83, 165),
+            ChangeKind::Ignored => theme().text_muted,
+        };
+    }
+    match kind {
+        ChangeKind::Modified | ChangeKind::TypeChanged => iced::Color::from_rgb(0.98, 0.74, 0.18),
+        ChangeKind::Added | ChangeKind::Untracked | ChangeKind::Copied => {
+            iced::Color::from_rgb(0.36, 0.86, 0.42)
+        },
+        ChangeKind::Deleted | ChangeKind::Conflicted => iced::Color::from_rgb(0.92, 0.37, 0.37),
+        ChangeKind::Renamed => iced::Color::from_rgb(0.40, 0.69, 0.98),
+        ChangeKind::Ignored => theme().text_muted,
+    }
+}
+
+/// Extra rows built above and below the viewport so fast scrolling never
+/// shows a gap.
+const OVERSCAN: usize = 6;
+
+/// One line of the status section: a heading or a changed file.
+enum StatusEntry<'a> {
+    Header(String),
+    Change(&'a FileChange, ChangeKind),
+    /// Closing row that lists the remaining files when pressed.
+    ShowMore(usize),
+}
+
+/// Changed files listed before the rest fold into a "show more" row.
+///
+/// Headings keep the true counts, so the cap never hides how much changed.
+pub const MAX_CHANGES_SHOWN: usize = 2000;
+
+/// How many rows from the end of the commit list the next page of history
+/// starts loading.
+pub const HISTORY_PREFETCH_ROWS: usize = 60;
+
+/// Flattens staged and unstaged changes, with their headings, into one list
+/// so it can be windowed by index.
+///
+/// At most `limit` files are listed in total; the rest are summed into a
+/// closing [`StatusEntry::ShowMore`].
+fn status_entries(changes: &[FileChange], limit: usize) -> Vec<StatusEntry<'_>> {
+    let (staged, unstaged) = split_changes(changes);
+    let total = staged.len() + unstaged.len();
+    let mut entries = Vec::with_capacity(total.min(limit) + 3);
+    let mut remaining = limit;
+
+    if !staged.is_empty() {
+        entries.push(StatusEntry::Header(format!(
+            "Staged Changes ({})",
+            staged.len()
+        )));
+        let take = staged.len().min(remaining);
+        remaining -= take;
+        entries.extend(
+            staged
+                .into_iter()
+                .take(take)
+                .filter_map(|c| c.staged_kind().map(|k| StatusEntry::Change(c, k))),
+        );
+    }
+    if !unstaged.is_empty() {
+        entries.push(StatusEntry::Header(format!("Changes ({})", unstaged.len())));
+        let take = unstaged.len().min(remaining);
+        remaining -= take;
+        entries.extend(
+            unstaged
+                .into_iter()
+                .take(take)
+                .filter_map(|c| c.unstaged_kind().map(|k| StatusEntry::Change(c, k))),
+        );
+    }
+
+    let hidden = total - (limit - remaining).min(total);
+    if hidden > 0 {
+        entries.push(StatusEntry::ShowMore(hidden));
+    }
+    entries
+}
+
+/// Which commits to build, given where the commit section sits in the list.
+///
+/// The section starts after every status entry plus the "Commits" heading,
+/// so the scroll offset is measured from there.
+fn commit_window(
+    scroll_offset: f32,
+    viewport_h: f32,
+    status_len: usize,
+    commit_len: usize,
+) -> std::ops::Range<usize> {
+    let section_top = (status_len + 1) as f32 * ROW_HEIGHT;
+    visible_range(
+        scroll_offset - section_top,
+        viewport_h,
+        ROW_HEIGHT,
+        commit_len,
+        OVERSCAN,
+    )
+}
+
+/// The git panel: changed files, then the commit graph below them.
+pub fn view_git_panel<'a>(
+    changes: &'a [FileChange],
+    history: &'a [Commit],
+    graph: &'a [GraphRow],
+    width: f32,
+    scroll_offset: f32,
+    viewport_h: f32,
+    show_all_changes: bool,
+) -> Element<'a, Message> {
+    let mut items: Vec<Element<'a, Message>> = Vec::new();
+
+    if changes.is_empty() && history.is_empty() {
+        items.push(
+            container(
+                column![
+                    text("No changes").size(TEXT_MD).color(theme().text_muted),
+                    text("Working tree is clean").size(TEXT_XS).color(theme().text_muted),
+                ]
+                .spacing(SPACE_1)
+                .align_x(iced::Alignment::Center),
+            )
+            .width(Length::Fill)
+            .center_x(Length::Fill)
+            .padding(SPACE_4)
+            .into(),
+        );
+    }
+
+    let limit = if show_all_changes {
+        usize::MAX
     } else {
-        let header =
-            text(format!("Changes ({})", changes.len())).size(11).color(theme().text_muted);
-
-        let mut items: Vec<Element<'a, Message>> = vec![container(header)
-            .padding(iced::Padding {
-                top: 4.0,
-                right: 4.0,
-                bottom: 4.0,
-                left: 4.0,
-            })
-            .into()];
-
-        for (status, file) in changes {
-            let status_color = match status.as_str() {
-                "M" | "MM" => iced::Color::from_rgb(0.98, 0.74, 0.18),
-                "A" | "??" => iced::Color::from_rgb(0.36, 0.86, 0.42),
-                "D" => iced::Color::from_rgb(0.92, 0.37, 0.37),
-                _ => theme().text_muted,
-            };
-
-            let label = match status.as_str() {
-                "M" | "MM" => "M",
-                "A" => "A",
-                "D" => "D",
-                "??" => "U",
-                _ => status.as_str(),
-            };
-
-            let file_name = std::path::Path::new(file)
-                .file_name()
-                .and_then(|n| n.to_str())
-                .unwrap_or(file.as_str());
-
-            let row_item = row![
-                text(label).size(11).color(status_color).width(Length::Fixed(16.0)),
-                text(file_name).size(12),
-            ]
-            .spacing(4)
-            .align_y(iced::Alignment::Center);
-
-            items.push(
-                container(row_item)
-                    .padding(iced::Padding {
-                        top: 3.0,
-                        right: 4.0,
-                        bottom: 3.0,
-                        left: 8.0,
-                    })
-                    .width(Length::Fill)
-                    .into(),
-            );
-        }
-
-        column(items).spacing(0).into()
+        MAX_CHANGES_SHOWN
     };
+    let entries = status_entries(changes, limit);
+    let total_rows = entries.len()
+        + if history.is_empty() {
+            0
+        } else {
+            1 + history.len()
+        };
+    let scroll_offset = clamp_offset(scroll_offset, viewport_h, total_rows, ROW_HEIGHT);
+    let range = visible_range(
+        scroll_offset,
+        viewport_h,
+        ROW_HEIGHT,
+        entries.len(),
+        OVERSCAN,
+    );
+    let (above, below) = spacer_heights(&range, entries.len(), ROW_HEIGHT);
 
-    container(scrollable(content).height(Length::Fill))
-        .width(Length::Fixed(width))
-        .height(Length::Fill)
+    if above > 0.0 {
+        items.push(Space::new().height(Length::Fixed(above)).into());
+    }
+    for entry in &entries[range] {
+        match entry {
+            StatusEntry::Header(label) => items.push(section_header(label.clone())),
+            StatusEntry::Change(change, kind) => items.extend(change_row(change, Some(*kind))),
+            StatusEntry::ShowMore(hidden) => items.push(show_more_row(*hidden)),
+        }
+    }
+    if below > 0.0 {
+        items.push(Space::new().height(Length::Fixed(below)).into());
+    }
+
+    if !history.is_empty() {
+        items.push(section_header("Commits".to_string()));
+        let window = commit_window(scroll_offset, viewport_h, entries.len(), history.len());
+        items.push(view_commit_graph(history, graph, width, window));
+    }
+
+    container(
+        scrollable(column(items).spacing(0)).height(Length::Fill).on_scroll(|viewport| {
+            Message::GitPanelScrolled {
+                offset: viewport.absolute_offset().y,
+                viewport: viewport.bounds().height,
+                content: viewport.content_bounds().height,
+            }
+        }),
+    )
+    .width(Length::Fixed(width))
+    .height(Length::Fill)
+    .padding(iced::Padding {
+        top: 14.0,
+        right: 2.0,
+        bottom: 2.0,
+        left: SPACE_1,
+    })
+    .style(sidebar_container_style)
+    .into()
+}
+
+/// One changed file: status letter, name, and its folder dimmed after it.
+fn change_row<'a>(
+    change: &'a FileChange,
+    kind: Option<ChangeKind>,
+) -> Option<Element<'a, Message>> {
+    let kind = kind?;
+    let mut line = row![
+        text(kind.letter())
+            .size(TEXT_XS)
+            .color(change_color(kind))
+            .width(Length::Fixed(16.0)),
+        text(change.display_name())
+            .size(TEXT_MD)
+            .wrapping(iced::widget::text::Wrapping::None),
+    ]
+    .spacing(SPACE_1)
+    .align_y(iced::Alignment::Center);
+
+    let dir = change.parent_dir();
+    if !dir.is_empty() {
+        line = line.push(
+            text(dir)
+                .size(TEXT_XS)
+                .color(theme().text_muted)
+                .wrapping(iced::widget::text::Wrapping::None),
+        );
+    }
+
+    Some(
+        container(line)
+            .padding(iced::Padding {
+                top: 0.0,
+                right: SPACE_1,
+                bottom: 0.0,
+                left: SPACE_2,
+            })
+            .width(Length::Fill)
+            .height(Length::Fixed(ROW_HEIGHT))
+            .align_y(iced::alignment::Vertical::Center)
+            .clip(true)
+            .into(),
+    )
+}
+
+/// The row that expands the capped changed-file list.
+fn show_more_row<'a>(hidden: usize) -> Element<'a, Message> {
+    button(
+        text(format!("Show {hidden} more\u{2026}"))
+            .size(TEXT_SM)
+            .color(theme().text_muted),
+    )
+    .on_press(Message::GitShowAllChanges)
+    .style(tree_button_style)
+    .padding(iced::Padding {
+        top: 0.0,
+        right: SPACE_1,
+        bottom: 0.0,
+        left: SPACE_2,
+    })
+    .width(Length::Fill)
+    .height(Length::Fixed(ROW_HEIGHT))
+    .into()
+}
+
+fn section_header<'a>(label: String) -> Element<'a, Message> {
+    container(text(label).size(TEXT_XS).color(theme().text_muted))
         .padding(iced::Padding {
-            top: 14.0,
-            right: 2.0,
-            bottom: 2.0,
-            left: 4.0,
+            top: 0.0,
+            right: SPACE_1,
+            bottom: 0.0,
+            left: SPACE_1,
         })
-        .style(sidebar_container_style)
+        .width(Length::Fill)
+        .height(Length::Fixed(ROW_HEIGHT))
+        .align_y(iced::alignment::Vertical::Center)
         .into()
+}
+
+/// One row per commit, with refs and a subject sized to the panel.
+fn view_commit_graph<'a>(
+    history: &'a [Commit],
+    graph: &'a [GraphRow],
+    width: f32,
+    window: std::ops::Range<usize>,
+) -> Element<'a, Message> {
+    let (above, below) = spacer_heights(&window, history.len(), ROW_HEIGHT);
+
+    let mut rows: Vec<Element<'a, Message>> = Vec::new();
+    if above > 0.0 {
+        rows.push(Space::new().height(Length::Fixed(above)).into());
+    }
+    rows.extend(
+        history[window.clone()]
+            .iter()
+            .zip(&graph[window])
+            .map(|(commit, graph_row)| view_commit_row(commit, graph_row, width)),
+    );
+    if below > 0.0 {
+        rows.push(Space::new().height(Length::Fixed(below)).into());
+    }
+
+    column(rows).spacing(0).clip(true).into()
 }
 
 pub fn view_sidebar<'a>(
@@ -125,7 +354,7 @@ pub fn view_sidebar<'a>(
             top: 14.0,
             right: 2.0,
             bottom: 2.0,
-            left: 4.0,
+            left: SPACE_1,
         })
         .style(sidebar_container_style);
 
@@ -167,7 +396,7 @@ fn view_file_tree<'a>(
         rename_input,
         rename_input_id,
     );
-    column(items).spacing(4).into()
+    column(items).spacing(SPACE_1).into()
 }
 
 fn view_empty_sidebar<'a>() -> Element<'a, Message> {
@@ -179,10 +408,10 @@ fn view_empty_sidebar<'a>() -> Element<'a, Message> {
 
     container(
         column![
-            text("No folder open").size(13).color(theme().text_muted),
-            text(shortcut_hint).size(11).color(theme().text_placeholder),
+            text("No folder open").size(TEXT_MD).color(theme().text_muted),
+            text(shortcut_hint).size(TEXT_XS).color(theme().text_muted),
         ]
-        .spacing(4)
+        .spacing(SPACE_1)
         .align_x(iced::Alignment::Center),
     )
     .width(Length::Fill)
@@ -228,7 +457,7 @@ fn render_entries<'a>(
                         row![
                             container(text("")).width(Length::Fixed(indent_width)),
                             icon,
-                            text(name).size(13),
+                            text(name).size(TEXT_MD),
                         ]
                         .spacing(6)
                         .align_y(iced::Alignment::Center),
@@ -279,7 +508,7 @@ fn render_entries<'a>(
                         row![
                             container(text("")).width(Length::Fixed(indent_width)),
                             icon,
-                            text(name).size(13),
+                            text(name).size(TEXT_MD),
                         ]
                         .spacing(6)
                         .align_y(iced::Alignment::Center),
@@ -315,12 +544,12 @@ fn render_rename_row<'a>(
         .id(rename_input_id)
         .on_input(Message::FileTreeRenameInputChanged)
         .on_submit(Message::FileTreeRenameSubmit)
-        .size(13)
+        .size(TEXT_MD)
         .padding(iced::Padding {
             top: 2.0,
-            right: 4.0,
+            right: SPACE_1,
             bottom: 2.0,
-            left: 4.0,
+            left: SPACE_1,
         })
         .style(rename_input_style)
         .width(Length::Fill);
@@ -342,4 +571,120 @@ fn render_rename_row<'a>(
     })
     .width(Length::Fill)
     .into()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn untracked(n: usize) -> Vec<FileChange> {
+        (0..n)
+            .map(|i| FileChange {
+                path: format!("f{i}"),
+                original_path: None,
+                index: None,
+                worktree: Some(ChangeKind::Untracked),
+                conflicted: false,
+            })
+            .collect()
+    }
+
+    fn count_files(entries: &[StatusEntry<'_>]) -> usize {
+        entries.iter().filter(|e| matches!(e, StatusEntry::Change(..))).count()
+    }
+
+    #[test]
+    fn test_status_entries_under_the_cap_has_no_show_more() {
+        let changes = untracked(5);
+        let entries = status_entries(&changes, 10);
+        assert_eq!(count_files(&entries), 5);
+        assert!(!entries.iter().any(|e| matches!(e, StatusEntry::ShowMore(_))));
+    }
+
+    #[test]
+    fn test_status_entries_over_the_cap_folds_the_rest() {
+        let changes = untracked(5);
+        let entries = status_entries(&changes, 3);
+        assert_eq!(count_files(&entries), 3);
+        assert!(matches!(entries.last(), Some(StatusEntry::ShowMore(2))));
+    }
+
+    #[test]
+    fn test_status_entries_header_keeps_the_true_count() {
+        let changes = untracked(5);
+        let entries = status_entries(&changes, 1);
+        assert!(matches!(entries.first(), Some(StatusEntry::Header(h)) if h == "Changes (5)"));
+    }
+
+    #[test]
+    fn test_status_entries_unlimited_lists_everything() {
+        let changes = untracked(50);
+        let entries = status_entries(&changes, usize::MAX);
+        assert_eq!(count_files(&entries), 50);
+    }
+
+    #[test]
+    fn test_status_entries_cap_spans_staged_and_unstaged() {
+        let mut changes = untracked(3);
+        for i in 0..3 {
+            changes.push(FileChange {
+                path: format!("s{i}"),
+                original_path: None,
+                index: Some(ChangeKind::Added),
+                worktree: None,
+                conflicted: false,
+            });
+        }
+        // staged are listed first, so a cap of 4 keeps 3 staged + 1 unstaged
+        let entries = status_entries(&changes, 4);
+        assert_eq!(count_files(&entries), 4);
+        assert!(matches!(entries.last(), Some(StatusEntry::ShowMore(2))));
+    }
+
+    #[test]
+    fn test_status_entries_empty() {
+        assert!(status_entries(&[], 10).is_empty());
+    }
+
+    #[test]
+    fn test_commit_window_top_of_panel_shows_no_commits() {
+        // 10 status rows + the heading = 11 rows above the commits
+        let window = commit_window(0.0, 10.0 * ROW_HEIGHT, 10, 500);
+        assert_eq!(window, 0..OVERSCAN);
+    }
+
+    #[test]
+    fn test_commit_window_starts_at_section_boundary() {
+        // viewport top sits exactly on the first commit
+        let window = commit_window(11.0 * ROW_HEIGHT, 10.0 * ROW_HEIGHT, 10, 500);
+        assert_eq!(window, 0..(10 + OVERSCAN));
+    }
+
+    #[test]
+    fn test_commit_window_scrolled_into_the_middle() {
+        let window = commit_window(
+            11.0 * ROW_HEIGHT + ROW_HEIGHT * 100.0,
+            10.0 * ROW_HEIGHT,
+            10,
+            500,
+        );
+        assert_eq!(window, (100 - OVERSCAN)..(110 + OVERSCAN));
+    }
+
+    #[test]
+    fn test_commit_window_clamped_at_the_end() {
+        let window = commit_window(1_000_000.0, 10.0 * ROW_HEIGHT, 10, 500);
+        assert_eq!(window, 500..500);
+    }
+
+    #[test]
+    fn test_commit_window_no_status_entries() {
+        let window = commit_window(ROW_HEIGHT, 10.0 * ROW_HEIGHT, 0, 500);
+        assert_eq!(window, 0..(10 + OVERSCAN));
+    }
+
+    #[test]
+    fn test_commit_window_empty_history() {
+        assert_eq!(commit_window(0.0, 10.0 * ROW_HEIGHT, 10, 0), 0..0);
+    }
 }

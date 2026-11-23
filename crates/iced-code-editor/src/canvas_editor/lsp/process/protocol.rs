@@ -17,7 +17,8 @@ use std::sync::{Arc, Mutex, mpsc};
 use serde_json::json;
 
 use super::pending::{LspRequestKind, PendingRequest};
-use super::{LspEvent, LspPosition, LspRange};
+use super::{LspDiagnostic, LspEvent, LspPosition, LspRange};
+use crate::canvas_editor::lsp::LspSymbol;
 
 /// JSON-RPC method name for server-push progress notifications.
 const METHOD_PROGRESS: &str = "$/progress";
@@ -234,7 +235,8 @@ pub(super) fn handle_server_request(id: u64, method: &str, tx: &mpsc::Sender<Vec
 /// Dispatches a server response to the appropriate pending request handler.
 ///
 /// Looks up the request kind by `id`, parses the result, and emits a
-/// [`LspEvent::Hover`], [`LspEvent::Completion`], or [`LspEvent::Definition`].
+/// [`LspEvent::Hover`], [`LspEvent::Completion`], [`LspEvent::Definition`], or
+/// [`LspEvent::DocumentSymbols`].
 pub(super) fn handle_client_response(
     id: u64,
     value: &serde_json::Value,
@@ -265,19 +267,43 @@ pub(super) fn handle_client_response(
                 let _ = events.send(LspEvent::Definition { uri, range });
             }
         },
+        LspRequestKind::DocumentSymbols { uri } => {
+            let symbols = parse_document_symbols(result);
+            let _ = events.send(LspEvent::DocumentSymbols { uri, symbols });
+        },
     }
 }
 
 /// Handles a server-initiated notification (e.g. `$/progress`).
 ///
-/// Parses the progress payload and emits a [`LspEvent::Progress`].
-/// Notifications for unknown methods are silently ignored.
+/// Forwards progress and diagnostics notifications to the application.
 pub(super) fn handle_server_notification(
     method: &str,
     params: &serde_json::Value,
     events: &mpsc::Sender<LspEvent>,
     server_key: &str,
 ) {
+    if method == "textDocument/publishDiagnostics" {
+        if let (Some(uri), Some(items)) = (params["uri"].as_str(), params["diagnostics"].as_array())
+        {
+            let diagnostics = items
+                .iter()
+                .filter_map(|item| {
+                    Some(LspDiagnostic {
+                        line: usize::try_from(item["range"]["start"]["line"].as_u64()?).ok()?,
+                        severity: item["severity"].as_u64(),
+                        message: item["message"].as_str()?.to_owned(),
+                    })
+                })
+                .collect();
+            let _ = events.send(LspEvent::Diagnostics {
+                uri: uri.to_owned(),
+                diagnostics,
+            });
+        }
+        return;
+    }
+
     if method != METHOD_PROGRESS {
         return;
     }
@@ -319,9 +345,20 @@ fn parse_hover_text(result: &serde_json::Value) -> Option<String> {
     hover_text_from_contents(contents)
 }
 
-/// Recursively extracts hover text from various content formats.
+/// Separator placed between the parts of an array hover response: a markdown
+/// rule, so the signature and the documentation render as separate sections.
+const HOVER_PART_SEPARATOR: &str = "\n\n---\n\n";
+
+/// Recursively extracts markdown hover text from the shapes `contents` takes.
 ///
-/// Handles strings, arrays, and objects with a `"value"` field.
+/// - A string (a legacy `MarkedString`) is already markdown and is returned
+///   as is.
+/// - An object with a string `language` and `value` (a legacy `MarkedString`
+///   carrying code) becomes a fenced code block tagged with that language, so
+///   it renders as highlighted code instead of prose.
+/// - Any other object with a `value`, such as `MarkupContent`
+///   (`{ kind, value }`), returns its value unchanged.
+/// - An array joins its parts with a markdown rule between them.
 fn hover_text_from_contents(value: &serde_json::Value) -> Option<String> {
     match value {
         serde_json::Value::String(text) => Some(text.clone()),
@@ -330,11 +367,18 @@ fn hover_text_from_contents(value: &serde_json::Value) -> Option<String> {
             if parts.is_empty() {
                 None
             } else {
-                Some(parts.join("\n"))
+                Some(parts.join(HOVER_PART_SEPARATOR))
             }
         },
         serde_json::Value::Object(map) => {
-            map.get("value").and_then(|v| v.as_str()).map(String::from)
+            let text = map.get("value").and_then(|v| v.as_str())?;
+            match map.get("language").and_then(|l| l.as_str()) {
+                Some(language) => Some(format!(
+                    "```{language}\n{}\n```",
+                    text.trim_end_matches('\n')
+                )),
+                None => Some(text.to_string()),
+            }
         },
         _ => None,
     }
@@ -416,6 +460,99 @@ fn parse_definition_location(result: &serde_json::Value) -> Option<(String, LspR
     } else {
         None
     }
+}
+
+/// Parses a `textDocument/documentSymbol` response into a symbol tree.
+///
+/// Servers answer with either hierarchical `DocumentSymbol[]` or flat
+/// `SymbolInformation[]`. The flat form is nested by range containment so
+/// both read the same to callers. Ranges are kept as sent (UTF-16 columns);
+/// callers only compare lines, which are unaffected by the encoding.
+fn parse_document_symbols(result: &serde_json::Value) -> Vec<LspSymbol> {
+    let Some(items) = result.as_array() else {
+        return Vec::new();
+    };
+    if items.iter().any(|item| item.get("location").is_some()) {
+        nest_flat_symbols(items.iter().filter_map(parse_symbol_information).collect())
+    } else {
+        items.iter().filter_map(parse_document_symbol).collect()
+    }
+}
+
+/// Parses one hierarchical `DocumentSymbol`, including its children.
+fn parse_document_symbol(value: &serde_json::Value) -> Option<LspSymbol> {
+    let name = value.get("name")?.as_str()?.to_string();
+    let range = extract_range(value.get("range")?)?;
+    let children = value
+        .get("children")
+        .and_then(|children| children.as_array())
+        .map(|children| children.iter().filter_map(parse_document_symbol).collect())
+        .unwrap_or_default();
+    Some(LspSymbol {
+        name,
+        range,
+        children,
+    })
+}
+
+/// Parses one flat `SymbolInformation` into a childless symbol.
+fn parse_symbol_information(value: &serde_json::Value) -> Option<LspSymbol> {
+    let name = value.get("name")?.as_str()?.to_string();
+    let range = extract_range(value.get("location")?.get("range")?)?;
+    Some(LspSymbol {
+        name,
+        range,
+        children: Vec::new(),
+    })
+}
+
+/// Returns `(line, character)` of a position, for ordering comparisons.
+fn position_key(position: LspPosition) -> (u32, u32) {
+    (position.line, position.character)
+}
+
+/// Returns `true` if `outer`'s range fully contains `inner`'s range.
+fn encloses(outer: &LspSymbol, inner: &LspSymbol) -> bool {
+    position_key(outer.range.start) <= position_key(inner.range.start)
+        && position_key(inner.range.end) <= position_key(outer.range.end)
+}
+
+/// Pops the innermost open symbol and attaches it to its parent, or to the
+/// roots when no enclosing symbol is open.
+fn close_top(stack: &mut Vec<LspSymbol>, roots: &mut Vec<LspSymbol>) {
+    if let Some(done) = stack.pop() {
+        match stack.last_mut() {
+            Some(parent) => parent.children.push(done),
+            None => roots.push(done),
+        }
+    }
+}
+
+/// Nests a flat symbol list into a tree by range containment.
+///
+/// Symbols are ordered by start (outer symbols first when two start
+/// together), then each one becomes a child of the nearest earlier symbol
+/// whose range encloses it.
+fn nest_flat_symbols(mut flat: Vec<LspSymbol>) -> Vec<LspSymbol> {
+    flat.sort_by(|a, b| {
+        position_key(a.range.start)
+            .cmp(&position_key(b.range.start))
+            .then_with(|| position_key(b.range.end).cmp(&position_key(a.range.end)))
+    });
+
+    let mut roots = Vec::new();
+    let mut stack: Vec<LspSymbol> = Vec::new();
+
+    for symbol in flat {
+        while stack.last().is_some_and(|top| !encloses(top, &symbol)) {
+            close_top(&mut stack, &mut roots);
+        }
+        stack.push(symbol);
+    }
+    while !stack.is_empty() {
+        close_top(&mut stack, &mut roots);
+    }
+    roots
 }
 
 #[cfg(test)]
@@ -782,6 +919,50 @@ mod tests {
     }
 
     // -------------------------------------------------------------------------
+    // hover_text_from_contents
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_hover_text_from_contents_marked_string_is_fenced() {
+        let contents = serde_json::json!({ "language": "rust", "value": "fn main()\n" });
+        assert_eq!(
+            hover_text_from_contents(&contents),
+            Some("```rust\nfn main()\n```".to_string())
+        );
+    }
+
+    #[test]
+    fn test_hover_text_from_contents_array_has_divider() {
+        let contents = serde_json::json!([
+            { "language": "python", "value": "def greet(name: str) -> str" },
+            "Returns a greeting."
+        ]);
+        assert_eq!(
+            hover_text_from_contents(&contents),
+            Some(
+                "```python\ndef greet(name: str) -> str\n```\n\n---\n\nReturns a greeting."
+                    .to_string()
+            )
+        );
+    }
+
+    #[test]
+    fn test_hover_text_from_contents_markup_content_unchanged() {
+        let markdown = "```rust\nfn main()\n```\n\n---\n\nThe entry point.";
+        let contents = serde_json::json!({ "kind": "markdown", "value": markdown });
+        assert_eq!(
+            hover_text_from_contents(&contents),
+            Some(markdown.to_string())
+        );
+
+        let contents = serde_json::json!({ "kind": "plaintext", "value": "fn main()" });
+        assert_eq!(
+            hover_text_from_contents(&contents),
+            Some("fn main()".to_string())
+        );
+    }
+
+    // -------------------------------------------------------------------------
     // handle_client_response
     // -------------------------------------------------------------------------
 
@@ -829,6 +1010,99 @@ mod tests {
         }
     }
 
+    fn symbol_names(symbols: &[LspSymbol]) -> Vec<&str> {
+        symbols.iter().map(|symbol| symbol.name.as_str()).collect()
+    }
+
+    fn json_range(start: u32, end: u32) -> serde_json::Value {
+        serde_json::json!({
+            "start": { "line": start, "character": 0 },
+            "end": { "line": end, "character": 1 }
+        })
+    }
+
+    #[test]
+    fn test_parse_document_symbols_reads_hierarchy() -> Result<(), Box<dyn std::error::Error>> {
+        let result = serde_json::json!([{
+            "name": "Editor",
+            "kind": 23,
+            "range": json_range(0, 10),
+            "selectionRange": json_range(0, 0),
+            "children": [{
+                "name": "render",
+                "kind": 6,
+                "range": json_range(2, 5),
+                "selectionRange": json_range(2, 2)
+            }]
+        }]);
+
+        let symbols = parse_document_symbols(&result);
+        assert_eq!(symbol_names(&symbols), ["Editor"]);
+        let editor = symbols.first().ok_or("missing Editor symbol")?;
+        assert_eq!(symbol_names(&editor.children), ["render"]);
+        Ok(())
+    }
+
+    #[test]
+    fn test_parse_document_symbols_nests_flat_symbol_information()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let location = |start, end| serde_json::json!({ "uri": "file:///a.lua", "range": json_range(start, end) });
+        // Out of order on purpose: nesting must not depend on response order.
+        let result = serde_json::json!([
+            { "name": "inner", "kind": 12, "location": location(3, 4) },
+            { "name": "outer", "kind": 12, "location": location(1, 8) },
+            { "name": "after", "kind": 12, "location": location(10, 12) },
+        ]);
+
+        let symbols = parse_document_symbols(&result);
+        assert_eq!(symbol_names(&symbols), ["outer", "after"]);
+        let outer = symbols.first().ok_or("missing outer symbol")?;
+        assert_eq!(symbol_names(&outer.children), ["inner"]);
+        Ok(())
+    }
+
+    #[test]
+    fn test_parse_document_symbols_null_result_is_empty() {
+        assert!(parse_document_symbols(&serde_json::Value::Null).is_empty());
+    }
+
+    #[test]
+    fn test_parse_document_symbols_skips_malformed_entries() {
+        let result = serde_json::json!([
+            { "name": "ok", "range": json_range(0, 1) },
+            { "name": "no range" },
+            { "range": json_range(2, 3) },
+        ]);
+        assert_eq!(symbol_names(&parse_document_symbols(&result)), ["ok"]);
+    }
+
+    #[test]
+    fn test_handle_client_response_document_symbols() -> Result<(), Box<dyn std::error::Error>> {
+        let (events_tx, events_rx) = mpsc::channel::<LspEvent>();
+        let pending = Arc::new(Mutex::new(HashMap::new()));
+        pending.lock().unwrap_or_else(|e| e.into_inner()).insert(
+            4u64,
+            pending_request(LspRequestKind::DocumentSymbols {
+                uri: "file:///foo/bar.rs".to_string(),
+            }),
+        );
+
+        let value = serde_json::json!({
+            "id": 4,
+            "result": [{ "name": "main", "range": json_range(0, 2) }]
+        });
+        handle_client_response(4, &value, &pending, &events_tx);
+
+        match events_rx.try_recv()? {
+            LspEvent::DocumentSymbols { uri, symbols } => {
+                assert_eq!(uri, "file:///foo/bar.rs");
+                assert_eq!(symbol_names(&symbols), ["main"]);
+                Ok(())
+            },
+            _ => Err("expected LspEvent::DocumentSymbols".into()),
+        }
+    }
+
     #[test]
     #[allow(clippy::expect_used, clippy::panic, clippy::unwrap_used)]
     fn test_handle_client_response_definition() {
@@ -857,6 +1131,51 @@ mod tests {
             },
             _ => panic!("expected LspEvent::Definition"),
         }
+    }
+
+    #[test]
+    fn test_handle_server_notification_publishes_and_clears_diagnostics()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let (tx, rx) = mpsc::channel();
+        let uri = "file:///project/file%20name.rs";
+        let mut params = json!({
+            "uri": uri,
+            "diagnostics": [
+                {
+                    "range": { "start": { "line": 3, "character": 0 } },
+                    "severity": 1,
+                    "message": "Unexpected token"
+                },
+                {
+                    "range": { "start": { "line": 5, "character": 2 } },
+                    "severity": 2,
+                    "message": "Unused binding"
+                }
+            ]
+        });
+
+        handle_server_notification("textDocument/publishDiagnostics", &params, &tx, "test");
+        let LspEvent::Diagnostics {
+            uri: path,
+            diagnostics,
+        } = rx.try_recv()?
+        else {
+            return Err("expected diagnostics".into());
+        };
+        assert_eq!(path, uri);
+        assert_eq!(diagnostics.len(), 2);
+        assert_eq!(diagnostics[0].line, 3);
+        assert_eq!(diagnostics[0].severity, Some(1));
+        assert_eq!(diagnostics[0].message, "Unexpected token");
+        assert_eq!(diagnostics[1].severity, Some(2));
+
+        params["diagnostics"] = json!([]);
+        handle_server_notification("textDocument/publishDiagnostics", &params, &tx, "test");
+        let LspEvent::Diagnostics { diagnostics, .. } = rx.try_recv()? else {
+            return Err("expected cleared diagnostics".into());
+        };
+        assert!(diagnostics.is_empty());
+        Ok(())
     }
 
     #[test]

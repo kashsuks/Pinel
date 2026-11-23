@@ -15,14 +15,44 @@ use super::chat_providers::ProviderApi;
 const ANTHROPIC_VERSION: &str = "2023-06-01";
 const REQUEST_TIMEOUT_SECS: u64 = 60;
 
-/// State of an in-flight or completed model list fetch for one provider,
-/// cached in `App` so switching back to a provider in the picker doesn't
-/// re-fetch every time.
+/// State of a model lookup in the picker or a connection test in settings.
 #[derive(Debug, Clone)]
 pub enum ModelFetchState {
-    Loading,
+    /// An outstanding request, identified by its request ID.
+    Loading(u64),
+    /// Model IDs returned by the server.
     Loaded(Vec<String>),
+    /// An error to display in the UI.
     Error(String),
+}
+
+impl ModelFetchState {
+    /// Applies a model list result if the request is still current.
+    pub fn finish(&mut self, request_id: u64, result: Result<Vec<String>, String>) {
+        if matches!(self, Self::Loading(current_id) if *current_id == request_id) {
+            *self = match result {
+                Ok(models) => Self::Loaded(models),
+                Err(error) => Self::Error(error),
+            };
+        }
+    }
+}
+
+/// Normalizes an HTTP API base URL without changing its path prefix.
+pub fn normalize_base_url(input: &str) -> Result<String, String> {
+    const INVALID_URL: &str =
+        "Enter an HTTP or HTTPS API base URL without credentials, a query, or a fragment.";
+    let url = url::Url::parse(input.trim()).map_err(|_| INVALID_URL.to_string())?;
+    if !matches!(url.scheme(), "http" | "https")
+        || url.host().is_none()
+        || !url.username().is_empty()
+        || url.password().is_some()
+        || url.query().is_some()
+        || url.fragment().is_some()
+    {
+        return Err(INVALID_URL.to_string());
+    }
+    Ok(url.as_str().trim_end_matches('/').to_string())
 }
 
 fn client() -> Result<reqwest::Client, String> {
@@ -101,6 +131,7 @@ async fn list_models_openai_compatible(
     api_key: &str,
 ) -> Result<Vec<String>, String> {
     let client = client()?;
+    let base_url = normalize_base_url(base_url)?;
     let url = format!("{base_url}/models");
     let mut request = client.get(url);
     if !api_key.is_empty() {
@@ -152,6 +183,7 @@ async fn send_message_openai_compatible(
     messages: &[ChatMessage],
 ) -> Result<String, String> {
     let client = client()?;
+    let base_url = normalize_base_url(base_url)?;
     let url = format!("{base_url}/chat/completions");
 
     let body = OpenAiChatRequest {
@@ -282,6 +314,44 @@ fn role_str(role: ChatRole) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_normalize_base_url_preserves_prefix_and_removes_trailing_slashes(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        assert_eq!(
+            normalize_base_url("  http://localhost:11434/proxy/v1//  ")?,
+            "http://localhost:11434/proxy/v1"
+        );
+        assert_eq!(
+            normalize_base_url("http://[::1]:1234/v1/")?,
+            "http://[::1]:1234/v1"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_normalize_base_url_rejects_invalid_endpoint_components() {
+        for input in [
+            "localhost:11434/v1",
+            "file:///tmp/server",
+            "https://user:secret@localhost/v1",
+            "https://localhost/v1?debug",
+            "https://localhost/v1#fragment",
+        ] {
+            assert!(normalize_base_url(input).is_err(), "{input}");
+        }
+    }
+
+    #[test]
+    fn test_model_fetch_finish_ignores_superseded_results() {
+        let mut state = ModelFetchState::Loading(2);
+        state.finish(1, Ok(vec!["old-model".into()]));
+        assert!(matches!(state, ModelFetchState::Loading(2)));
+
+        state.finish(2, Ok(vec!["current-model".into()]));
+        state.finish(1, Err("old failure".into()));
+        assert!(matches!(state, ModelFetchState::Loaded(models) if models == ["current-model"]));
+    }
 
     #[test]
     fn extracts_message_from_openrouter_style_error() {
