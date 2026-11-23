@@ -881,7 +881,7 @@ impl App {
     }
 }
 
-/// Size of the status bar's text: the 13px body size, so the bar reads at a
+/// Size of the status bar's text: the 15px body size, so the bar reads at a
 /// glance rather than at the 12px used for other secondary text.
 const STATUS_TEXT_SIZE: f32 = TEXT_MD;
 
@@ -896,7 +896,7 @@ const VIM_PILL_PADDING_Y: f32 = 2.0;
 ///
 /// iced's line box keeps room for descenders under the baseline, and the
 /// labels are all capitals, which have none, so the letters sit high in the
-/// box. Measured on screen at [`VIM_PILL_TEXT_SIZE`] (12px), the capitals
+/// box. Measured on screen at [`VIM_PILL_TEXT_SIZE`] (14px), the capitals
 /// were 2px above the pill's centre; re-measure if that size changes.
 const VIM_PILL_LABEL_NUDGE: f32 = 2.0;
 
@@ -905,7 +905,7 @@ const _: () = assert!(VIM_PILL_LABEL_NUDGE <= VIM_PILL_PADDING_Y);
 
 /// Fixed height of the status bar: `SPACE_2` above and below one line of
 /// [`STATUS_TEXT_SIZE`] text, which iced lays out at its default line height
-/// of 1.3 times the font size (13 × 1.3 = 16.9px). 32.9px in all, and the bar
+/// of 1.3 times the font size (15 × 1.3 = 19.5px). 35.5px in all, and the bar
 /// cannot grow with its contents.
 const STATUS_BAR_HEIGHT: f32 = SPACE_2 + STATUS_TEXT_SIZE * 1.3 + SPACE_2;
 
@@ -1240,8 +1240,8 @@ mod tests {
 
     #[test]
     fn test_status_bar_height_is_one_line_plus_padding() -> Result<(), Box<dyn std::error::Error>> {
-        // 8px + one 13px line at iced's 1.3 line height + 8px
-        assert!((STATUS_BAR_HEIGHT - 32.9).abs() < 0.01);
+        // 8px + one 15px line at iced's 1.3 line height + 8px
+        assert!((STATUS_BAR_HEIGHT - 35.5).abs() < 0.01);
         Ok(())
     }
 }

@@ -631,7 +631,7 @@ impl App {
         editor.set_theme(theme().editor_style);
         editor.set_font(iced::Font {
             family: iced::font::Family::Name("Fira Code"),
-            weight: iced::font::Weight::Normal,
+            weight: iced::font::Weight::Medium,
             ..iced::Font::DEFAULT
         });
 

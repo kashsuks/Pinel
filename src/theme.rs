@@ -22,21 +22,21 @@ pub const BORDER_RADIUS_TAB: f32 = RADIUS_LG;
 
 // Text Size Scale
 /// Extra-small UI text: badges, hints and secondary metadata.
-pub const TEXT_XS: f32 = 11.0;
+pub const TEXT_XS: f32 = 13.0;
 /// Small UI text: secondary text such as the status bar, breadcrumbs,
 /// metadata (hashes, dates, counts), hints, and loading or empty states.
-pub const TEXT_SM: f32 = 12.0;
+pub const TEXT_SM: f32 = 14.0;
 /// Medium UI text: primary labels, inputs and body copy.
-pub const TEXT_MD: f32 = 13.0;
+pub const TEXT_MD: f32 = 15.0;
 /// Large UI text: prominent inputs such as the finder and palette queries.
-pub const TEXT_LG: f32 = 15.0;
+pub const TEXT_LG: f32 = 17.0;
 /// Font size of the code editor text, in pixels.
 ///
 /// Applied together with [`CODE_LINE_HEIGHT`] by [`apply_code_metrics`].
-pub const CODE_FONT_SIZE: f32 = 14.0;
+pub const CODE_FONT_SIZE: f32 = 16.0;
 /// Line height of the code editor text, in pixels. Set as a fixed value
 /// rather than scaled from [`CODE_FONT_SIZE`].
-pub const CODE_LINE_HEIGHT: f32 = 22.0;
+pub const CODE_LINE_HEIGHT: f32 = 24.0;
 
 /// Applies [`CODE_FONT_SIZE`] and [`CODE_LINE_HEIGHT`] to `editor`.
 ///
