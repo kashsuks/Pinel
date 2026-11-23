@@ -171,51 +171,60 @@ impl App {
             return iced::widget::Space::new().into();
         };
 
-        let label = text(format!("Pinel {} is available", info.version))
-            .size(TEXT_MD)
-            .color(Color::from_rgb(0.85, 0.93, 1.0));
+        let label = text(format!(
+            "Pinel {} is available (installed: {})",
+            info.version,
+            crate::features::updater::CURRENT_VERSION
+        ))
+        .size(TEXT_MD)
+        .color(Color::from_rgb(0.85, 0.93, 1.0));
 
-        let open_btn = button(
-            text("Open release page →")
-                .size(TEXT_MD)
-                .color(Color::from_rgb(0.55, 0.75, 1.0)),
+        let open_btn =
+            button(text("View release →").size(TEXT_MD).color(Color::from_rgb(0.55, 0.75, 1.0)))
+                .on_press(Message::OpenUrl(info.url.clone()))
+                .style(|_theme, _status| button::Style {
+                    background: Some(Background::Color(Color::from_rgba(0.30, 0.55, 1.0, 0.15))),
+                    border: iced::Border {
+                        color: Color::from_rgba(0.40, 0.65, 1.0, 0.35),
+                        width: 1.0,
+                        radius: RADIUS_SM.into(),
+                    },
+                    text_color: Color::from_rgb(0.55, 0.75, 1.0),
+                    ..Default::default()
+                })
+                .padding(iced::Padding {
+                    top: 5.0,
+                    right: SPACE_3,
+                    bottom: 5.0,
+                    left: SPACE_3,
+                });
+
+        let dismiss_btn = button(
+            text("Remind me tomorrow")
+                .size(TEXT_SM)
+                .color(Color::from_rgba(0.65, 0.80, 1.0, 0.7)),
         )
         .on_press(Message::DismissUpdateBanner)
         .style(|_theme, _status| button::Style {
-            background: Some(Background::Color(Color::from_rgba(0.30, 0.55, 1.0, 0.15))),
-            border: iced::Border {
-                color: Color::from_rgba(0.40, 0.65, 1.0, 0.35),
-                width: 1.0,
-                radius: RADIUS_SM.into(),
-            },
-            text_color: Color::from_rgb(0.55, 0.75, 1.0),
+            background: None,
+            border: iced::Border::default(),
+            text_color: Color::from_rgba(0.65, 0.80, 1.0, 0.7),
             ..Default::default()
         })
         .padding(iced::Padding {
-            top: 5.0,
-            right: SPACE_3,
-            bottom: 5.0,
-            left: SPACE_3,
+            top: 0.0,
+            right: SPACE_1,
+            bottom: 0.0,
+            left: SPACE_2,
         });
 
-        let dismiss_btn = button(text("×").size(14).color(Color::from_rgba(0.65, 0.80, 1.0, 0.7)))
-            .on_press(Message::DismissUpdateBanner)
-            .style(|_theme, _status| button::Style {
-                background: None,
-                border: iced::Border::default(),
-                text_color: Color::from_rgba(0.65, 0.80, 1.0, 0.7),
-                ..Default::default()
-            })
-            .padding(iced::Padding {
-                top: 0.0,
-                right: SPACE_1,
-                bottom: 0.0,
-                left: SPACE_2,
-            });
-
-        let banner_inner = row![label, open_btn, dismiss_btn]
-            .spacing(SPACE_3)
-            .align_y(iced::Alignment::Center);
+        let skip_btn =
+            button(text("Skip this version").size(TEXT_SM)).on_press(Message::SkipUpdateVersion);
+        let banner_inner = column![
+            label,
+            row![open_btn, dismiss_btn, skip_btn].spacing(SPACE_2)
+        ]
+        .spacing(SPACE_3);
 
         let banner = container(banner_inner)
             .padding(iced::Padding {

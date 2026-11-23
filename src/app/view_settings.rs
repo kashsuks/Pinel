@@ -221,7 +221,9 @@ impl App {
                 .size(TEXT_MD)
                 .color(theme().text_muted)
                 .width(Length::Fixed(140.0)),
-            text("1.0.0").size(TEXT_MD).color(theme().text_primary),
+            text(crate::features::updater::CURRENT_VERSION)
+                .size(TEXT_MD)
+                .color(theme().text_primary),
         ]
         .spacing(SPACE_3)
         .align_y(iced::Alignment::Center);
@@ -252,7 +254,13 @@ impl App {
             separator,
             app_name_row,
             version_row,
-            framework_row
+            framework_row,
+            iced::widget::checkbox(!self.update_state.disabled)
+                .label("Automatically check for updates")
+                .on_toggle(Message::ToggleAutomaticUpdates),
+            button(text("Check for updates"))
+                .on_press_maybe((!self.update_check_in_flight).then_some(Message::CheckForUpdate)),
+            text(&self.update_status).size(TEXT_SM).color(theme().text_muted)
         ]
         .spacing(SPACE_3)
         .width(Length::Fill)

@@ -3659,20 +3659,33 @@ impl App {
                 self.startup_run_on_startup = !self.startup_run_on_startup;
                 iced::Task::none()
             },
-            Message::CheckForUpdate => {
-                iced::Task::perform(crate::features::updater::check_for_update(), |result| {
-                    match result {
-                        Some(info) => Message::UpdateAvailable(info),
-                        None => Message::DismissUpdateBanner,
-                    }
-                })
+            Message::CheckForUpdate => self.start_update_check(true),
+            Message::UpdateChecked { manual, result } => {
+                self.finish_update_check(manual, result);
+                iced::Task::none()
             },
-            Message::UpdateAvailable(info) => {
-                self.update_banner = Some(info);
+            Message::ToggleAutomaticUpdates(enabled) => {
+                self.update_state.disabled = !enabled;
+                self.update_banner = self.update_state.notification(
+                    crate::features::updater::CURRENT_VERSION,
+                    crate::features::updater::now(),
+                );
+                self.save_update_state();
+                iced::Task::none()
+            },
+            Message::SkipUpdateVersion => {
+                if let Some(info) = self.update_banner.take() {
+                    self.update_state.skipped_version = Some(info.version);
+                    self.save_update_state();
+                }
                 iced::Task::none()
             },
             Message::DismissUpdateBanner => {
-                self.update_banner = None;
+                if let Some(info) = self.update_banner.take() {
+                    self.update_state
+                        .remind_tomorrow(info.version, crate::features::updater::now());
+                    self.save_update_state();
+                }
                 iced::Task::none()
             },
             Message::ActiveFileChanged => {

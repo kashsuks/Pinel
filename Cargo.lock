@@ -5351,6 +5351,7 @@ dependencies = [
  "rodio",
  "ropey",
  "rustls-webpki",
+ "semver",
  "serde",
  "serde_json",
  "syntect",

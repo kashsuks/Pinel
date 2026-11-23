@@ -303,7 +303,15 @@ pub enum Message {
     OpenProviderSettings,
 
     CheckForUpdate,
-    UpdateAvailable(crate::features::updater::UpdateInfo),
+    /// Completes a release check; manual checks always show their result.
+    UpdateChecked {
+        manual: bool,
+        result: Result<Option<crate::features::updater::UpdateInfo>, String>,
+    },
+    /// Changes whether startup contacts GitHub for updates.
+    ToggleAutomaticUpdates(bool),
+    /// Suppresses automatic notifications for this release only.
+    SkipUpdateVersion,
     DismissUpdateBanner,
 
     // all the ones below are related to media playback

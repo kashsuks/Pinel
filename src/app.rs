@@ -44,6 +44,7 @@ mod commands;
 mod lifecycle;
 mod subscription;
 mod update;
+mod updates;
 mod view_commit;
 mod view_editor;
 mod view_finders;
@@ -327,6 +328,9 @@ pub struct App {
 
     notification: Option<Notification>,
     update_banner: Option<UpdateInfo>,
+    update_state: crate::features::updater::UpdateState,
+    update_check_in_flight: bool,
+    update_status: String,
 
     lsp: crate::features::lsp::LspManager,
     lsp_diagnostics: HashMap<PathBuf, Vec<crate::features::lsp::InlineDiagnostic>>,
@@ -539,6 +543,9 @@ impl Default for App {
 
             notification: None,
             update_banner: None,
+            update_state: crate::features::updater::UpdateState::load(),
+            update_check_in_flight: false,
+            update_status: String::new(),
 
             lsp: crate::features::lsp::LspManager::new(),
             lsp_diagnostics: HashMap::new(),
