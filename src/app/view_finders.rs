@@ -24,25 +24,26 @@ impl App {
             .style(search_input_style)
             .width(Length::Fill);
 
-        let folder_label: Element<'_, Message> =
-            if let Some(folder) = &self.fuzzy_finder.current_folder {
-                container(text(format!("{}", folder.display())).size(10).color(theme().text_dim))
-                    .padding(iced::Padding {
-                        top: 0.0,
-                        right: 18.0,
-                        bottom: 0.0,
-                        left: 18.0,
-                    })
-                    .into()
-            } else {
-                container(text("")).into()
-            };
+        let folder_label: Element<'_, Message> = if let Some(folder) =
+            &self.fuzzy_finder.current_folder
+        {
+            container(text(format!("{}", folder.display())).size(TEXT_XS).color(theme().text_muted))
+                .padding(iced::Padding {
+                    top: 0.0,
+                    right: 18.0,
+                    bottom: 0.0,
+                    left: 18.0,
+                })
+                .into()
+        } else {
+            container(text("")).into()
+        };
 
         let mut items: Vec<Element<'_, Message>> = Vec::new();
 
         if self.fuzzy_finder.filtered_files.is_empty() {
             items.push(
-                container(text("No files found").size(TEXT_MD).color(theme().text_dim))
+                container(text("No files found").size(TEXT_MD).color(theme().text_muted))
                     .padding(20)
                     .width(Length::Fill)
                     .center_x(Length::Fill)
@@ -161,7 +162,8 @@ impl App {
                                 style.foreground.b,
                                 style.foreground.a as f32 / 255.0,
                             ))
-                            .size(TEXT_XS),
+                            .size(self.editor_preferences.editor_font_size)
+                            .font(self.editor_preferences.code_font()),
                     );
                 }
 
@@ -172,7 +174,7 @@ impl App {
             let preview_header = container(
                 text(preview_path.file_name().unwrap_or_default().to_string_lossy().to_string())
                     .size(TEXT_XS)
-                    .color(theme().text_dim),
+                    .color(theme().text_muted),
             )
             .padding(iced::Padding {
                 top: SPACE_2,
@@ -203,7 +205,7 @@ impl App {
                 .height(Length::Fill)
                 .into()
         } else {
-            container(text("No preview available").size(TEXT_MD).color(theme().text_dim))
+            container(text("No preview available").size(TEXT_MD).color(theme().text_muted))
                 .width(Length::Fill)
                 .height(Length::Fill)
                 .center_x(Length::Fill)
@@ -264,7 +266,7 @@ impl App {
         if self.file_finder_query.is_empty() {
             if !self.recent_files.is_empty() {
                 items.push(
-                    container(text("Recent Files").size(10).color(theme().text_dim))
+                    container(text("Recent Files").size(TEXT_XS).color(theme().text_muted))
                         .padding(iced::Padding {
                             top: SPACE_2,
                             right: SPACE_2,
@@ -295,7 +297,7 @@ impl App {
                             } else {
                                 theme().text_muted
                             }),
-                            text(parent).size(TEXT_XS).color(theme().text_dim),
+                            text(parent).size(TEXT_XS).color(theme().text_muted),
                         ]
                         .spacing(10)
                         .align_y(iced::Alignment::Center),

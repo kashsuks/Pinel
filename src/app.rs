@@ -187,6 +187,7 @@ pub struct App {
 
     sidebar_visible: bool,
     sidebar_width: f32,
+    chat_width: f32,
 
     resizing_sidebar: bool,
     resize_start_x: Option<f32>,
@@ -397,7 +398,8 @@ impl Default for App {
             cursor_col: 1,
             file_tree: None,
             sidebar_visible: true,
-            sidebar_width: SIDEBAR_DEFAULT_WIDTH,
+            sidebar_width: editor_preferences.sidebar_width,
+            chat_width: editor_preferences.chat_width,
             resizing_sidebar: false,
             resize_start_x: None,
             resize_start_width: SIDEBAR_DEFAULT_WIDTH,
@@ -430,6 +432,7 @@ impl Default for App {
                 };
 
                 let settings = iced_term::settings::Settings {
+                    font: editor_preferences.terminal_font(),
                     backend: iced_term::settings::BackendSettings {
                         program: shell,
                         ..Default::default()
@@ -626,14 +629,50 @@ impl App {
     #[cfg(not(feature = "unstable-comet"))]
     pub fn dev_log(&mut self, _message: String) {}
 
+    /// Additional zoom applied on top of the operating system display scale.
+    pub fn ui_scale(&self) -> f32 {
+        self.editor_preferences.ui_scale
+    }
+
+    fn apply_typography_to_tabs(&mut self) {
+        let font = self.editor_preferences.code_font();
+        let size = self.editor_preferences.editor_font_size;
+        for tab in &mut self.tabs {
+            if let TabKind::Editor { code_editor, .. } = &mut tab.kind {
+                code_editor.set_font(font);
+                apply_code_metrics(code_editor, size);
+            }
+        }
+        if let Some(terminal) = &mut self.terminal_pane {
+            terminal.handle(iced_term::Command::ChangeFont(
+                self.editor_preferences.terminal_font(),
+            ));
+        }
+    }
+
+    /// Width of the active sidebar, with a separate conversation width.
+    fn active_panel_width(&self) -> f32 {
+        if self.active_panel == ActivePanel::Chat {
+            self.chat_width
+        } else {
+            self.sidebar_width
+        }
+    }
+
+    fn set_active_panel_width(&mut self, width: f32) {
+        if self.active_panel == ActivePanel::Chat {
+            self.chat_width = width.clamp(320.0, 640.0);
+            self.editor_preferences.chat_width = self.chat_width;
+        } else {
+            self.sidebar_width = width.clamp(SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH);
+            self.editor_preferences.sidebar_width = self.sidebar_width;
+        }
+    }
+
     pub(super) fn configured_code_editor(&self, content: &str, syntax: &str) -> CodeEditor {
         let mut editor = iced_code_editor::CodeEditor::new(content, syntax);
         editor.set_theme(theme().editor_style);
-        editor.set_font(iced::Font {
-            family: iced::font::Family::Name("Fira Code"),
-            weight: iced::font::Weight::Normal,
-            ..iced::Font::DEFAULT
-        });
+        editor.set_font(self.editor_preferences.code_font());
 
         editor.set_search_replace_enabled(false);
         // Pinel draws its own themed palette (Cmd/Ctrl+Shift+P); stop the
@@ -641,7 +680,7 @@ impl App {
         editor.set_command_palette_enabled(false);
         editor.set_line_numbers_enabled(true);
         editor.set_wrap_enabled(false);
-        apply_code_metrics(&mut editor);
+        apply_code_metrics(&mut editor, self.editor_preferences.editor_font_size);
 
         // iced-code-editor builtin indentation
         let indent_style = if self.editor_preferences.use_spaces {
@@ -1032,7 +1071,7 @@ impl App {
                 self.sidebar_visible = visible;
             },
             EditorCommand::SetSidebarWidth(width) => {
-                self.sidebar_width = width.clamp(SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH);
+                self.set_active_panel_width(width);
             },
         }
     }

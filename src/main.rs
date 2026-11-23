@@ -25,6 +25,7 @@ mod wakatime;
 
 const FIRA_CODE_BOLD: &[u8] = include_bytes!("assets/fonts/FiraCode-Bold.ttf");
 const FIRA_CODE_REGULAR: &[u8] = include_bytes!("assets/fonts/FiraCode-Regular.ttf");
+const FIRA_CODE_MEDIUM: &[u8] = include_bytes!("assets/fonts/FiraCode-Medium.ttf");
 const SF_PRO: &[u8] = include_bytes!("assets/fonts/SF-Pro.ttf");
 
 fn main() -> iced::Result {
@@ -65,12 +66,15 @@ fn run_gui(startup_path: Option<PathBuf>) -> iced::Result {
         app::App::view,
     )
     .title("Pinel")
+    .scale_factor(app::App::ui_scale)
     .subscription(|app| app.subscription())
     .font(FIRA_CODE_BOLD)
     .font(FIRA_CODE_REGULAR)
+    .font(FIRA_CODE_MEDIUM)
     .font(SF_PRO)
     .default_font(iced::Font {
         family: iced::font::Family::Name("SF Pro"),
+        weight: iced::font::Weight::Medium,
         ..iced::Font::DEFAULT
     })
     .window_size((window_width, window_height))

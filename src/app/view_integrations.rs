@@ -10,7 +10,7 @@ impl App {
         let heading = text("Theme").size(18).color(theme().text_primary);
         let desc = text("Theme options have been moved to Preferences.")
             .size(TEXT_SM)
-            .color(theme().text_dim);
+            .color(theme().text_muted);
 
         let separator = container(Space::new().width(Length::Fill).height(Length::Fixed(1.0)))
             .style(|_theme| container::Style {
@@ -39,7 +39,7 @@ impl App {
 
         let reload_desc = text("Or reload a custom theme.lua from ~/.config/pinel/")
             .size(TEXT_XS)
-            .color(theme().text_dim);
+            .color(theme().text_muted);
 
         let reload_btn =
             button(text("↻  Reload theme.lua").size(TEXT_MD).color(theme().text_primary))
@@ -81,7 +81,7 @@ impl App {
         let heading = text("WakaTime").size(18).color(theme().text_primary);
         let desc = text("Configure WakaTime integration for activity tracking.")
             .size(TEXT_SM)
-            .color(theme().text_dim);
+            .color(theme().text_muted);
 
         let separator = container(Space::new().width(Length::Fill).height(Length::Fixed(1.0)))
             .style(|_theme| container::Style {
@@ -193,7 +193,7 @@ impl App {
                 text("API Key").size(TEXT_MD).color(theme().text_muted),
                 text("Your WakaTime API key for authentication")
                     .size(TEXT_XS)
-                    .color(theme().text_dim),
+                    .color(theme().text_muted),
             ]
             .spacing(2)
             .width(Length::FillPortion(2)),
@@ -211,7 +211,7 @@ impl App {
         let api_url_row = row![
             column![
                 text("API URL").size(TEXT_MD).color(theme().text_muted),
-                text("WakaTime API endpoint URL").size(TEXT_XS).color(theme().text_dim),
+                text("WakaTime API endpoint URL").size(TEXT_XS).color(theme().text_muted),
             ]
             .spacing(2)
             .width(Length::FillPortion(2)),

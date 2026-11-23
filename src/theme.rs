@@ -9,8 +9,8 @@ use syntect::highlighting::{
 };
 
 // Layout Constants
-pub const SIDEBAR_DEFAULT_WIDTH: f32 = 180.0;
-pub const SIDEBAR_MIN_WIDTH: f32 = 100.0;
+pub const SIDEBAR_DEFAULT_WIDTH: f32 = 280.0;
+pub const SIDEBAR_MIN_WIDTH: f32 = 220.0;
 pub const SIDEBAR_MAX_WIDTH: f32 = 500.0;
 #[allow(dead_code)]
 pub const RESIZE_HIT_WIDTH: f32 = 12.0;
@@ -20,32 +20,43 @@ pub const BORDER_RADIUS: f32 = 14.0;
 /// Corner radius for editor tabs; shares the [`RADIUS_LG`] step of the radius scale.
 pub const BORDER_RADIUS_TAB: f32 = RADIUS_LG;
 
+/// Default width of the conversation panel, independent of the explorer.
+pub const CHAT_DEFAULT_WIDTH: f32 = 400.0;
+/// Font used consistently for source text and code previews.
+pub const CODE_FONT: iced::Font = iced::Font {
+    family: iced::font::Family::Name("Fira Code"),
+    weight: iced::font::Weight::Medium,
+    ..iced::Font::DEFAULT
+};
+/// Size for extended prose such as chat messages.
+pub const TEXT_BODY: f32 = 16.0;
+
 // Text Size Scale
 /// Extra-small UI text: badges, hints and secondary metadata.
-pub const TEXT_XS: f32 = 11.0;
+pub const TEXT_XS: f32 = 13.0;
 /// Small UI text: secondary text such as the status bar, breadcrumbs,
 /// metadata (hashes, dates, counts), hints, and loading or empty states.
-pub const TEXT_SM: f32 = 12.0;
+pub const TEXT_SM: f32 = 14.0;
 /// Medium UI text: primary labels, inputs and body copy.
-pub const TEXT_MD: f32 = 13.0;
+pub const TEXT_MD: f32 = 15.0;
 /// Large UI text: prominent inputs such as the finder and palette queries.
-pub const TEXT_LG: f32 = 15.0;
+pub const TEXT_LG: f32 = 17.0;
 /// Font size of the code editor text, in pixels.
 ///
 /// Applied together with [`CODE_LINE_HEIGHT`] by [`apply_code_metrics`].
-pub const CODE_FONT_SIZE: f32 = 14.0;
-/// Line height of the code editor text, in pixels. Set as a fixed value
-/// rather than scaled from [`CODE_FONT_SIZE`].
-pub const CODE_LINE_HEIGHT: f32 = 22.0;
+pub const CODE_FONT_SIZE: f32 = 16.0;
+/// Default code line height in logical pixels. User font sizes preserve
+/// this ratio to [`CODE_FONT_SIZE`].
+pub const CODE_LINE_HEIGHT: f32 = 24.0;
 
-/// Applies [`CODE_FONT_SIZE`] and [`CODE_LINE_HEIGHT`] to `editor`.
+/// Applies a font size and the default line-height ratio to `editor`.
 ///
 /// The font size is set first: it recomputes the character width, and with
 /// auto-adjust off it leaves the line height alone, so the fixed line height
 /// set afterwards is the one that sticks.
-pub fn apply_code_metrics(editor: &mut CodeEditor) {
-    editor.set_font_size(CODE_FONT_SIZE, false);
-    editor.set_line_height(CODE_LINE_HEIGHT);
+pub fn apply_code_metrics(editor: &mut CodeEditor, font_size: f32) {
+    editor.set_font_size(font_size, false);
+    editor.set_line_height(font_size * CODE_LINE_HEIGHT / CODE_FONT_SIZE);
 }
 
 // Spacing Scale (used for padding and spacing between widgets)
@@ -1308,10 +1319,21 @@ mod tests {
     }
 
     #[test]
+    fn test_apply_code_metrics_resizes_existing_editor() {
+        let mut editor = CodeEditor::new("let value = 42;", "rs");
+        for size in [24.0, 12.0, 18.0] {
+            apply_code_metrics(&mut editor, size);
+            assert_eq!(editor.font_size(), size);
+            assert_eq!(editor.line_height(), size * 1.5);
+            assert!(editor.char_width().is_finite() && editor.char_width() > 0.0);
+        }
+    }
+
+    #[test]
     fn test_apply_code_metrics_sets_font_and_line_height() -> Result<(), Box<dyn std::error::Error>>
     {
         let mut editor = CodeEditor::new("fn main() {}", "rs");
-        apply_code_metrics(&mut editor);
+        apply_code_metrics(&mut editor, CODE_FONT_SIZE);
 
         assert!((editor.font_size() - CODE_FONT_SIZE).abs() < f32::EPSILON);
         assert!((editor.line_height() - CODE_LINE_HEIGHT).abs() < f32::EPSILON);

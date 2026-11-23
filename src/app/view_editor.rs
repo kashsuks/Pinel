@@ -55,8 +55,8 @@ impl App {
                     result_items.push(
                         container(
                             text(format!("  ... and {} more", result.matches.len() - 3))
-                                .size(10)
-                                .color(theme().text_dim),
+                                .size(TEXT_XS)
+                                .color(theme().text_muted),
                         )
                         .padding(iced::Padding {
                             top: 1.0,
@@ -210,7 +210,7 @@ impl App {
                                             text(&suggestion.text).size(TEXT_MD).color(label_color),
                                             iced::widget::Space::new().width(Length::Fill),
                                             text(format!("{:?}", suggestion.kind).to_lowercase())
-                                                .size(10)
+                                                .size(TEXT_XS)
                                                 .color(Color::from_rgba(ic.r, ic.g, ic.b, 0.65)),
                                         ]
                                         .spacing(6)
@@ -241,12 +241,18 @@ impl App {
                                 container(
                                     container(
                                         row![
-                                            text("↑↓").size(9).color(accent_purple),
-                                            text(" navigate · ").size(9).color(theme().text_dim),
-                                            text("↵").size(9).color(accent_purple),
-                                            text(" accept · ").size(9).color(theme().text_dim),
-                                            text("esc").size(9).color(accent_purple),
-                                            text(" dismiss").size(9).color(theme().text_dim),
+                                            text("↑↓").size(TEXT_XS).color(accent_purple),
+                                            text(" navigate · ")
+                                                .size(TEXT_XS)
+                                                .color(theme().text_muted),
+                                            text("↵").size(TEXT_XS).color(accent_purple),
+                                            text(" accept · ")
+                                                .size(TEXT_XS)
+                                                .color(theme().text_muted),
+                                            text("esc").size(TEXT_XS).color(accent_purple),
+                                            text(" dismiss")
+                                                .size(TEXT_XS)
+                                                .color(theme().text_muted),
                                         ]
                                         .spacing(0)
                                         .align_y(iced::Alignment::Center),
@@ -278,7 +284,7 @@ impl App {
 
                             let panel = container(column(items).spacing(1))
                                 .padding(SPACE_1)
-                                .max_width(320.0)
+                                .max_width(420.0)
                                 .style(move |_theme| container::Style {
                                     background: Some(iced::Background::Color(bg_modal)),
                                     border: iced::Border {
@@ -625,7 +631,7 @@ impl App {
                                     iced::widget::Space::new().width(Length::Fill),
                                     text(fmt_time(*duration_secs))
                                         .size(TEXT_SM)
-                                        .color(theme().text_dim),
+                                        .color(theme().text_muted),
                                 ]
                                 .width(Length::Fill),
                                 // Controls
@@ -662,7 +668,7 @@ impl App {
                 row![
                     text("Terminal").size(TEXT_SM).color(theme().text_muted),
                     iced::widget::Space::new().width(Length::Fill),
-                    button(text("x").size(TEXT_SM).color(theme().text_dim))
+                    button(text("x").size(TEXT_SM).color(theme().text_muted))
                         .style(tab_close_button_style)
                         .on_press(Message::ToggleTerminal),
                 ]
@@ -703,7 +709,7 @@ impl App {
                 .into();
         }
 
-        container(text("Embedded terminal unavailable").size(TEXT_SM).color(theme().text_dim))
+        container(text("Embedded terminal unavailable").size(TEXT_SM).color(theme().text_muted))
             .padding(10)
             .width(Length::Fill)
             .height(height)
@@ -737,12 +743,12 @@ impl App {
         let mut items: Vec<Element<'_, Message>> = Vec::with_capacity(total * 2);
         for (index, crumb) in path_crumbs.into_iter().chain(symbol_crumbs).enumerate() {
             if index > 0 {
-                items.push(text("\u{203a}").size(TEXT_SM).color(theme().text_placeholder).into());
+                items.push(text("\u{203a}").size(TEXT_SM).color(theme().text_muted).into());
             }
             let color = if index + 1 == total {
                 theme().text_secondary
             } else {
-                theme().text_dim
+                theme().text_muted
             };
             items.push(text(crumb).size(TEXT_SM).color(color).into());
         }
@@ -871,7 +877,7 @@ impl App {
                 text(folder_name).size(24).color(theme().text_muted),
                 text("Select a file from the sidebar to begin editing")
                     .size(TEXT_MD)
-                    .color(theme().text_placeholder),
+                    .color(theme().text_muted),
             ]
             .spacing(SPACE_3)
             .align_x(iced::Alignment::Center),
@@ -881,7 +887,7 @@ impl App {
     }
 }
 
-/// Size of the status bar's text: the 13px body size, so the bar reads at a
+/// Size of the status bar's text: the 15px body size, so the bar reads at a
 /// glance rather than at the 12px used for other secondary text.
 const STATUS_TEXT_SIZE: f32 = TEXT_MD;
 
@@ -896,7 +902,7 @@ const VIM_PILL_PADDING_Y: f32 = 2.0;
 ///
 /// iced's line box keeps room for descenders under the baseline, and the
 /// labels are all capitals, which have none, so the letters sit high in the
-/// box. Measured on screen at [`VIM_PILL_TEXT_SIZE`] (12px), the capitals
+/// box. Measured on screen at [`VIM_PILL_TEXT_SIZE`] (14px), the capitals
 /// were 2px above the pill's centre; re-measure if that size changes.
 const VIM_PILL_LABEL_NUDGE: f32 = 2.0;
 
@@ -905,7 +911,7 @@ const _: () = assert!(VIM_PILL_LABEL_NUDGE <= VIM_PILL_PADDING_Y);
 
 /// Fixed height of the status bar: `SPACE_2` above and below one line of
 /// [`STATUS_TEXT_SIZE`] text, which iced lays out at its default line height
-/// of 1.3 times the font size (13 × 1.3 = 16.9px). 32.9px in all, and the bar
+/// of 1.3 times the font size (15 × 1.3 = 19.5px). 35.5px in all, and the bar
 /// cannot grow with its contents.
 const STATUS_BAR_HEIGHT: f32 = SPACE_2 + STATUS_TEXT_SIZE * 1.3 + SPACE_2;
 
@@ -1240,8 +1246,8 @@ mod tests {
 
     #[test]
     fn test_status_bar_height_is_one_line_plus_padding() -> Result<(), Box<dyn std::error::Error>> {
-        // 8px + one 13px line at iced's 1.3 line height + 8px
-        assert!((STATUS_BAR_HEIGHT - 32.9).abs() < 0.01);
+        // 8px + one 15px line at iced's 1.3 line height + 8px
+        assert!((STATUS_BAR_HEIGHT - 35.5).abs() < 0.01);
         Ok(())
     }
 }

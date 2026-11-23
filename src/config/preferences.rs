@@ -8,6 +8,18 @@ use super::theme_manager::{get_config_dir, load_theme, ThemeColors};
 #[derive(Debug, Clone)]
 pub struct EditorPreferences {
     pub first_launch: bool,
+    /// Additional application zoom, on top of the display scale (0.8–1.5).
+    pub ui_scale: f32,
+    /// Source text size in logical pixels (12–24).
+    pub editor_font_size: f32,
+    /// Embedded terminal text size in logical pixels (12–24).
+    pub terminal_font_size: f32,
+    /// Use Medium rather than Regular for source and terminal text.
+    pub medium_code_font: bool,
+    /// Remember the explorer and Git panel width independently of chat.
+    pub sidebar_width: f32,
+    /// Remember the conversation panel width.
+    pub chat_width: f32,
     pub tab_size: usize,
     pub use_spaces: bool,
     /// copy the leading whitespaces of the current line onto the new line on enter
@@ -36,6 +48,12 @@ impl Default for EditorPreferences {
     fn default() -> Self {
         Self {
             first_launch: true,
+            ui_scale: 1.0,
+            editor_font_size: crate::theme::CODE_FONT_SIZE,
+            terminal_font_size: crate::theme::CODE_FONT_SIZE,
+            medium_code_font: true,
+            sidebar_width: crate::theme::SIDEBAR_DEFAULT_WIDTH,
+            chat_width: crate::theme::CHAT_DEFAULT_WIDTH,
             tab_size: 4,
             use_spaces: true,
             auto_indent_enabled: true,
@@ -59,6 +77,27 @@ impl Default for EditorPreferences {
 
 #[allow(dead_code)]
 impl EditorPreferences {
+    /// Font shared by the editor, previews, and embedded terminal.
+    pub fn code_font(&self) -> iced::Font {
+        iced::Font {
+            weight: if self.medium_code_font {
+                iced::font::Weight::Medium
+            } else {
+                iced::font::Weight::Normal
+            },
+            ..crate::theme::CODE_FONT
+        }
+    }
+
+    /// Terminal metrics; changing these preserves the running shell.
+    pub fn terminal_font(&self) -> iced_term::settings::FontSettings {
+        iced_term::settings::FontSettings {
+            size: self.terminal_font_size,
+            scale_factor: 1.5,
+            font_type: self.code_font(),
+        }
+    }
+
     pub fn indent_unit(&self) -> String {
         if self.use_spaces {
             " ".repeat(self.tab_size)
@@ -121,6 +160,16 @@ fn parse_preferences(content: &str) -> EditorPreferences {
             let key = key.trim();
             let value = value.trim().trim_end_matches(',').trim_matches('"').trim_matches('\'');
             match key {
+                "ui_scale" => parse_dimension(value, &mut prefs.ui_scale, 0.8, 1.5),
+                "editor_font_size" => {
+                    parse_dimension(value, &mut prefs.editor_font_size, 12.0, 24.0)
+                },
+                "terminal_font_size" => {
+                    parse_dimension(value, &mut prefs.terminal_font_size, 12.0, 24.0)
+                },
+                "sidebar_width" => parse_dimension(value, &mut prefs.sidebar_width, 220.0, 500.0),
+                "chat_width" => parse_dimension(value, &mut prefs.chat_width, 320.0, 640.0),
+                "medium_code_font" => prefs.medium_code_font = value != "false",
                 "tab_size" => {
                     if let Ok(size) = value.parse::<usize>() {
                         prefs.tab_size = size.clamp(1, 16);
@@ -188,6 +237,15 @@ fn parse_preferences(content: &str) -> EditorPreferences {
         }
     }
     prefs
+}
+
+// Reject non-finite Lua values before they can reach layout or font measurement.
+fn parse_dimension(value: &str, target: &mut f32, min: f32, max: f32) {
+    if let Ok(value) = value.parse::<f32>() {
+        if value.is_finite() {
+            *target = value.clamp(min, max);
+        }
+    }
 }
 
 pub fn save_preferences(prefs: &EditorPreferences) -> Result<(), std::io::Error> {
@@ -265,6 +323,13 @@ fn save_preferences_to_path(prefs: &EditorPreferences, path: &Path) -> Result<()
 
 return {{
     first_launch = {},
+    -- Additional UI zoom (0.8–1.5); font sizes are logical pixels (12–24)
+    ui_scale = {},
+    editor_font_size = {},
+    terminal_font_size = {},
+    medium_code_font = {},
+    sidebar_width = {},
+    chat_width = {},
     tab_size = {},
     use_spaces = {},
     auto_indent_enabled = {},
@@ -288,6 +353,12 @@ return {{
 {}}}
 "#,
         prefs.first_launch,
+        prefs.ui_scale,
+        prefs.editor_font_size,
+        prefs.terminal_font_size,
+        prefs.medium_code_font,
+        prefs.sidebar_width,
+        prefs.chat_width,
         prefs.tab_size,
         prefs.use_spaces,
         prefs.auto_indent_enabled,
@@ -312,6 +383,56 @@ return {{
 mod tests {
     use super::*;
     use std::time::{Duration, SystemTime};
+
+    #[test]
+    fn test_parse_preferences_typography_legacy_and_invalid_values() {
+        let defaults = EditorPreferences::default();
+        for content in ["tab_size = 2", "ui_scale = NaN\neditor_font_size = inf\nterminal_font_size = -inf\nsidebar_width = nope\nchat_width = NaN"] {
+            let prefs = parse_preferences(content);
+            assert_eq!(prefs.ui_scale, defaults.ui_scale);
+            assert_eq!(prefs.editor_font_size, defaults.editor_font_size);
+            assert_eq!(prefs.terminal_font_size, defaults.terminal_font_size);
+            assert_eq!(prefs.sidebar_width, defaults.sidebar_width);
+            assert_eq!(prefs.chat_width, defaults.chat_width);
+            assert!(prefs.medium_code_font);
+        }
+    }
+
+    #[test]
+    fn test_parse_preferences_typography_bounds() {
+        let prefs = parse_preferences("ui_scale = 99\neditor_font_size = 0\nterminal_font_size = 100\nsidebar_width = 1\nchat_width = 900");
+        assert_eq!(prefs.ui_scale, 1.5);
+        assert_eq!(prefs.editor_font_size, 12.0);
+        assert_eq!(prefs.terminal_font_size, 24.0);
+        assert_eq!(prefs.sidebar_width, 220.0);
+        assert_eq!(prefs.chat_width, 640.0);
+    }
+
+    #[test]
+    fn test_save_preferences_typography_roundtrip() -> Result<(), Box<dyn std::error::Error>> {
+        let dir = tempfile::tempdir()?;
+        let path = dir.path().join("preferences.lua");
+        let prefs = EditorPreferences {
+            ui_scale: 1.2,
+            editor_font_size: 18.0,
+            terminal_font_size: 17.0,
+            medium_code_font: false,
+            sidebar_width: 310.0,
+            chat_width: 440.0,
+            ..EditorPreferences::default()
+        };
+        save_preferences_to_path(&prefs, &path)?;
+        let loaded = read_preferences_from(&path).ok_or("preferences did not load")?;
+        assert_eq!(loaded.ui_scale, prefs.ui_scale);
+        assert_eq!(loaded.editor_font_size, prefs.editor_font_size);
+        assert_eq!(loaded.terminal_font_size, prefs.terminal_font_size);
+        assert_eq!(loaded.sidebar_width, prefs.sidebar_width);
+        assert_eq!(loaded.chat_width, prefs.chat_width);
+        assert_eq!(loaded.code_font().weight, iced::font::Weight::Normal);
+        assert_eq!(loaded.terminal_font().size, 17.0);
+        assert_eq!(loaded.terminal_font().font_type, loaded.code_font());
+        Ok(())
+    }
 
     #[test]
     fn parse_preferences_empty_returns_defaults() {

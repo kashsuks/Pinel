@@ -112,6 +112,8 @@ Pinel works without any config. To change things, open Settings (<kbd>Cmd</kbd>+
 | `theme.lua` | Colors. See [color customization](DOCS/CODE_EDITOR_COLOR_CUSTOMIZATION.md). |
 | `init.lua` | Your own Lua scripts, run at startup |
 
+In **Settings → Preferences → Text and display**, adjust UI zoom (80–150%), editor and terminal text sizes (12–24 logical pixels), and Regular/Medium code weight. Changes preview immediately; click **Save Preferences** to keep them. UI zoom is applied on top of your operating system's display scaling. Explorer/Git and chat panel widths are remembered separately when you finish resizing them.
+
 To restyle the hover and autocomplete popups, see [LSP overlay customization](DOCS/LSP_OVERLAY_CUSTOMIZATION.md).
 
 ## Troubleshooting

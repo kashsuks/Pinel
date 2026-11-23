@@ -1859,15 +1859,14 @@ impl App {
             Message::SidebarResizeStart => {
                 self.resizing_sidebar = true;
                 self.resize_start_x = None;
-                self.resize_start_width = self.sidebar_width;
+                self.resize_start_width = self.active_panel_width();
                 iced::Task::none()
             },
             Message::SidebarResizing(x) => {
                 if self.resizing_sidebar {
                     if let Some(start_x) = self.resize_start_x {
                         let delta = x - start_x;
-                        self.sidebar_width = (self.resize_start_width + delta)
-                            .clamp(SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH);
+                        self.set_active_panel_width(self.resize_start_width + delta);
                     } else {
                         self.resize_start_x = Some(x);
                     }
@@ -1875,6 +1874,9 @@ impl App {
                 iced::Task::none()
             },
             Message::SidebarResizeEnd => {
+                if self.resizing_sidebar {
+                    let _ = prefs::save_preferences(&self.editor_preferences);
+                }
                 self.resizing_sidebar = false;
                 self.resize_start_x = None;
                 iced::Task::none()
@@ -2852,6 +2854,32 @@ impl App {
                 self.vim_refresh_cursor_style();
                 iced::Task::none()
             },
+            Message::SettingsUiScaleChanged(value) => {
+                if value.is_finite() {
+                    self.editor_preferences.ui_scale = value.clamp(0.8, 1.5);
+                }
+                iced::Task::none()
+            },
+            Message::SettingsEditorFontSizeChanged(value) => {
+                if value.is_finite() {
+                    self.editor_preferences.editor_font_size = value.clamp(12.0, 24.0);
+                    self.apply_typography_to_tabs();
+                }
+                iced::Task::none()
+            },
+            Message::SettingsTerminalFontSizeChanged(value) => {
+                if value.is_finite() {
+                    self.editor_preferences.terminal_font_size = value.clamp(12.0, 24.0);
+                    self.apply_typography_to_tabs();
+                }
+                iced::Task::none()
+            },
+            Message::SettingsToggleCodeWeight => {
+                self.editor_preferences.medium_code_font =
+                    !self.editor_preferences.medium_code_font;
+                self.apply_typography_to_tabs();
+                iced::Task::none()
+            },
             Message::SettingsTabSizeChanged(val) => {
                 if let Ok(size) = val.parse::<usize>() {
                     self.editor_preferences.tab_size = size.clamp(1, 16);
@@ -3037,8 +3065,10 @@ impl App {
                 iced::Task::none()
             },
             Message::WindowResized(width, height) => {
-                self.editor_preferences.window_width = (width as f32).max(640.0);
-                self.editor_preferences.window_height = (height as f32).max(480.0);
+                // Resize events use zoomed logical coordinates; persist OS logical size.
+                self.editor_preferences.window_width = (width as f32 * self.ui_scale()).max(640.0);
+                self.editor_preferences.window_height =
+                    (height as f32 * self.ui_scale()).max(480.0);
                 self.window_size_dirty = true;
                 self.window_size_save_token = self.window_size_save_token.wrapping_add(1);
                 let token = self.window_size_save_token;
