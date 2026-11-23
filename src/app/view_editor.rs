@@ -395,6 +395,11 @@ impl App {
                         )
                         .padding(24)
                         .height(Length::Fill)
+                        // Markdown body text inherits the renderer color, not its palette.
+                        .style(|_| container::Style {
+                            text_color: Some(theme().text_primary),
+                            ..Default::default()
+                        })
                         .into();
                     },
                     TabKind::Commit {
