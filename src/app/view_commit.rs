@@ -15,7 +15,10 @@ use crate::{
         git_diff::{DiffLine, FileDiff, FileStatus, LineKind},
     },
     message::Message,
-    theme::{theme, RADIUS_SM, SPACE_1, SPACE_2, SPACE_3, SPACE_4, TEXT_MD, TEXT_SM, TEXT_XS},
+    theme::{
+        theme, CODE_FONT, CODE_FONT_SIZE, RADIUS_SM, SPACE_1, SPACE_2, SPACE_3, SPACE_4, TEXT_MD,
+        TEXT_SM, TEXT_XS,
+    },
     ui::{
         commit_card::{GREEN, RED},
         git_graph::{pill, ref_color},
@@ -117,7 +120,7 @@ fn view_header<'a>(
     }
 
     let mut hash_row = row![
-        text(hash).size(TEXT_SM).color(muted).font(iced::Font::MONOSPACE),
+        text(hash).size(TEXT_SM).color(muted).font(CODE_FONT),
         link("Copy", Message::CopyText(hash.to_string())),
     ]
     .spacing(SPACE_3)
@@ -207,8 +210,7 @@ fn view_file_diff<'a>(idx: usize, file: &'a FileDiff, folded: bool) -> Element<'
             section = section.push(text("Binary file not shown").size(TEXT_SM).color(muted));
         }
         for hunk in &file.hunks {
-            section = section
-                .push(text(&hunk.header).size(TEXT_XS).color(BLUE).font(iced::Font::MONOSPACE));
+            section = section.push(text(&hunk.header).size(TEXT_XS).color(BLUE).font(CODE_FONT));
 
             section = section.push(column(hunk.lines.iter().map(view_diff_line)).spacing(0));
         }
@@ -234,7 +236,7 @@ fn view_diff_line<'a>(line: &'a DiffLine) -> Element<'a, Message> {
         text(n.map(|n| n.to_string()).unwrap_or_default())
             .size(TEXT_XS)
             .color(theme().text_dim)
-            .font(iced::Font::MONOSPACE)
+            .font(CODE_FONT)
             .width(Length::Fixed(44.0))
     };
 
@@ -243,9 +245,9 @@ fn view_diff_line<'a>(line: &'a DiffLine) -> Element<'a, Message> {
             number(line.old_line),
             number(line.new_line),
             text(format!("{sign}{}", line.text))
-                .size(TEXT_MD)
+                .size(CODE_FONT_SIZE)
                 .color(theme().text_primary)
-                .font(iced::Font::MONOSPACE)
+                .font(CODE_FONT)
                 .wrapping(iced::widget::text::Wrapping::None),
         ]
         .spacing(SPACE_2),

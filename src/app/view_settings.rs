@@ -129,7 +129,7 @@ impl App {
                 left: 0.0,
             },
         )))
-        .width(Length::Fixed(180.0))
+        .width(Length::Fixed(220.0))
         .height(Length::Fill)
         .style(|_theme| container::Style {
             background: Some(Background::Color(theme().bg_secondary)),
@@ -181,7 +181,7 @@ impl App {
         let heading = text("General").size(18).color(theme().text_primary);
         let desc = text("General application settings and information.")
             .size(TEXT_SM)
-            .color(theme().text_dim);
+            .color(theme().text_muted);
 
         let separator = container(Space::new().width(Length::Fill).height(Length::Fixed(1.0)))
             .style(|_theme| container::Style {
@@ -240,7 +240,7 @@ impl App {
         let heading = text("Preferences").size(18).color(theme().text_primary);
         let desc = text("Configure editor behavior, formatting, and appearance.")
             .size(TEXT_SM)
-            .color(theme().text_dim);
+            .color(theme().text_muted);
 
         let separator = container(Space::new().width(Length::Fill).height(Length::Fixed(1.0)))
             .style(|_theme| container::Style {
@@ -253,7 +253,7 @@ impl App {
                 text("Tab Size").size(TEXT_MD).color(theme().text_muted),
                 text("Number of spaces per indentation level")
                     .size(TEXT_XS)
-                    .color(theme().text_dim),
+                    .color(theme().text_muted),
             ]
             .spacing(2)
             .width(Length::FillPortion(2)),
@@ -278,7 +278,7 @@ impl App {
                 text("Indent Using").size(TEXT_MD).color(theme().text_muted),
                 text("Choose between spaces or tabs for indentation")
                     .size(TEXT_XS)
-                    .color(theme().text_dim),
+                    .color(theme().text_muted),
             ]
             .spacing(2)
             .width(Length::FillPortion(2)),
@@ -309,7 +309,7 @@ impl App {
                 text("Auto-Indent").size(TEXT_MD).color(theme().text_muted),
                 text("Copy the previous line's indentation on Enter")
                     .size(TEXT_XS)
-                    .color(theme().text_dim),
+                    .color(theme().text_muted),
             ]
             .spacing(2)
             .width(Length::FillPortion(2)),
@@ -340,7 +340,7 @@ impl App {
                 text("Show Whitespace").size(TEXT_MD).color(theme().text_muted),
                 text("Draw spaces as \u{b7} and tabs as \u{2192}")
                     .size(TEXT_XS)
-                    .color(theme().text_dim),
+                    .color(theme().text_muted),
             ]
             .spacing(2)
             .width(Length::FillPortion(2)),
@@ -371,7 +371,7 @@ impl App {
                 text("Show Breadcrumbs").size(TEXT_MD).color(theme().text_muted),
                 text("Project, file and symbol path under the tab bar")
                     .size(TEXT_XS)
-                    .color(theme().text_dim),
+                    .color(theme().text_muted),
             ]
             .spacing(2)
             .width(Length::FillPortion(2)),
@@ -402,7 +402,7 @@ impl App {
                 text("Vim Mode").size(TEXT_MD).color(theme().text_muted),
                 text("Start new tabs in Vim mode (toggle per-tab with Ctrl+Alt+V)")
                     .size(TEXT_XS)
-                    .color(theme().text_dim),
+                    .color(theme().text_muted),
             ]
             .spacing(2)
             .width(Length::FillPortion(2)),
@@ -433,7 +433,7 @@ impl App {
                 text("Discord Rich Presence").size(TEXT_MD).color(theme().text_muted),
                 text("Show the file you're editing as your Discord status")
                     .size(TEXT_XS)
-                    .color(theme().text_dim),
+                    .color(theme().text_muted),
             ]
             .spacing(2)
             .width(Length::FillPortion(2)),
@@ -464,7 +464,7 @@ impl App {
                 text("Restore Last Session").size(TEXT_MD).color(theme().text_muted),
                 text("Reopen the last folder, tabs, and cursor positions on launch")
                     .size(TEXT_XS)
-                    .color(theme().text_dim),
+                    .color(theme().text_muted),
             ]
             .spacing(2)
             .width(Length::FillPortion(2)),
@@ -494,7 +494,9 @@ impl App {
         let autosave_toggle_row = row![
             column![
                 text("Autosave").size(TEXT_MD).color(theme().text_muted),
-                text("Automatically save modified files").size(TEXT_XS).color(theme().text_dim)
+                text("Automatically save modified files")
+                    .size(TEXT_XS)
+                    .color(theme().text_muted)
             ]
             .spacing(2)
             .width(Length::FillPortion(2)),
@@ -520,7 +522,7 @@ impl App {
                 text("Autosave Interval").size(TEXT_MD).color(theme().text_muted),
                 text("Delay in milliseconds before autosaving (30-1000)")
                     .size(TEXT_XS)
-                    .color(theme().text_dim),
+                    .color(theme().text_muted),
             ]
             .spacing(2)
             .width(Length::FillPortion(2)),
@@ -548,7 +550,7 @@ impl App {
                 text("Tab Drag Style").size(TEXT_MD).color(theme().text_muted),
                 text("Floating: ghost follows cursor  ·  Static: tabs shift live")
                     .size(TEXT_XS)
-                    .color(theme().text_dim),
+                    .color(theme().text_muted),
             ]
             .spacing(2)
             .width(Length::FillPortion(2)),
@@ -574,7 +576,7 @@ impl App {
                 text("Line Number Width").size(TEXT_MD).color(theme().text_muted),
                 text("Gutter width in pixels (20\u{2013}120)")
                     .size(TEXT_XS)
-                    .color(theme().text_dim),
+                    .color(theme().text_muted),
             ]
             .spacing(2)
             .width(Length::FillPortion(2)),
@@ -604,8 +606,8 @@ impl App {
                 } else {
                     "▼"
                 })
-                .size(10)
-                .color(theme().text_dim),
+                .size(TEXT_XS)
+                .color(theme().text_muted),
             ]
             .align_y(iced::Alignment::Center),
         )
@@ -652,7 +654,7 @@ impl App {
                         } else {
                             "○"
                         })
-                        .size(9)
+                        .size(TEXT_XS)
                         .color(item_color),
                         text(*name).size(TEXT_MD).color(item_color),
                     ]
@@ -690,7 +692,7 @@ impl App {
                 text("Color Theme").size(TEXT_MD).color(theme().text_muted),
                 text("Select a color theme for the editor")
                     .size(TEXT_XS)
-                    .color(theme().text_dim),
+                    .color(theme().text_muted),
             ]
             .spacing(2)
             .width(Length::FillPortion(2)),
@@ -828,7 +830,7 @@ impl App {
         let heading = text("Developer").size(18).color(theme().text_primary);
         let desc = text("Debug logging and development tools. Logs may contain sensitive data.")
             .size(TEXT_SM)
-            .color(theme().text_dim);
+            .color(theme().text_muted);
 
         let separator = container(Space::new().width(Length::Fill).height(Length::Fixed(1.0)))
             .style(|_theme| container::Style {
@@ -867,7 +869,7 @@ impl App {
                 text("Developer Mode").size(TEXT_MD).color(theme().text_muted),
                 text("Enable debug logging for LSP events and actions")
                     .size(TEXT_XS)
-                    .color(theme().text_dim),
+                    .color(theme().text_muted),
             ]
             .spacing(2)
             .width(Length::FillPortion(2)),
@@ -905,7 +907,7 @@ impl App {
                 text("LSP Support").size(TEXT_MD).color(theme().text_muted),
                 text("Enable Language Server Protocol for autocompletion and hover")
                     .size(TEXT_XS)
-                    .color(theme().text_dim),
+                    .color(theme().text_muted),
             ]
             .spacing(2)
             .width(Length::FillPortion(2)),
@@ -923,7 +925,7 @@ impl App {
             "Language servers found on PATH. Install missing servers to enable LSP for those languages."
         )
         .size(TEXT_XS)
-        .color(theme().text_dim);
+        .color(theme().text_muted);
 
         let server_rows: Vec<Element<'_, Message>> = server_status
             .iter()
@@ -941,12 +943,12 @@ impl App {
                     ),
                 };
                 row![
-                    text(icon).size(10).color(icon_color).width(Length::Fixed(14.0)),
+                    text(icon).size(TEXT_XS).color(icon_color).width(Length::Fixed(14.0)),
                     text(*key).size(TEXT_SM).color(theme().text_muted).width(Length::Fixed(240.0)),
                     text(status_text)
                         .size(TEXT_XS)
                         .color(if path_opt.is_some() {
-                            theme().text_dim
+                            theme().text_muted
                         } else {
                             Color::from_rgba(0.9, 0.5, 0.35, 0.9)
                         })
@@ -1004,7 +1006,7 @@ impl App {
         let logs_header = row![
             text("Debug Logs").size(TEXT_MD).color(theme().text_muted),
             Space::new().width(Length::Fill),
-            text(format!("{} entries", log_count)).size(TEXT_XS).color(theme().text_dim),
+            text(format!("{} entries", log_count)).size(TEXT_XS).color(theme().text_muted),
             clear_logs_btn,
         ]
         .align_y(iced::Alignment::Center);
@@ -1026,7 +1028,7 @@ impl App {
                 let msg = msg.clone();
                 let time_str = time_str.clone();
                 container(row![
-                    text(time_str).size(10).color(theme().text_dim),
+                    text(time_str).size(TEXT_XS).color(theme().text_muted),
                     Space::new().width(Length::Fixed(8.0)),
                     text(msg).size(TEXT_XS).color(theme().text_primary).width(Length::Fill),
                 ])
@@ -1048,7 +1050,7 @@ impl App {
             container(
                 text("No logs yet. Enable developer mode and trigger actions to see logs.")
                     .size(TEXT_XS)
-                    .color(theme().text_dim),
+                    .color(theme().text_muted),
             )
             .padding(SPACE_4)
             .into()
@@ -1162,7 +1164,7 @@ impl App {
                 row![
                     column![
                         text(label).size(TEXT_MD).color(theme().text_primary),
-                        text(sublabel).size(TEXT_XS).color(theme().text_dim),
+                        text(sublabel).size(TEXT_XS).color(theme().text_muted),
                     ]
                     .spacing(2)
                     .width(Length::Fill),
@@ -1214,11 +1216,11 @@ impl App {
                         } else {
                             "○"
                         })
-                        .size(10)
+                        .size(TEXT_XS)
                         .color(if is_selected {
                             crate::theme::ACCENT_PURPLE
                         } else {
-                            theme().text_dim
+                            theme().text_muted
                         }),
                         text(name).size(TEXT_MD).color(if is_selected {
                             theme().text_primary
@@ -1286,7 +1288,7 @@ impl App {
                     text("Welcome to Pinel").size(28).color(theme().text_primary),
                     text("A lightweight editor built with Rust.")
                         .size(TEXT_MD)
-                        .color(theme().text_dim),
+                        .color(theme().text_muted),
                     iced::widget::Space::new().height(Length::Fixed(24.0)),
                     text("Choose a theme").size(14).color(theme().text_muted),
                     iced::widget::Space::new().height(Length::Fixed(8.0)),

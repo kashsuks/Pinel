@@ -9,8 +9,8 @@ use syntect::highlighting::{
 };
 
 // Layout Constants
-pub const SIDEBAR_DEFAULT_WIDTH: f32 = 180.0;
-pub const SIDEBAR_MIN_WIDTH: f32 = 100.0;
+pub const SIDEBAR_DEFAULT_WIDTH: f32 = 280.0;
+pub const SIDEBAR_MIN_WIDTH: f32 = 220.0;
 pub const SIDEBAR_MAX_WIDTH: f32 = 500.0;
 #[allow(dead_code)]
 pub const RESIZE_HIT_WIDTH: f32 = 12.0;
@@ -19,6 +19,17 @@ pub const INDENT_WIDTH: f32 = 16.0;
 pub const BORDER_RADIUS: f32 = 14.0;
 /// Corner radius for editor tabs; shares the [`RADIUS_LG`] step of the radius scale.
 pub const BORDER_RADIUS_TAB: f32 = RADIUS_LG;
+
+/// Default width of the conversation panel, independent of the explorer.
+pub const CHAT_DEFAULT_WIDTH: f32 = 400.0;
+/// Font used consistently for source text and code previews.
+pub const CODE_FONT: iced::Font = iced::Font {
+    family: iced::font::Family::Name("Fira Code"),
+    weight: iced::font::Weight::Medium,
+    ..iced::Font::DEFAULT
+};
+/// Size for extended prose such as chat messages.
+pub const TEXT_BODY: f32 = 16.0;
 
 // Text Size Scale
 /// Extra-small UI text: badges, hints and secondary metadata.

@@ -55,8 +55,8 @@ impl App {
                     result_items.push(
                         container(
                             text(format!("  ... and {} more", result.matches.len() - 3))
-                                .size(10)
-                                .color(theme().text_dim),
+                                .size(TEXT_XS)
+                                .color(theme().text_muted),
                         )
                         .padding(iced::Padding {
                             top: 1.0,
@@ -210,7 +210,7 @@ impl App {
                                             text(&suggestion.text).size(TEXT_MD).color(label_color),
                                             iced::widget::Space::new().width(Length::Fill),
                                             text(format!("{:?}", suggestion.kind).to_lowercase())
-                                                .size(10)
+                                                .size(TEXT_XS)
                                                 .color(Color::from_rgba(ic.r, ic.g, ic.b, 0.65)),
                                         ]
                                         .spacing(6)
@@ -241,12 +241,18 @@ impl App {
                                 container(
                                     container(
                                         row![
-                                            text("↑↓").size(9).color(accent_purple),
-                                            text(" navigate · ").size(9).color(theme().text_dim),
-                                            text("↵").size(9).color(accent_purple),
-                                            text(" accept · ").size(9).color(theme().text_dim),
-                                            text("esc").size(9).color(accent_purple),
-                                            text(" dismiss").size(9).color(theme().text_dim),
+                                            text("↑↓").size(TEXT_XS).color(accent_purple),
+                                            text(" navigate · ")
+                                                .size(TEXT_XS)
+                                                .color(theme().text_muted),
+                                            text("↵").size(TEXT_XS).color(accent_purple),
+                                            text(" accept · ")
+                                                .size(TEXT_XS)
+                                                .color(theme().text_muted),
+                                            text("esc").size(TEXT_XS).color(accent_purple),
+                                            text(" dismiss")
+                                                .size(TEXT_XS)
+                                                .color(theme().text_muted),
                                         ]
                                         .spacing(0)
                                         .align_y(iced::Alignment::Center),
@@ -278,7 +284,7 @@ impl App {
 
                             let panel = container(column(items).spacing(1))
                                 .padding(SPACE_1)
-                                .max_width(320.0)
+                                .max_width(420.0)
                                 .style(move |_theme| container::Style {
                                     background: Some(iced::Background::Color(bg_modal)),
                                     border: iced::Border {
@@ -625,7 +631,7 @@ impl App {
                                     iced::widget::Space::new().width(Length::Fill),
                                     text(fmt_time(*duration_secs))
                                         .size(TEXT_SM)
-                                        .color(theme().text_dim),
+                                        .color(theme().text_muted),
                                 ]
                                 .width(Length::Fill),
                                 // Controls
@@ -662,7 +668,7 @@ impl App {
                 row![
                     text("Terminal").size(TEXT_SM).color(theme().text_muted),
                     iced::widget::Space::new().width(Length::Fill),
-                    button(text("x").size(TEXT_SM).color(theme().text_dim))
+                    button(text("x").size(TEXT_SM).color(theme().text_muted))
                         .style(tab_close_button_style)
                         .on_press(Message::ToggleTerminal),
                 ]
@@ -703,7 +709,7 @@ impl App {
                 .into();
         }
 
-        container(text("Embedded terminal unavailable").size(TEXT_SM).color(theme().text_dim))
+        container(text("Embedded terminal unavailable").size(TEXT_SM).color(theme().text_muted))
             .padding(10)
             .width(Length::Fill)
             .height(height)
@@ -737,12 +743,12 @@ impl App {
         let mut items: Vec<Element<'_, Message>> = Vec::with_capacity(total * 2);
         for (index, crumb) in path_crumbs.into_iter().chain(symbol_crumbs).enumerate() {
             if index > 0 {
-                items.push(text("\u{203a}").size(TEXT_SM).color(theme().text_placeholder).into());
+                items.push(text("\u{203a}").size(TEXT_SM).color(theme().text_muted).into());
             }
             let color = if index + 1 == total {
                 theme().text_secondary
             } else {
-                theme().text_dim
+                theme().text_muted
             };
             items.push(text(crumb).size(TEXT_SM).color(color).into());
         }
@@ -871,7 +877,7 @@ impl App {
                 text(folder_name).size(24).color(theme().text_muted),
                 text("Select a file from the sidebar to begin editing")
                     .size(TEXT_MD)
-                    .color(theme().text_placeholder),
+                    .color(theme().text_muted),
             ]
             .spacing(SPACE_3)
             .align_x(iced::Alignment::Center),

@@ -124,7 +124,7 @@ fn view_chat_history<'a>(
         container(
             column![
                 text("No chats yet").size(TEXT_MD).color(theme().text_muted),
-                text("Start a new chat to begin").size(TEXT_XS).color(theme().text_placeholder),
+                text("Start a new chat to begin").size(TEXT_XS).color(theme().text_muted),
             ]
             .spacing(SPACE_1)
             .align_x(iced::Alignment::Center),
@@ -178,11 +178,11 @@ fn render_history_row(session: &ChatSession, is_active: bool) -> Element<'_, Mes
             .on_press(Message::ChatSelectSession(session.id.clone()))
             .padding(ROW_PADDING)
             .width(Length::Fill),
-        button(text("Rename").size(10).color(theme().text_dim))
+        button(text("Rename").size(TEXT_XS).color(theme().text_muted))
             .style(tree_button_style)
             .on_press(Message::ChatRenameStart(session.id.clone()))
             .padding(ROW_ACTION_PADDING),
-        button(text("Delete").size(10).color(Color::from_rgb(0.86, 0.35, 0.35)))
+        button(text("Delete").size(TEXT_XS).color(Color::from_rgb(0.86, 0.35, 0.35)))
             .style(tree_button_style)
             .on_press(Message::ChatDeleteSession(session.id.clone()))
             .padding(ROW_ACTION_PADDING),
@@ -210,7 +210,7 @@ fn render_rename_row<'a>(
             })
             .style(rename_input_style)
             .width(Length::Fill),
-        button(text("Cancel").size(10).color(theme().text_dim))
+        button(text("Cancel").size(TEXT_XS).color(theme().text_muted))
             .style(tree_button_style)
             .on_press(Message::ChatRenameCancel)
             .padding(ROW_ACTION_PADDING),
@@ -325,7 +325,7 @@ fn message_thread<'a>(session: &'a ChatSession, sending: bool) -> Element<'a, Me
         return container(
             text("Send a message to start the conversation")
                 .size(TEXT_SM)
-                .color(theme().text_placeholder),
+                .color(theme().text_muted),
         )
         .width(Length::Fill)
         .height(Length::Fill)
@@ -338,7 +338,7 @@ fn message_thread<'a>(session: &'a ChatSession, sending: bool) -> Element<'a, Me
         session.messages.iter().map(message_bubble).collect();
     if sending {
         bubbles.push(
-            container(text("Assistant is typing...").size(TEXT_SM).color(theme().text_placeholder))
+            container(text("Assistant is typing...").size(TEXT_SM).color(theme().text_muted))
                 .padding(iced::Padding {
                     top: 6.0,
                     right: SPACE_2,
@@ -360,8 +360,11 @@ fn message_bubble(message: &ChatMessage) -> Element<'_, Message> {
 
     container(
         column![
-            text(role_label).size(10).color(theme().text_dim),
-            text(message.content.as_str()).size(TEXT_MD).color(theme().text_primary),
+            text(role_label).size(TEXT_XS).color(theme().text_muted),
+            text(message.content.as_str())
+                .size(TEXT_BODY)
+                .line_height(1.5)
+                .color(theme().text_primary),
         ]
         .spacing(2),
     )
@@ -394,8 +397,8 @@ fn model_trigger_button(session: &ChatSession, is_open: bool) -> Element<'_, Mes
             } else {
                 "v"
             })
-            .size(10)
-            .color(theme().text_dim),
+            .size(TEXT_XS)
+            .color(theme().text_muted),
         ]
         .align_y(iced::Alignment::Center),
     )
@@ -442,19 +445,19 @@ fn model_picker<'a>(
         None => container(
             text("No API key attached. Add one in Settings → Providers.")
                 .size(TEXT_XS)
-                .color(theme().text_placeholder),
+                .color(theme().text_muted),
         )
         .padding(ROW_PADDING)
         .into(),
         Some(ModelFetchState::Loading) => {
-            container(text("Loading models...").size(TEXT_XS).color(theme().text_placeholder))
+            container(text("Loading models...").size(TEXT_XS).color(theme().text_muted))
                 .padding(ROW_PADDING)
                 .into()
         },
         Some(ModelFetchState::Error(message)) => container(
             text(format!("Failed to load models: {message}"))
                 .size(TEXT_XS)
-                .color(theme().text_placeholder),
+                .color(theme().text_muted),
         )
         .padding(ROW_PADDING)
         .into(),
@@ -466,7 +469,7 @@ fn model_picker<'a>(
                 .collect();
 
             if matching_models.is_empty() {
-                container(text("No models found").size(TEXT_XS).color(theme().text_placeholder))
+                container(text("No models found").size(TEXT_XS).color(theme().text_muted))
                     .padding(ROW_PADDING)
                     .into()
             } else {

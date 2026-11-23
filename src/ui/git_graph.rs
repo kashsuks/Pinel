@@ -15,11 +15,11 @@ use crate::{
         git_graph::{GraphRow, Segment},
     },
     message::Message,
-    theme::{theme, TEXT_SM},
+    theme::{theme, TEXT_SM, TEXT_XS},
 };
 
 /// height of one commit row, shared with the text beside the graph
-pub const ROW_HEIGHT: f32 = 22.0;
+pub const ROW_HEIGHT: f32 = 30.0;
 /// horizontal space given to each lane
 pub const LANE_WIDTH: f32 = 14.0;
 /// lanes beyond this are clipped so a wide graph cannot crowd out the text
@@ -130,9 +130,9 @@ impl<Message> canvas::Program<Message> for RowProgram<'_> {
 
 /// rough width of one character at the subject's text size
 // Calibrated for subject text at TEXT_SM; re-tune if that size changes.
-const SUBJECT_CHAR_WIDTH: f32 = 6.4;
+const SUBJECT_CHAR_WIDTH: f32 = TEXT_SM * 0.56;
 /// rough width of one character at the pill's text size
-const PILL_CHAR_WIDTH: f32 = 5.6;
+const PILL_CHAR_WIDTH: f32 = TEXT_XS * 0.56;
 /// padding and gap around a pill's text
 const PILL_CHROME: f32 = 14.0;
 /// most pills shown on one commit before the rest fold into `+N`
@@ -251,7 +251,7 @@ pub fn ref_color(git_ref: &GitRef) -> Color {
 pub fn pill<'a>(label: String, color: Color) -> Element<'a, Message> {
     container(
         text(label)
-            .size(10)
+            .size(TEXT_XS)
             .color(Color::from_rgb(0.08, 0.09, 0.12))
             // a wrapped pill grows taller than its row and spills onto the next
             .wrapping(iced::widget::text::Wrapping::None),

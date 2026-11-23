@@ -156,7 +156,7 @@ pub fn view_git_panel<'a>(
             container(
                 column![
                     text("No changes").size(TEXT_MD).color(theme().text_muted),
-                    text("Working tree is clean").size(TEXT_XS).color(theme().text_placeholder),
+                    text("Working tree is clean").size(TEXT_XS).color(theme().text_muted),
                 ]
                 .spacing(SPACE_1)
                 .align_x(iced::Alignment::Center),
@@ -254,7 +254,7 @@ fn change_row<'a>(
         line = line.push(
             text(dir)
                 .size(TEXT_XS)
-                .color(theme().text_placeholder)
+                .color(theme().text_muted)
                 .wrapping(iced::widget::text::Wrapping::None),
         );
     }
@@ -409,7 +409,7 @@ fn view_empty_sidebar<'a>() -> Element<'a, Message> {
     container(
         column![
             text("No folder open").size(TEXT_MD).color(theme().text_muted),
-            text(shortcut_hint).size(TEXT_XS).color(theme().text_placeholder),
+            text(shortcut_hint).size(TEXT_XS).color(theme().text_muted),
         ]
         .spacing(SPACE_1)
         .align_x(iced::Alignment::Center),
@@ -648,38 +648,43 @@ mod tests {
 
     #[test]
     fn test_commit_window_top_of_panel_shows_no_commits() {
-        // 10 status rows + the heading = 11 rows (242px) above the commits
-        let window = commit_window(0.0, 220.0, 10, 500);
+        // 10 status rows + the heading = 11 rows above the commits
+        let window = commit_window(0.0, 10.0 * ROW_HEIGHT, 10, 500);
         assert_eq!(window, 0..OVERSCAN);
     }
 
     #[test]
     fn test_commit_window_starts_at_section_boundary() {
         // viewport top sits exactly on the first commit
-        let window = commit_window(242.0, 220.0, 10, 500);
+        let window = commit_window(11.0 * ROW_HEIGHT, 10.0 * ROW_HEIGHT, 10, 500);
         assert_eq!(window, 0..(10 + OVERSCAN));
     }
 
     #[test]
     fn test_commit_window_scrolled_into_the_middle() {
-        let window = commit_window(242.0 + 22.0 * 100.0, 220.0, 10, 500);
+        let window = commit_window(
+            11.0 * ROW_HEIGHT + ROW_HEIGHT * 100.0,
+            10.0 * ROW_HEIGHT,
+            10,
+            500,
+        );
         assert_eq!(window, (100 - OVERSCAN)..(110 + OVERSCAN));
     }
 
     #[test]
     fn test_commit_window_clamped_at_the_end() {
-        let window = commit_window(1_000_000.0, 220.0, 10, 500);
+        let window = commit_window(1_000_000.0, 10.0 * ROW_HEIGHT, 10, 500);
         assert_eq!(window, 500..500);
     }
 
     #[test]
     fn test_commit_window_no_status_entries() {
-        let window = commit_window(22.0, 220.0, 0, 500);
+        let window = commit_window(ROW_HEIGHT, 10.0 * ROW_HEIGHT, 0, 500);
         assert_eq!(window, 0..(10 + OVERSCAN));
     }
 
     #[test]
     fn test_commit_window_empty_history() {
-        assert_eq!(commit_window(0.0, 220.0, 10, 0), 0..0);
+        assert_eq!(commit_window(0.0, 10.0 * ROW_HEIGHT, 10, 0), 0..0);
     }
 }

@@ -1859,15 +1859,14 @@ impl App {
             Message::SidebarResizeStart => {
                 self.resizing_sidebar = true;
                 self.resize_start_x = None;
-                self.resize_start_width = self.sidebar_width;
+                self.resize_start_width = self.active_panel_width();
                 iced::Task::none()
             },
             Message::SidebarResizing(x) => {
                 if self.resizing_sidebar {
                     if let Some(start_x) = self.resize_start_x {
                         let delta = x - start_x;
-                        self.sidebar_width = (self.resize_start_width + delta)
-                            .clamp(SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH);
+                        self.set_active_panel_width(self.resize_start_width + delta);
                     } else {
                         self.resize_start_x = Some(x);
                     }

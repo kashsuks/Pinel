@@ -244,7 +244,7 @@ impl App {
                     self.chat_rename_target.as_deref(),
                     &self.chat_rename_input,
                     self.chat_rename_input_id.clone(),
-                    self.sidebar_width,
+                    self.chat_width,
                 ),
             };
 

@@ -187,6 +187,7 @@ pub struct App {
 
     sidebar_visible: bool,
     sidebar_width: f32,
+    chat_width: f32,
 
     resizing_sidebar: bool,
     resize_start_x: Option<f32>,
@@ -398,6 +399,7 @@ impl Default for App {
             file_tree: None,
             sidebar_visible: true,
             sidebar_width: SIDEBAR_DEFAULT_WIDTH,
+            chat_width: CHAT_DEFAULT_WIDTH,
             resizing_sidebar: false,
             resize_start_x: None,
             resize_start_width: SIDEBAR_DEFAULT_WIDTH,
@@ -626,14 +628,27 @@ impl App {
     #[cfg(not(feature = "unstable-comet"))]
     pub fn dev_log(&mut self, _message: String) {}
 
+    /// Width of the active sidebar, with a separate conversation width.
+    fn active_panel_width(&self) -> f32 {
+        if self.active_panel == ActivePanel::Chat {
+            self.chat_width
+        } else {
+            self.sidebar_width
+        }
+    }
+
+    fn set_active_panel_width(&mut self, width: f32) {
+        if self.active_panel == ActivePanel::Chat {
+            self.chat_width = width.clamp(320.0, 640.0);
+        } else {
+            self.sidebar_width = width.clamp(SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH);
+        }
+    }
+
     pub(super) fn configured_code_editor(&self, content: &str, syntax: &str) -> CodeEditor {
         let mut editor = iced_code_editor::CodeEditor::new(content, syntax);
         editor.set_theme(theme().editor_style);
-        editor.set_font(iced::Font {
-            family: iced::font::Family::Name("Fira Code"),
-            weight: iced::font::Weight::Medium,
-            ..iced::Font::DEFAULT
-        });
+        editor.set_font(CODE_FONT);
 
         editor.set_search_replace_enabled(false);
         // Pinel draws its own themed palette (Cmd/Ctrl+Shift+P); stop the
@@ -1032,7 +1047,7 @@ impl App {
                 self.sidebar_visible = visible;
             },
             EditorCommand::SetSidebarWidth(width) => {
-                self.sidebar_width = width.clamp(SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH);
+                self.set_active_panel_width(width);
             },
         }
     }

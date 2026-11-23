@@ -32,7 +32,7 @@ use crate::{
 pub(super) const TAB_HEIGHT: f32 = 38.0;
 const TAB_GAP: f32 = 1.0;
 const TAB_CLOSE_SIZE: f32 = 22.0;
-const TAB_TITLE_SIZE: f32 = 14.0;
+const TAB_TITLE_SIZE: f32 = TEXT_MD;
 const TAB_TOP_RADIUS: f32 = 8.0;
 const TAB_JOIN_RADIUS: f32 = 6.0;
 const TAB_JOIN_INSET: f32 = 2.0;
@@ -50,9 +50,9 @@ impl App {
             .chars()
             .map(|c| {
                 if c.is_ascii() && !matches!(c, 'M' | 'W' | 'm' | 'w' | '@' | '%') {
-                    8.5
+                    TAB_TITLE_SIZE * 0.65
                 } else {
-                    14.0
+                    TAB_TITLE_SIZE
                 }
             })
             .sum();
@@ -75,7 +75,7 @@ impl App {
             0.0
         };
         let chrome_width = TAB_GAP + SPACE_3 * 2.0 + ICON_SIZE + TAB_CLOSE_SIZE + SPACE_2 * 2.0;
-        (chrome_width + name_width + problem_width + git_width).clamp(112.0, 280.0)
+        (chrome_width + name_width + problem_width + git_width).clamp(128.0, 320.0)
     }
 
     /// Brings the selected tab fully into view when the strip has room for it.
