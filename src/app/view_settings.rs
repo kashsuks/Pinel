@@ -180,6 +180,7 @@ impl App {
         .height(Length::Fill)
         .style(|_theme| container::Style {
             background: Some(Background::Color(theme().bg_editor)),
+            text_color: Some(theme().text_primary),
             ..Default::default()
         });
 
@@ -221,7 +222,9 @@ impl App {
                 .size(TEXT_MD)
                 .color(theme().text_muted)
                 .width(Length::Fixed(140.0)),
-            text("1.0.0").size(TEXT_MD).color(theme().text_primary),
+            text(crate::features::updater::CURRENT_VERSION)
+                .size(TEXT_MD)
+                .color(theme().text_primary),
         ]
         .spacing(SPACE_3)
         .align_y(iced::Alignment::Center);
@@ -252,7 +255,35 @@ impl App {
             separator,
             app_name_row,
             version_row,
-            framework_row
+            framework_row,
+            Space::new().height(SPACE_2),
+            text("Updates").size(TEXT_LG).color(theme().text_primary),
+            iced::widget::checkbox(!self.update_state.disabled)
+                .label("Automatically check for updates")
+                .text_size(TEXT_MD)
+                .size(18)
+                .spacing(SPACE_2)
+                .style(settings_update_checkbox_style)
+                .on_toggle(Message::ToggleAutomaticUpdates),
+            row![
+                button(
+                    text(if self.update_check_in_flight {
+                        "Checking…"
+                    } else {
+                        "Check for updates"
+                    })
+                    .size(TEXT_MD)
+                )
+                .style(settings_action_style)
+                .padding([6, 10])
+                .on_press_maybe((!self.update_check_in_flight).then_some(Message::CheckForUpdate)),
+                button(text("What's New →").size(TEXT_MD))
+                    .style(settings_action_style)
+                    .padding([6, 10])
+                    .on_press(Message::ShowReleaseNotes),
+            ]
+            .spacing(SPACE_2),
+            text(&self.update_status).size(TEXT_SM).color(theme().text_muted)
         ]
         .spacing(SPACE_3)
         .width(Length::Fill)
@@ -265,9 +296,15 @@ impl App {
             column![
                 text(label).size(TEXT_MD).color(theme().text_primary),
                 row![
-                    button(text("−").size(TEXT_LG)).on_press(decrease).padding([4, 12]),
-                    text(value).size(TEXT_MD).width(80).center(),
-                    button(text("+").size(TEXT_LG)).on_press(increase).padding([4, 12]),
+                    button(text("−").size(TEXT_LG))
+                        .style(settings_action_style)
+                        .on_press(decrease)
+                        .padding([4, 12]),
+                    text(value).size(TEXT_MD).color(theme().text_primary).width(80).center(),
+                    button(text("+").size(TEXT_LG))
+                        .style(settings_action_style)
+                        .on_press(increase)
+                        .padding([4, 12]),
                 ]
                 .spacing(SPACE_2)
                 .align_y(iced::Alignment::Center),
@@ -307,6 +344,7 @@ impl App {
                     })
                     .size(TEXT_MD)
                 )
+                .style(settings_action_style)
                 .on_press(Message::SettingsToggleCodeWeight)
                 .padding([8, 12]),
             ]
@@ -1527,5 +1565,64 @@ fn settings_input_style(
             radius: 4.0.into(),
         },
         ..search_input_style(iced_theme, status)
+    }
+}
+
+// Keep these controls on Pinel's palette rather than Iced's default light theme.
+fn settings_update_checkbox_style(
+    _theme: &iced::Theme,
+    status: iced::widget::checkbox::Status,
+) -> iced::widget::checkbox::Style {
+    use iced::widget::checkbox::Status;
+    let colors = theme();
+    let (checked, hovered, disabled) = match status {
+        Status::Active { is_checked } => (is_checked, false, false),
+        Status::Hovered { is_checked } => (is_checked, true, false),
+        Status::Disabled { is_checked } => (is_checked, false, true),
+    };
+    iced::widget::checkbox::Style {
+        background: Background::Color(if checked {
+            colors.text_primary
+        } else if hovered {
+            colors.bg_hover
+        } else {
+            colors.bg_secondary
+        }),
+        icon_color: colors.bg_editor,
+        border: iced::Border {
+            color: if checked || hovered {
+                colors.text_primary
+            } else {
+                colors.text_muted
+            },
+            width: 1.0,
+            radius: 4.0.into(),
+        },
+        text_color: Some(if disabled {
+            colors.text_dim
+        } else {
+            colors.text_primary
+        }),
+    }
+}
+
+fn settings_action_style(_theme: &iced::Theme, status: button::Status) -> button::Style {
+    let colors = theme();
+    button::Style {
+        background: match status {
+            button::Status::Hovered => Some(colors.bg_hover.into()),
+            button::Status::Pressed => Some(colors.bg_pressed.into()),
+            _ => None,
+        },
+        text_color: if status == button::Status::Disabled {
+            colors.text_dim
+        } else {
+            colors.text_primary
+        },
+        border: iced::Border {
+            radius: 6.0.into(),
+            ..Default::default()
+        },
+        ..Default::default()
     }
 }

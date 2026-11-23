@@ -102,6 +102,23 @@ cargo install --path . --locked
 > [!NOTE]
 > `master` is where day-to-day development happens, and any commit on it may be broken. For a stable build, install a tagged release: the quickstart script and crates.io both do. Nightly builds, once they exist, won't be stable either.
 
+## Updates and release notes
+
+Pinel checks for published releases in the background at startup, at most once a day.
+The notification offers **View release**, **Remind me tomorrow**, and **Skip this version**.
+Install updates using your original installation method (for example, Cargo or AUR).
+Stable builds only suggest stable releases; development builds can also discover prereleases.
+
+Use **Settings → General** to check manually or turn off automatic network checks.
+Manual checks also reveal releases you previously skipped. Failed automatic checks stay quiet.
+
+On the first launch of a new installed version, Pinel opens its published GitHub release notes
+in a read-only **What's New** tab, after restoring your files. This also happens once when
+this feature is first installed. The tab is never autosaved or restored as a file.
+Notes are cached locally and can be reopened from **Settings → General → What's New**.
+If you're offline or notes aren't published yet, Pinel retries on a later launch. Turning off
+automatic checks also disables automatic fetching of release notes; manual actions still work.
+
 ## Configuration
 
 Pinel works without any config. To change things, open Settings (<kbd>Cmd</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd>) or edit the files in `~/.config/pinel/`:

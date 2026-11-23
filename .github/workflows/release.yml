@@ -86,6 +86,7 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PUBLISH_VERSION: ${{ steps.check.outputs.publish_version }}
         run: |
           prev_tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
           range="HEAD"
@@ -93,20 +94,11 @@ jobs:
             range="${prev_tag}..HEAD"
           fi
 
-          pr_numbers=$(git log "$range" --merges --grep="Merge pull request" --format='%s' \
-            | grep -oE '#[0-9]+' | tr -d '#' | tac || true)
-
           {
-            echo "# "
+            echo "# What's New in Pinel ${PUBLISH_VERSION}"
             echo
-            for num in $pr_numbers; do
-              title=$(gh api "repos/${{ github.repository }}/pulls/${num}" --jq .title 2>/dev/null || echo "PR #${num}")
-              echo "## ${title} (#${num})"
-              echo
-            done
-            echo "## Fixes/Security"
-            echo
-            echo "## Future"
+            # Include squash commits, which have no merge commit / PR number.
+            git log "$range" --no-merges --format='- %s'
           } > /tmp/release_body.md
 
           {
@@ -123,12 +115,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Create GitHub release shell
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.prepare-release.outputs.release_tag }}
           name: ${{ needs.prepare-release.outputs.release_name }}
           prerelease: ${{ needs.prepare-release.outputs.release_channel == 'dev' }}
           draft: true
+          target_commitish: ${{ github.sha }}
           body: ${{ needs.prepare-release.outputs.release_body }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -175,8 +168,28 @@ jobs:
       publish_version: ${{ needs.prepare-release.outputs.publish_version }}
     secrets: inherit
 
+  publish-release:
+    needs: [prepare-release, linux, windows, macos]
+    if: needs.prepare-release.outputs.should_release == 'true'
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish complete release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ needs.prepare-release.outputs.release_tag }}
+          RELEASE_CHANNEL: ${{ needs.prepare-release.outputs.release_channel }}
+        run: |
+          if [ "$RELEASE_CHANNEL" = "stable" ]; then
+            gh release edit "$RELEASE_TAG" --draft=false --latest
+          else
+            gh release edit "$RELEASE_TAG" --draft=false --prerelease
+          fi
+
   aur:
-    needs: [prepare-release, linux]
+    needs: [prepare-release, publish-release]
     if: needs.prepare-release.outputs.should_release == 'true'
     uses: ./.github/workflows/release-aur.yml
     with:

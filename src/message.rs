@@ -302,8 +302,22 @@ pub enum Message {
     /// "no providers set up" prompt.
     OpenProviderSettings,
 
+    /// Begins post-restore startup work, including installed-release notes.
+    StartupReady,
+    /// Opens the installed release's notes on demand.
+    ShowReleaseNotes,
+    /// Receives installed-version notes from GitHub.
+    ReleaseNotesLoaded(Result<crate::features::updater::ReleaseNotes, String>),
     CheckForUpdate,
-    UpdateAvailable(crate::features::updater::UpdateInfo),
+    /// Completes a release check; manual checks always show their result.
+    UpdateChecked {
+        manual: bool,
+        result: Result<Option<crate::features::updater::UpdateInfo>, String>,
+    },
+    /// Changes whether startup contacts GitHub for updates.
+    ToggleAutomaticUpdates(bool),
+    /// Suppresses automatic notifications for this release only.
+    SkipUpdateVersion,
     DismissUpdateBanner,
 
     // all the ones below are related to media playback

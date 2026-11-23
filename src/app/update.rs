@@ -2434,7 +2434,9 @@ impl App {
 
                 iced::Task::none()
             },
-            Message::MarkdownLinkClicked(_uri) => iced::Task::none(),
+            Message::MarkdownLinkClicked(uri) => {
+                self.update_message(Message::OpenUrl(uri.to_string()))
+            },
             Message::ToggleSearch => {
                 if self.search_visible {
                     self.search_visible = false;
@@ -3632,7 +3634,7 @@ impl App {
                 self.apply_editor_theme_to_tabs();
                 self.editor_preferences.theme_name = name;
                 let _ = crate::config::preferences::save_preferences(&self.editor_preferences);
-                iced::Task::none()
+                self.start_release_notes(false)
             },
             Message::StartupThemeSelected(name) => {
                 self.startup_selected_theme = name.clone();
@@ -3659,20 +3661,39 @@ impl App {
                 self.startup_run_on_startup = !self.startup_run_on_startup;
                 iced::Task::none()
             },
-            Message::CheckForUpdate => {
-                iced::Task::perform(crate::features::updater::check_for_update(), |result| {
-                    match result {
-                        Some(info) => Message::UpdateAvailable(info),
-                        None => Message::DismissUpdateBanner,
-                    }
-                })
+            Message::StartupReady => {
+                self.startup_ready = true;
+                self.start_release_notes(false)
             },
-            Message::UpdateAvailable(info) => {
-                self.update_banner = Some(info);
+            Message::ShowReleaseNotes => self.start_release_notes(true),
+            Message::ReleaseNotesLoaded(result) => self.finish_release_notes(result),
+            Message::CheckForUpdate => self.start_update_check(true),
+            Message::UpdateChecked { manual, result } => {
+                self.finish_update_check(manual, result);
+                iced::Task::none()
+            },
+            Message::ToggleAutomaticUpdates(enabled) => {
+                self.update_state.disabled = !enabled;
+                self.update_banner = self.update_state.notification(
+                    crate::features::updater::CURRENT_VERSION,
+                    crate::features::updater::now(),
+                );
+                self.save_update_state();
+                iced::Task::none()
+            },
+            Message::SkipUpdateVersion => {
+                if let Some(info) = self.update_banner.take() {
+                    self.update_state.skipped_version = Some(info.version);
+                    self.save_update_state();
+                }
                 iced::Task::none()
             },
             Message::DismissUpdateBanner => {
-                self.update_banner = None;
+                if let Some(info) = self.update_banner.take() {
+                    self.update_state
+                        .remind_tomorrow(info.version, crate::features::updater::now());
+                    self.save_update_state();
+                }
                 iced::Task::none()
             },
             Message::ActiveFileChanged => {

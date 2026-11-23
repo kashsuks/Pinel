@@ -13,13 +13,15 @@ impl App {
     pub fn new_with_path(startup_path: Option<std::path::PathBuf>) -> (Self, iced::Task<Message>) {
         let mut app = Self::default();
 
-        let update_task = iced::Task::perform(
-            crate::features::updater::check_for_update(),
-            |result| match result {
-                Some(info) => Message::UpdateAvailable(info),
-                None => Message::DismissUpdateBanner,
-            },
+        app.update_banner = app.update_state.notification(
+            crate::features::updater::CURRENT_VERSION,
+            crate::features::updater::now(),
         );
+        let update_task = if app.update_state.check_due(crate::features::updater::now()) {
+            app.start_update_check(false)
+        } else {
+            iced::Task::none()
+        };
 
         let startup_task = match startup_path {
             Some(path) if path.is_dir() => iced::Task::done(Message::FolderOpened(path)),
@@ -28,7 +30,13 @@ impl App {
             None => app.restore_last_session_task(),
         };
 
-        (app, iced::Task::batch([update_task, startup_task]))
+        (
+            app,
+            iced::Task::batch([
+                update_task,
+                startup_task.chain(iced::Task::done(Message::StartupReady)),
+            ]),
+        )
     }
 
     /// Restores the last saved session: reopens its folder and its tabs.
