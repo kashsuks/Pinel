@@ -162,8 +162,8 @@ impl App {
                                 style.foreground.b,
                                 style.foreground.a as f32 / 255.0,
                             ))
-                            .size(CODE_FONT_SIZE)
-                            .font(CODE_FONT),
+                            .size(self.editor_preferences.editor_font_size)
+                            .font(self.editor_preferences.code_font()),
                     );
                 }
 

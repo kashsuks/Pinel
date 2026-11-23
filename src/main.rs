@@ -66,6 +66,7 @@ fn run_gui(startup_path: Option<PathBuf>) -> iced::Result {
         app::App::view,
     )
     .title("Pinel")
+    .scale_factor(app::App::ui_scale)
     .subscription(|app| app.subscription())
     .font(FIRA_CODE_BOLD)
     .font(FIRA_CODE_REGULAR)

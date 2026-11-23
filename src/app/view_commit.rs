@@ -16,8 +16,7 @@ use crate::{
     },
     message::Message,
     theme::{
-        theme, CODE_FONT, CODE_FONT_SIZE, RADIUS_SM, SPACE_1, SPACE_2, SPACE_3, SPACE_4, TEXT_MD,
-        TEXT_SM, TEXT_XS,
+        theme, CODE_FONT, RADIUS_SM, SPACE_1, SPACE_2, SPACE_3, SPACE_4, TEXT_MD, TEXT_SM, TEXT_XS,
     },
     ui::{
         commit_card::{GREEN, RED},
@@ -46,7 +45,12 @@ impl App {
             Some([]) => page = page.push(text("No file changes").size(TEXT_SM).color(muted)),
             Some(files) => {
                 for (idx, file) in files.iter().enumerate() {
-                    page = page.push(view_file_diff(idx, file, collapsed.contains(&idx)));
+                    page = page.push(view_file_diff(
+                        idx,
+                        file,
+                        collapsed.contains(&idx),
+                        &self.editor_preferences,
+                    ));
                 }
             },
         }
@@ -153,7 +157,12 @@ fn view_header<'a>(
     header.into()
 }
 
-fn view_file_diff<'a>(idx: usize, file: &'a FileDiff, folded: bool) -> Element<'a, Message> {
+fn view_file_diff<'a>(
+    idx: usize,
+    file: &'a FileDiff,
+    folded: bool,
+    prefs: &crate::config::preferences::EditorPreferences,
+) -> Element<'a, Message> {
     let (primary, muted) = (theme().text_primary, theme().text_muted);
     let (letter, color) = match file.status {
         FileStatus::Added => ("A", GREEN),
@@ -210,9 +219,16 @@ fn view_file_diff<'a>(idx: usize, file: &'a FileDiff, folded: bool) -> Element<'
             section = section.push(text("Binary file not shown").size(TEXT_SM).color(muted));
         }
         for hunk in &file.hunks {
-            section = section.push(text(&hunk.header).size(TEXT_XS).color(BLUE).font(CODE_FONT));
+            section =
+                section.push(text(&hunk.header).size(TEXT_XS).color(BLUE).font(prefs.code_font()));
 
-            section = section.push(column(hunk.lines.iter().map(view_diff_line)).spacing(0));
+            section =
+                section.push(
+                    column(hunk.lines.iter().map(|line| {
+                        view_diff_line(line, prefs.code_font(), prefs.editor_font_size)
+                    }))
+                    .spacing(0),
+                );
         }
         if file.hidden_lines > 0 {
             section = section.push(
@@ -226,7 +242,11 @@ fn view_file_diff<'a>(idx: usize, file: &'a FileDiff, folded: bool) -> Element<'
     section.into()
 }
 
-fn view_diff_line<'a>(line: &'a DiffLine) -> Element<'a, Message> {
+fn view_diff_line<'a>(
+    line: &'a DiffLine,
+    font: iced::Font,
+    font_size: f32,
+) -> Element<'a, Message> {
     let (background, sign) = match line.kind {
         LineKind::Added => (Some(Color { a: 0.14, ..GREEN }), '+'),
         LineKind::Removed => (Some(Color { a: 0.14, ..RED }), '-'),
@@ -236,7 +256,7 @@ fn view_diff_line<'a>(line: &'a DiffLine) -> Element<'a, Message> {
         text(n.map(|n| n.to_string()).unwrap_or_default())
             .size(TEXT_XS)
             .color(theme().text_dim)
-            .font(CODE_FONT)
+            .font(font)
             .width(Length::Fixed(44.0))
     };
 
@@ -245,9 +265,9 @@ fn view_diff_line<'a>(line: &'a DiffLine) -> Element<'a, Message> {
             number(line.old_line),
             number(line.new_line),
             text(format!("{sign}{}", line.text))
-                .size(CODE_FONT_SIZE)
+                .size(font_size)
                 .color(theme().text_primary)
-                .font(CODE_FONT)
+                .font(font)
                 .wrapping(iced::widget::text::Wrapping::None),
         ]
         .spacing(SPACE_2),

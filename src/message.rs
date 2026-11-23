@@ -121,6 +121,14 @@ pub enum Message {
 
     ToggleSettings,
     SettingsNavigate(String),
+    /// Set additional UI zoom, preserving the OS display scale.
+    SettingsUiScaleChanged(f32),
+    /// Set the source text size in all open editors.
+    SettingsEditorFontSizeChanged(f32),
+    /// Set the embedded terminal size without restarting its shell.
+    SettingsTerminalFontSizeChanged(f32),
+    /// Switch source text between Regular and Medium weight.
+    SettingsToggleCodeWeight,
     SettingsTabSizeChanged(String),
     SettingsToggleUseSpaces,
     SettingsToggleAutoIndent,

@@ -213,7 +213,7 @@ impl App {
         })
         .into();
 
-        let base_content: Element<'_, Message> = if self.sidebar_visible {
+        let base_content: Element<'_, Message> = if self.sidebar_visible && !self.settings_open {
             let panel: Element<'_, Message> = match self.active_panel {
                 ActivePanel::Files => view_sidebar(
                     self.file_tree.as_ref(),

@@ -33,6 +33,10 @@ impl App {
     }
 
     pub(super) fn view_settings_panel(&self) -> Element<'_, Message> {
+        iced::widget::responsive(|size| self.view_settings_layout(size.width < 700.0)).into()
+    }
+
+    fn view_settings_layout(&self, compact: bool) -> Element<'_, Message> {
         use iced::widget::Space;
 
         #[cfg(feature = "unstable-comet")]
@@ -129,8 +133,16 @@ impl App {
                 left: 0.0,
             },
         )))
-        .width(Length::Fixed(220.0))
-        .height(Length::Fill)
+        .width(if compact {
+            Length::Fill
+        } else {
+            Length::Fixed(220.0)
+        })
+        .height(if compact {
+            Length::Fixed(160.0)
+        } else {
+            Length::Fill
+        })
         .style(|_theme| container::Style {
             background: Some(Background::Color(theme().bg_secondary)),
             ..Default::default()
@@ -150,9 +162,17 @@ impl App {
             container(content_view)
                 .padding(iced::Padding {
                     top: 24.0,
-                    right: 32.0,
+                    right: if compact {
+                        12.0
+                    } else {
+                        32.0
+                    },
                     bottom: 24.0,
-                    left: 32.0,
+                    left: if compact {
+                        12.0
+                    } else {
+                        32.0
+                    },
                 })
                 .width(Length::Fill),
         ))
@@ -169,10 +189,17 @@ impl App {
                 ..Default::default()
             });
 
-        row![nav_sidebar, vert_sep, content_area]
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .into()
+        if compact {
+            column![nav_sidebar, content_area]
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .into()
+        } else {
+            row![nav_sidebar, vert_sep, content_area]
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .into()
+        }
     }
 
     pub(super) fn view_settings_general(&self) -> Element<'_, Message> {
@@ -229,6 +256,63 @@ impl App {
         ]
         .spacing(SPACE_3)
         .width(Length::Fill)
+        .into()
+    }
+
+    fn view_typography_preferences(&self) -> Element<'_, Message> {
+        let prefs = &self.editor_preferences;
+        let control = |label: &'static str, value: String, decrease, increase| {
+            column![
+                text(label).size(TEXT_MD).color(theme().text_primary),
+                row![
+                    button(text("−").size(TEXT_LG)).on_press(decrease).padding([4, 12]),
+                    text(value).size(TEXT_MD).width(80).center(),
+                    button(text("+").size(TEXT_LG)).on_press(increase).padding([4, 12]),
+                ]
+                .spacing(SPACE_2)
+                .align_y(iced::Alignment::Center),
+            ]
+            .spacing(SPACE_1)
+        };
+        column![
+            text("Text and display").size(TEXT_LG).color(theme().text_primary),
+            text("Changes preview immediately. Use Save Preferences to keep them.")
+                .size(TEXT_SM)
+                .color(theme().text_muted),
+            control(
+                "UI zoom",
+                format!("{:.0}%", prefs.ui_scale * 100.0),
+                Message::SettingsUiScaleChanged(prefs.ui_scale - 0.1),
+                Message::SettingsUiScaleChanged(prefs.ui_scale + 0.1)
+            ),
+            control(
+                "Editor text size",
+                format!("{:.0} px", prefs.editor_font_size),
+                Message::SettingsEditorFontSizeChanged(prefs.editor_font_size - 1.0),
+                Message::SettingsEditorFontSizeChanged(prefs.editor_font_size + 1.0)
+            ),
+            control(
+                "Terminal text size",
+                format!("{:.0} px", prefs.terminal_font_size),
+                Message::SettingsTerminalFontSizeChanged(prefs.terminal_font_size - 1.0),
+                Message::SettingsTerminalFontSizeChanged(prefs.terminal_font_size + 1.0)
+            ),
+            column![
+                text("Code text weight").size(TEXT_MD).color(theme().text_primary),
+                button(
+                    text(if prefs.medium_code_font {
+                        "Medium"
+                    } else {
+                        "Regular"
+                    })
+                    .size(TEXT_MD)
+                )
+                .on_press(Message::SettingsToggleCodeWeight)
+                .padding([8, 12]),
+            ]
+            .spacing(SPACE_1),
+        ]
+        .spacing(SPACE_3)
         .into()
     }
 
@@ -724,6 +808,7 @@ impl App {
             heading,
             desc,
             separator,
+            self.view_typography_preferences(),
             tab_size_row,
             container(Space::new().width(Length::Fill).height(Length::Fixed(1.0))).style(
                 |_theme| container::Style {
