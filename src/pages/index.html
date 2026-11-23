@@ -24,24 +24,42 @@
 
 <script>
 (function() {
+  // Macs report "Intel" in the user agent even on Apple Silicon, so start
+  // with x86_64 (it runs on every Mac, through Rosetta if needed) and switch
+  // to arm64 only when the browser confirms an Apple chip.
+  function detectMacArch(apply) {
+    apply('x86_64');
+    var uad = navigator.userAgentData;
+    if (uad && uad.getHighEntropyValues) {
+      uad.getHighEntropyValues(['architecture']).then(function(v) {
+        if (v.architecture === 'arm') apply('arm64');
+      }).catch(function() {});
+      return;
+    }
+    try {
+      var gl = document.createElement('canvas').getContext('webgl');
+      var ext = gl && gl.getExtension('WEBGL_debug_renderer_info');
+      var renderer = ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : '';
+      if (/Apple M\d/i.test(renderer)) apply('arm64');
+    } catch (e) {}
+  }
+
   var btn = document.getElementById('downloadBtn');
   if (!btn) return;
   var base = 'https://github.com/kashsuks/Pinel/releases/latest/download/';
   var ua = navigator.userAgent;
   if (/Mac/i.test(ua)) {
-    var arch = /arm|aarch/i.test(navigator.userAgent) || (typeof navigator.userAgentData !== 'undefined' && navigator.userAgentData.architecture === 'arm') ? 'arm64' : 'x86_64';
-    btn.textContent = 'Download for macOS (' + arch + ')';
-    btn.href = base + 'pinel-macos-' + arch;
+    detectMacArch(function(arch) {
+      btn.textContent = 'Download for MacOS (' + arch + ')';
+      btn.href = base + 'pinel-macos-' + arch;
+    });
   } else if (/Win/i.test(ua)) {
     btn.textContent = 'Download for Windows';
     btn.href = base + 'pinel-windows-x86_64.exe';
   } else if (/Linux/i.test(ua)) {
-    btn.textContent = 'Download for Linux';
-    btn.href = '#';
-    btn.classList.add('btn-disabled');
-    btn.title = 'Linux binary not yet available';
-    btn.setAttribute('aria-disabled', 'true');
-    btn.addEventListener('click', function(evt) { evt.preventDefault(); });
+    var linuxArch = /aarch64|arm64/i.test(ua) ? 'arm64' : 'x86_64';
+    btn.textContent = 'Download for Linux (' + linuxArch + ')';
+    btn.href = base + 'pinel-linux-' + linuxArch;
   }
 
   window.copyInstall = function() {

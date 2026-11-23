@@ -23,6 +23,26 @@
 
 <script>
 (function() {
+  // Macs report "Intel" in the user agent even on Apple Silicon, so start
+  // with x86_64 (it runs on every Mac, through Rosetta if needed) and switch
+  // to arm64 only when the browser confirms an Apple chip.
+  function detectMacArch(apply) {
+    apply('x86_64');
+    var uad = navigator.userAgentData;
+    if (uad && uad.getHighEntropyValues) {
+      uad.getHighEntropyValues(['architecture']).then(function(v) {
+        if (v.architecture === 'arm') apply('arm64');
+      }).catch(function() {});
+      return;
+    }
+    try {
+      var gl = document.createElement('canvas').getContext('webgl');
+      var ext = gl && gl.getExtension('WEBGL_debug_renderer_info');
+      var renderer = ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : '';
+      if (/Apple M\d/i.test(renderer)) apply('arm64');
+    } catch (e) {}
+  }
+
   var downloadLink = document.getElementById('downloadLink');
   if (!downloadLink) return;
   
@@ -31,9 +51,10 @@
   var base = 'https://github.com/kashsuks/Pinel/releases/latest/download/';
 
   if (/Mac/i.test(ua)) {
-    var arch = /arm|aarch/i.test(ua) || (typeof navigator.userAgentData !== 'undefined' && navigator.userAgentData.architecture === 'arm') ? 'arm64' : 'x86_64';
-    platformSpan.textContent = 'Download for macOS (' + arch + ')';
-    downloadLink.href = base + 'pinel-macos-' + arch;
+    detectMacArch(function(arch) {
+      platformSpan.textContent = 'Download for macOS (' + arch + ')';
+      downloadLink.href = base + 'pinel-macos-' + arch;
+    });
   } else if (/Win/i.test(ua)) {
     platformSpan.textContent = 'Download for Windows (x86_64)';
     downloadLink.href = base + 'pinel-windows-x86_64.exe';

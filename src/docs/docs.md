@@ -63,12 +63,12 @@ curl -fsSL https://pinel.netlify.app/install.sh | sh
 ```
 And the script will install the editor for usage!
 
-You can also install via the `pinel-macos-x86_64` under the latest release which can be found [here](https://github.com/kashsuks/Pinel/releases)
+You can also download the binary from the [latest release](https://github.com/kashsuks/Pinel/releases/latest): `pinel-macos-arm64` for Apple Silicon (M1 and newer) or `pinel-macos-x86_64` for Intel Macs.
 
 Due to the extra security that MacOS has for unverified apps, you will need to grant the app some permissions (that Gatekeeper would otherwise give by default). Here are the steps to follow:
 - Copy the path of your installation
 - Go to your terminal of choice and type in `chmod +x <the path to the install>`
-- Then run `./pinel-macos-x86_64`
+- Then run `./pinel-macos-arm64` (or `./pinel-macos-x86_64` on Intel)
 
 *Optional*: You can also add this new binary to your `$PATH` if you would like to just refer to the app as `Pinel`
 
@@ -76,7 +76,11 @@ Due to the extra security that MacOS has for unverified apps, you will need to g
 
 ## 2.2 Windows
 
-There is no windows installation currently due to cross-platform dependency issues. A solution will be found soon
+Download `pinel-windows-x86_64.exe` from the [latest release](https://github.com/kashsuks/Pinel/releases/latest) and run it.
+
+The app isn't signed yet, so Windows may show "Windows protected your PC" the first time. Click **More info**, then **Run anyway**.
+
+Windows builds are new and less tested than macOS and Linux. If something breaks, please [open an issue](https://github.com/kashsuks/Pinel/issues).
 
 **There is no active option for Winget or Chocolatey however they are in the works.**
 
