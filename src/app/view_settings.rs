@@ -274,11 +274,11 @@ impl App {
                     })
                     .size(TEXT_MD)
                 )
-                .style(settings_update_action_style)
+                .style(settings_action_style)
                 .padding([6, 10])
                 .on_press_maybe((!self.update_check_in_flight).then_some(Message::CheckForUpdate)),
                 button(text("What's New →").size(TEXT_MD))
-                    .style(settings_update_action_style)
+                    .style(settings_action_style)
                     .padding([6, 10])
                     .on_press(Message::ShowReleaseNotes),
             ]
@@ -296,9 +296,15 @@ impl App {
             column![
                 text(label).size(TEXT_MD).color(theme().text_primary),
                 row![
-                    button(text("−").size(TEXT_LG)).on_press(decrease).padding([4, 12]),
-                    text(value).size(TEXT_MD).width(80).center(),
-                    button(text("+").size(TEXT_LG)).on_press(increase).padding([4, 12]),
+                    button(text("−").size(TEXT_LG))
+                        .style(settings_action_style)
+                        .on_press(decrease)
+                        .padding([4, 12]),
+                    text(value).size(TEXT_MD).color(theme().text_primary).width(80).center(),
+                    button(text("+").size(TEXT_LG))
+                        .style(settings_action_style)
+                        .on_press(increase)
+                        .padding([4, 12]),
                 ]
                 .spacing(SPACE_2)
                 .align_y(iced::Alignment::Center),
@@ -338,6 +344,7 @@ impl App {
                     })
                     .size(TEXT_MD)
                 )
+                .style(settings_action_style)
                 .on_press(Message::SettingsToggleCodeWeight)
                 .padding([8, 12]),
             ]
@@ -1599,7 +1606,7 @@ fn settings_update_checkbox_style(
     }
 }
 
-fn settings_update_action_style(_theme: &iced::Theme, status: button::Status) -> button::Style {
+fn settings_action_style(_theme: &iced::Theme, status: button::Status) -> button::Style {
     let colors = theme();
     button::Style {
         background: match status {
