@@ -370,6 +370,35 @@ impl App {
         )
     }
 
+    /// Blurs the active editor so keys the palette's input doesn't consume
+    /// (arrows, Enter, Home/End...) don't also move the editor cursor.
+    fn blur_editor_for_palette(&mut self) {
+        if let Some(TabKind::Editor {
+            ref mut code_editor,
+            ..
+        }) = self.active_tab.and_then(|idx| self.tabs.get_mut(idx)).map(|t| &mut t.kind)
+        {
+            code_editor.lose_focus();
+        }
+    }
+
+    /// Closes the command palette and hands keyboard focus back to the
+    /// editor, unless the terminal owns focus.
+    fn close_command_palette(&mut self) {
+        self.command_palette.close();
+        if self.terminal_open && self.focused_pane == FocusPane::Terminal {
+            return;
+        }
+        if let Some(TabKind::Editor {
+            ref mut code_editor,
+            ..
+        }) = self.active_tab.and_then(|idx| self.tabs.get_mut(idx)).map(|t| &mut t.kind)
+        {
+            code_editor.request_focus();
+            let _ = code_editor.update(&EditorMessage::CanvasFocusGained);
+        }
+    }
+
     pub(super) fn vim_refresh_cursor_style(&mut self) {
         if self.terminal_open && self.focused_pane == FocusPane::Terminal {
             if let Some(idx) = self.active_tab {
@@ -2568,7 +2597,7 @@ impl App {
                         self.command_palette.filtered_commands.get(self.command_palette_selected)
                     {
                         let command_name = cmd.name.clone();
-                        self.command_palette.close();
+                        self.close_command_palette();
                         return self.execute_palette_command(&command_name);
                     }
                     return iced::Task::none();
@@ -2589,7 +2618,7 @@ impl App {
                     self.lsp_overlay = iced_code_editor::LspOverlayState::new();
                     self.pending_hover_request = None;
                 } else if self.command_palette.open {
-                    self.command_palette.close();
+                    self.close_command_palette();
                 } else if self.pending_sensitive_open.is_some() {
                     self.pending_sensitive_open = None;
                 } else if self.command_input.open {
@@ -2629,10 +2658,10 @@ impl App {
                 self.command_palette.toggle(include_markdown_render);
                 self.command_palette_selected = 0;
                 if self.command_palette.open {
-                    self.vim_refresh_cursor_style();
+                    self.blur_editor_for_palette();
                     return iced::widget::operation::focus(self.command_palette_input_id.clone());
                 }
-                self.vim_refresh_cursor_style();
+                self.close_command_palette();
                 iced::Task::none()
             },
             Message::CommandPaletteQueryChanged(query) => {
@@ -2643,7 +2672,7 @@ impl App {
                 iced::widget::operation::focus(self.command_palette_input_id.clone())
             },
             Message::CommandPaletteSelect(command_name) => {
-                self.command_palette.close();
+                self.close_command_palette();
                 self.execute_palette_command(&command_name)
             },
             Message::CommandPaletteNavigate(delta) => {
