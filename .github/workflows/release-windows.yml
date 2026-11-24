@@ -26,6 +26,11 @@ jobs:
         with:
           targets: x86_64-pc-windows-msvc
 
+      - name: Cache cargo registry and build output
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: x86_64-pc-windows-msvc
+
       - name: Set embedded release version
         shell: bash
         env:

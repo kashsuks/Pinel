@@ -33,6 +33,11 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
+      - name: Cache cargo registry and build output
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+
       - name: Set embedded release version
         shell: bash
         env:

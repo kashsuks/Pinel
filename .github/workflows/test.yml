@@ -4,6 +4,12 @@ on:
   push:
     branches: ["master"]
   pull_request:
+  workflow_call:
+
+# Cancel superseded PR runs. Pushes and release calls get a unique group so they never cancel each other.
+concurrency:
+  group: tests-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+  cancel-in-progress: true
 
 env:
   CARGO_TERM_COLOR: always
@@ -41,7 +47,15 @@ jobs:
       - name: Cache cargo registry and build output
         uses: Swatinem/rust-cache@v2
 
+      - name: Check formatting
+        run: cargo fmt --all --check
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+        env:
+          DISCORD_CLIENT_ID: ${{ secrets.DISCORD_CLIENT_ID }}
+
       - name: Run tests
-        run: cargo test --all --verbose
+        run: cargo test --workspace
         env:
           DISCORD_CLIENT_ID: ${{ secrets.DISCORD_CLIENT_ID }}
