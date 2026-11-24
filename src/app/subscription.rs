@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use super::*;
 
@@ -19,8 +19,12 @@ impl App {
             crate::subscriptions::window::resizes(),
             crate::subscriptions::window::focus_refresh(),
             crate::subscriptions::window::close_requests(),
-            iced::time::every(Duration::from_millis(150)).map(|_| Message::LspTick),
         ];
+
+        // Nothing can arrive before a server starts, so don't wake up to poll
+        if self.lsp.has_started_client() {
+            subs.push(iced::time::every(Duration::from_millis(150)).map(|_| Message::LspTick));
+        }
 
         subs.push(crate::subscriptions::mouse::tab_drag());
 
@@ -31,7 +35,9 @@ impl App {
             subs.push(iced::time::every(Duration::from_secs(5)).map(|_| Message::GitBranchTick));
         }
 
-        if self.editor_preferences.autosave_enabled {
+        if self.editor_preferences.autosave_enabled
+            && has_pending_autosave(self.tabs.iter().map(|t| t.autosave_requested_at))
+        {
             subs.push(
                 iced::time::every(Duration::from_millis(
                     self.editor_preferences.autosave_interval_ms.clamp(30, 1000),
@@ -66,5 +72,31 @@ impl App {
         }
 
         Subscription::batch(subs)
+    }
+}
+
+/// Whether any tab is waiting to be autosaved. The autosave timer only runs
+/// while this holds, so an idle editor doesn't wake up for nothing.
+fn has_pending_autosave(requested: impl IntoIterator<Item = Option<Instant>>) -> bool {
+    requested.into_iter().any(|requested_at| requested_at.is_some())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_has_pending_autosave_no_tabs_is_false() {
+        assert!(!has_pending_autosave([]));
+    }
+
+    #[test]
+    fn test_has_pending_autosave_all_idle_is_false() {
+        assert!(!has_pending_autosave([None, None]));
+    }
+
+    #[test]
+    fn test_has_pending_autosave_one_requested_is_true() {
+        assert!(has_pending_autosave([None, Some(Instant::now())]));
     }
 }

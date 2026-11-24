@@ -348,8 +348,14 @@ impl App {
             return iced::Task::none();
         };
 
-        if tab.path == Path::new("untitled") || !code_editor.is_modified() || tab.autosave_in_flight
-        {
+        if tab.autosave_in_flight {
+            return iced::Task::none();
+        }
+
+        // Nothing to write: drop the request so the autosave timer can stop.
+        // The next edit requests a new one.
+        if tab.path == Path::new("untitled") || !code_editor.is_modified() {
+            tab.autosave_requested_at = None;
             return iced::Task::none();
         }
 
