@@ -27,6 +27,9 @@ pub struct LspManager {
     sender: mpsc::Sender<LspEvent>,
     receiver: Option<mpsc::Receiver<LspEvent>>,
     workspace_root: Option<PathBuf>,
+    /// Set once any language server has started. Until then no events can
+    /// arrive, so the app can skip polling for them.
+    client_started: bool,
 }
 
 impl LspManager {
@@ -36,6 +39,7 @@ impl LspManager {
             sender,
             receiver: Some(receiver),
             workspace_root: None,
+            client_started: false,
         }
     }
 
@@ -46,14 +50,21 @@ impl LspManager {
     /// Creates a new LSP process client for the given server key.
     /// The client should be attached to a CodeEditor via `editor.attach_lsp()`.
     pub fn create_client(
-        &self,
+        &mut self,
         server_key: &str,
         root_hint: Option<&Path>,
     ) -> Result<Box<dyn LspClient>, String> {
         let root_uri = self.root_uri(root_hint);
         let client = LspProcessClient::new_with_server(&root_uri, self.sender.clone(), server_key)
             .map_err(|e| format!("Failed to start LSP server '{}': {}", server_key, e))?;
+        self.client_started = true;
         Ok(Box::new(client))
+    }
+
+    /// Whether any language server has been started, so there may be
+    /// events to drain.
+    pub fn has_started_client(&self) -> bool {
+        self.client_started
     }
 
     pub fn drain_events(&mut self) -> Vec<LspEvent> {
@@ -245,6 +256,11 @@ mod tests {
     /// A marker check that reports a marker in exactly the directories listed.
     fn markers_at<'a>(dirs: &'a [&'a str]) -> impl Fn(&Path) -> bool + 'a {
         move |dir| dirs.iter().any(|marked| Path::new(marked) == dir)
+    }
+
+    #[test]
+    fn test_has_started_client_new_manager_is_false() {
+        assert!(!LspManager::new().has_started_client());
     }
 
     #[test]
