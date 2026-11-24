@@ -2,7 +2,14 @@ use frostmark::MarkWidget;
 use iced::widget::column;
 
 use super::*;
-use crate::{features::lsp::diagnostic_counts, ui::git_graph::truncate_subject};
+use crate::{
+    features::{
+        breadcrumbs::symbol_icon,
+        icons::{get_file_icon, icon_handle},
+        lsp::diagnostic_counts,
+    },
+    ui::git_graph::truncate_subject,
+};
 
 impl App {
     pub(super) fn view_search_panel(&self) -> Element<'_, Message> {
@@ -745,12 +752,13 @@ impl App {
         let symbol_crumbs = self
             .document_symbols
             .get(&crate::features::lsp::document_uri(&tab.path))
-            .map(|symbols| iced_code_editor::symbol_path_at(symbols, cursor_line))
+            .map(|symbols| iced_code_editor::symbol_details_path_at(symbols, cursor_line))
             .unwrap_or_default();
 
-        let total = path_crumbs.len() + symbol_crumbs.len();
+        let path_count = path_crumbs.len();
+        let total = path_count + symbol_crumbs.len();
         let mut items: Vec<Element<'_, Message>> = Vec::with_capacity(total * 2);
-        for (index, crumb) in path_crumbs.into_iter().chain(symbol_crumbs).enumerate() {
+        for (index, crumb) in path_crumbs.into_iter().enumerate() {
             if index > 0 {
                 items.push(text("\u{203a}").size(TEXT_SM).color(theme().text_muted).into());
             }
@@ -759,7 +767,40 @@ impl App {
             } else {
                 theme().text_muted
             };
-            items.push(text(crumb).size(TEXT_SM).color(color).into());
+            if index + 1 == path_count {
+                let icon = iced::widget::image::Image::new(icon_handle(get_file_icon(&crumb), 28))
+                    .width(Length::Fixed(TEXT_SM))
+                    .height(Length::Fixed(TEXT_SM));
+                items.push(
+                    row![icon, text(crumb).size(TEXT_SM).color(color)]
+                        .spacing(SPACE_1)
+                        .align_y(iced::Alignment::Center)
+                        .into(),
+                );
+            } else {
+                items.push(text(crumb).size(TEXT_SM).color(color).into());
+            }
+        }
+
+        for (symbol_index, symbol) in symbol_crumbs.into_iter().enumerate() {
+            items.push(text("\u{203a}").size(TEXT_SM).color(theme().text_muted).into());
+            let index = path_count + symbol_index;
+            let color = if index + 1 == total {
+                theme().text_secondary
+            } else {
+                theme().text_muted
+            };
+            let icon = container(
+                text(symbol_icon(symbol.kind)).size(TEXT_XS).color(theme().text_secondary),
+            )
+            .width(Length::Fixed(TEXT_MD))
+            .center_x(Length::Fixed(TEXT_MD));
+            items.push(
+                row![icon, text(&symbol.name).size(TEXT_SM).color(color)]
+                    .spacing(SPACE_1)
+                    .align_y(iced::Alignment::Center)
+                    .into(),
+            );
         }
 
         Some(

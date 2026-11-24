@@ -2,6 +2,41 @@
 
 use std::path::Path;
 
+use iced_code_editor::LspSymbolKind;
+
+/// Returns a compact glyph for an LSP symbol kind in the breadcrumb bar.
+pub(crate) const fn symbol_icon(kind: LspSymbolKind) -> &'static str {
+    match kind {
+        LspSymbolKind::File => "▤",
+        LspSymbolKind::Module => "⬡",
+        LspSymbolKind::Namespace => "N",
+        LspSymbolKind::Package => "▣",
+        LspSymbolKind::Class => "C",
+        LspSymbolKind::Method => "m",
+        LspSymbolKind::Property => "◈",
+        LspSymbolKind::Field => "▪",
+        LspSymbolKind::Constructor => "◇",
+        LspSymbolKind::Enum => "E",
+        LspSymbolKind::Interface => "I",
+        LspSymbolKind::Function => "ƒ",
+        LspSymbolKind::Variable => "𝑥",
+        LspSymbolKind::Constant => "π",
+        LspSymbolKind::String => "S",
+        LspSymbolKind::Number => "#",
+        LspSymbolKind::Boolean => "◉",
+        LspSymbolKind::Array => "[]",
+        LspSymbolKind::Object => "⬡",
+        LspSymbolKind::Key => "◆",
+        LspSymbolKind::Null => "∅",
+        LspSymbolKind::EnumMember => "•",
+        LspSymbolKind::Struct => "S",
+        LspSymbolKind::Event => "⚡",
+        LspSymbolKind::Operator => "±",
+        LspSymbolKind::TypeParameter => "T",
+        LspSymbolKind::Unknown => "◇",
+    }
+}
+
 /// Returns the path part of the breadcrumb for `path`.
 ///
 /// When `path` is inside `root`, the trail starts with the project folder
@@ -74,5 +109,13 @@ mod tests {
     fn test_path_segments_filesystem_root_uses_display_name() {
         let crumbs = path_segments(Path::new("/notes.md"), Some(Path::new("/")));
         assert_eq!(crumbs, ["/", "notes.md"]);
+    }
+
+    #[test]
+    fn test_symbol_icon_distinguishes_common_symbol_kinds() {
+        assert_eq!(symbol_icon(LspSymbolKind::Function), "ƒ");
+        assert_eq!(symbol_icon(LspSymbolKind::Class), "C");
+        assert_eq!(symbol_icon(LspSymbolKind::Object), "⬡");
+        assert_eq!(symbol_icon(LspSymbolKind::Method), "m");
     }
 }

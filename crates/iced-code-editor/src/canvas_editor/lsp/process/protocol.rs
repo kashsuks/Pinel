@@ -18,7 +18,7 @@ use serde_json::json;
 
 use super::pending::{LspRequestKind, PendingRequest};
 use super::{LspDiagnostic, LspEvent, LspPosition, LspRange};
-use crate::canvas_editor::lsp::LspSymbol;
+use crate::canvas_editor::lsp::{LspSymbol, LspSymbolKind};
 
 /// JSON-RPC method name for server-push progress notifications.
 const METHOD_PROGRESS: &str = "$/progress";
@@ -482,6 +482,7 @@ fn parse_document_symbols(result: &serde_json::Value) -> Vec<LspSymbol> {
 /// Parses one hierarchical `DocumentSymbol`, including its children.
 fn parse_document_symbol(value: &serde_json::Value) -> Option<LspSymbol> {
     let name = value.get("name")?.as_str()?.to_string();
+    let kind = LspSymbolKind::from_lsp_value(value.get("kind").and_then(serde_json::Value::as_u64));
     let range = extract_range(value.get("range")?)?;
     let children = value
         .get("children")
@@ -490,6 +491,7 @@ fn parse_document_symbol(value: &serde_json::Value) -> Option<LspSymbol> {
         .unwrap_or_default();
     Some(LspSymbol {
         name,
+        kind,
         range,
         children,
     })
@@ -498,9 +500,11 @@ fn parse_document_symbol(value: &serde_json::Value) -> Option<LspSymbol> {
 /// Parses one flat `SymbolInformation` into a childless symbol.
 fn parse_symbol_information(value: &serde_json::Value) -> Option<LspSymbol> {
     let name = value.get("name")?.as_str()?.to_string();
+    let kind = LspSymbolKind::from_lsp_value(value.get("kind").and_then(serde_json::Value::as_u64));
     let range = extract_range(value.get("location")?.get("range")?)?;
     Some(LspSymbol {
         name,
+        kind,
         range,
         children: Vec::new(),
     })
@@ -1039,7 +1043,9 @@ mod tests {
         let symbols = parse_document_symbols(&result);
         assert_eq!(symbol_names(&symbols), ["Editor"]);
         let editor = symbols.first().ok_or("missing Editor symbol")?;
+        assert_eq!(editor.kind, LspSymbolKind::Struct);
         assert_eq!(symbol_names(&editor.children), ["render"]);
+        assert_eq!(editor.children[0].kind, LspSymbolKind::Method);
         Ok(())
     }
 
@@ -1057,6 +1063,7 @@ mod tests {
         let symbols = parse_document_symbols(&result);
         assert_eq!(symbol_names(&symbols), ["outer", "after"]);
         let outer = symbols.first().ok_or("missing outer symbol")?;
+        assert_eq!(outer.kind, LspSymbolKind::Function);
         assert_eq!(symbol_names(&outer.children), ["inner"]);
         Ok(())
     }
