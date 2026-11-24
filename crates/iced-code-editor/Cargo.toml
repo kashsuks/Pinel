@@ -2,6 +2,7 @@
 name = "pinel-code-editor"
 version = "0.1.0"
 edition = "2024"
+rust-version = "1.88"
 authors = ["LuDog71 <ludog71.trekker238@passmail.net>", "Kashyap Sukshavasi"]
 description = "Pinel's fork of iced-code-editor: a code editor widget for the Iced GUI framework with syntax highlighting, line numbers, and scrolling support."
 homepage = "https://github.com/kashsuks/Pinel"
