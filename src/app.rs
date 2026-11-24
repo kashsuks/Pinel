@@ -158,6 +158,8 @@ const SYMBOL_MAX_EMPTY_REPLIES: u8 = 3;
 const GIT_CARD_OPEN_DELAY: Duration = Duration::from_millis(300);
 /// How long the card stays after the cursor leaves the row and the card.
 const GIT_CARD_CLOSE_DELAY: Duration = Duration::from_millis(150);
+/// How long the WakaTime key's copy button reads "Copied".
+const WAKATIME_COPIED_FLASH: Duration = Duration::from_millis(1500);
 /// How long the window size must stay still before it is written to disk.
 const WINDOW_SIZE_SAVE_DELAY: Duration = Duration::from_millis(500);
 const DOUBLE_CLICK: Duration = Duration::from_millis(400);
@@ -323,7 +325,9 @@ pub struct App {
     theme_dropdown_open: bool,
 
     wakatime: WakaTimeConfig,
-    wakatime_api_key_hovered: bool,
+    wakatime_key_visible: bool,
+    wakatime_key_copied: bool,
+    wakatime_copy_token: u64,
     last_wakatime_entity: Option<String>,
     last_wakatime_sent_at: Option<Instant>,
 
@@ -542,7 +546,9 @@ impl Default for App {
             theme_dropdown_open: false,
 
             wakatime: wakatime::load(),
-            wakatime_api_key_hovered: false,
+            wakatime_key_visible: false,
+            wakatime_key_copied: false,
+            wakatime_copy_token: 0,
             last_wakatime_entity: None,
             last_wakatime_sent_at: None,
 

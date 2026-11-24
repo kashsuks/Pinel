@@ -3204,12 +3204,29 @@ impl App {
                 self.wakatime.api_key = key;
                 iced::Task::none()
             },
-            Message::WakaTimeApiKeyHoverStart => {
-                self.wakatime_api_key_hovered = true;
+            Message::WakaTimeToggleKeyVisibility => {
+                self.wakatime_key_visible = !self.wakatime_key_visible;
                 iced::Task::none()
             },
-            Message::WakaTimeApiKeyHoverEnd => {
-                self.wakatime_api_key_hovered = false;
+            Message::WakaTimeCopyKey => {
+                self.wakatime_copy_token = self.wakatime_copy_token.wrapping_add(1);
+                self.wakatime_key_copied = true;
+                let token = self.wakatime_copy_token;
+                iced::Task::batch([
+                    iced::clipboard::write(self.wakatime.api_key.clone()),
+                    iced::Task::perform(
+                        async move {
+                            tokio::time::sleep(WAKATIME_COPIED_FLASH).await;
+                            token
+                        },
+                        Message::WakaTimeCopiedReset,
+                    ),
+                ])
+            },
+            Message::WakaTimeCopiedReset(token) => {
+                if token == self.wakatime_copy_token {
+                    self.wakatime_key_copied = false;
+                }
                 iced::Task::none()
             },
             Message::WakaTimeApiUrlChanged(url) => {
