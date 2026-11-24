@@ -1,0 +1,5 @@
+# Build with the latest stable toolchain (matches CI's dtolnay/rust-toolchain@stable).
+# The minimum supported version is declared as `rust-version` in each Cargo.toml.
+[toolchain]
+channel = "stable"
+components = ["clippy", "rustfmt"]

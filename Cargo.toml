@@ -5,6 +5,7 @@ members = [".", "crates/iced-code-editor"]
 name = "pinel"
 version = "0.9.0"
 edition = "2021"
+rust-version = "1.88"
 authors = ["Kashyap Sukshavas"]
 description = "A lightweight editor built with rust"
 license = "GPL-3.0-only"

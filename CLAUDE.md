@@ -64,7 +64,9 @@ This allows us to squash multiple commits that were in the Pull Request into one
 
 ## Rust Edition and Toolchain
 - Edition: 2021 (always specify in Cargo.toml)
-- MSRV: 1.75.0 (stable, pinned in rust-toolchain.toml)
+  - Exception: `crates/iced-code-editor` stays on edition 2024 to match its upstream fork
+- MSRV: 1.88 (declared as `rust-version` in each Cargo.toml; required by iced 0.14 / wgpu)
+- Toolchain: latest stable, set in rust-toolchain.toml
 - Do NOT use nightly features
 
 ## Error Handling
