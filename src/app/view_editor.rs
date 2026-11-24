@@ -8,7 +8,10 @@ use crate::{
         icons::{get_file_icon, icon_handle},
         lsp::diagnostic_counts,
     },
-    ui::git_graph::truncate_subject,
+    ui::{
+        codicon::{self, Codicon},
+        git_graph::truncate_subject,
+    },
 };
 
 impl App {
@@ -791,7 +794,7 @@ impl App {
                 theme().text_muted
             };
             let icon = container(
-                text(symbol_icon(symbol.kind)).size(TEXT_XS).color(theme().text_secondary),
+                codicon::icon(symbol_icon(symbol.kind), TEXT_SM).color(theme().text_secondary),
             )
             .width(Length::Fixed(TEXT_MD))
             .center_x(Length::Fixed(TEXT_MD));
@@ -855,7 +858,15 @@ impl App {
 
         if let Some(branch) = &self.git_branch {
             let branch = truncate_subject(branch, STATUS_BRANCH_MAX_CHARS);
-            left.push(status_text(format!("\u{2387} {branch}"), item_color).into());
+            left.push(
+                row![
+                    codicon::icon(Codicon::GitBranch, STATUS_TEXT_SIZE).color(item_color),
+                    status_text(branch, item_color),
+                ]
+                .spacing(SPACE_1)
+                .align_y(iced::Alignment::Center)
+                .into(),
+            );
         }
 
         if let Some((tab, code_editor)) = active_editor {

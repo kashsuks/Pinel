@@ -4,36 +4,39 @@ use std::path::Path;
 
 use iced_code_editor::LspSymbolKind;
 
-/// Returns a compact glyph for an LSP symbol kind in the breadcrumb bar.
-pub(crate) const fn symbol_icon(kind: LspSymbolKind) -> &'static str {
+use crate::ui::codicon::Codicon;
+
+/// Returns the Codicon for an LSP symbol kind in the breadcrumb bar.
+///
+/// Kinds without a dedicated icon share the one VS Code uses for them.
+pub(crate) const fn symbol_icon(kind: LspSymbolKind) -> Codicon {
     match kind {
-        LspSymbolKind::File => "▤",
-        LspSymbolKind::Module => "⬡",
-        LspSymbolKind::Namespace => "N",
-        LspSymbolKind::Package => "▣",
-        LspSymbolKind::Class => "C",
-        LspSymbolKind::Method => "m",
-        LspSymbolKind::Property => "◈",
-        LspSymbolKind::Field => "▪",
-        LspSymbolKind::Constructor => "◇",
-        LspSymbolKind::Enum => "E",
-        LspSymbolKind::Interface => "I",
-        LspSymbolKind::Function => "ƒ",
-        LspSymbolKind::Variable => "𝑥",
-        LspSymbolKind::Constant => "π",
-        LspSymbolKind::String => "S",
-        LspSymbolKind::Number => "#",
-        LspSymbolKind::Boolean => "◉",
-        LspSymbolKind::Array => "[]",
-        LspSymbolKind::Object => "⬡",
-        LspSymbolKind::Key => "◆",
-        LspSymbolKind::Null => "∅",
-        LspSymbolKind::EnumMember => "•",
-        LspSymbolKind::Struct => "S",
-        LspSymbolKind::Event => "⚡",
-        LspSymbolKind::Operator => "±",
-        LspSymbolKind::TypeParameter => "T",
-        LspSymbolKind::Unknown => "◇",
+        LspSymbolKind::File => Codicon::SymbolFile,
+        LspSymbolKind::Module
+        | LspSymbolKind::Namespace
+        | LspSymbolKind::Package
+        | LspSymbolKind::Object => Codicon::SymbolNamespace,
+        LspSymbolKind::Class => Codicon::SymbolClass,
+        LspSymbolKind::Method | LspSymbolKind::Function | LspSymbolKind::Constructor => {
+            Codicon::SymbolMethod
+        },
+        LspSymbolKind::Property => Codicon::SymbolProperty,
+        LspSymbolKind::Field => Codicon::SymbolField,
+        LspSymbolKind::Enum => Codicon::SymbolEnum,
+        LspSymbolKind::Interface => Codicon::SymbolInterface,
+        LspSymbolKind::Variable => Codicon::SymbolVariable,
+        LspSymbolKind::Constant => Codicon::SymbolConstant,
+        LspSymbolKind::String => Codicon::SymbolString,
+        LspSymbolKind::Number => Codicon::SymbolNumeric,
+        LspSymbolKind::Boolean | LspSymbolKind::Null => Codicon::SymbolBoolean,
+        LspSymbolKind::Array => Codicon::SymbolArray,
+        LspSymbolKind::Key => Codicon::SymbolKey,
+        LspSymbolKind::EnumMember => Codicon::SymbolEnumMember,
+        LspSymbolKind::Struct => Codicon::SymbolStructure,
+        LspSymbolKind::Event => Codicon::SymbolEvent,
+        LspSymbolKind::Operator => Codicon::SymbolOperator,
+        LspSymbolKind::TypeParameter => Codicon::SymbolParameter,
+        LspSymbolKind::Unknown => Codicon::SymbolMisc,
     }
 }
 
@@ -113,9 +116,19 @@ mod tests {
 
     #[test]
     fn test_symbol_icon_distinguishes_common_symbol_kinds() {
-        assert_eq!(symbol_icon(LspSymbolKind::Function), "ƒ");
-        assert_eq!(symbol_icon(LspSymbolKind::Class), "C");
-        assert_eq!(symbol_icon(LspSymbolKind::Object), "⬡");
-        assert_eq!(symbol_icon(LspSymbolKind::Method), "m");
+        assert_eq!(symbol_icon(LspSymbolKind::Function), Codicon::SymbolMethod);
+        assert_eq!(symbol_icon(LspSymbolKind::Class), Codicon::SymbolClass);
+        assert_eq!(symbol_icon(LspSymbolKind::Object), Codicon::SymbolNamespace);
+        assert_eq!(symbol_icon(LspSymbolKind::Struct), Codicon::SymbolStructure);
+        assert_eq!(symbol_icon(LspSymbolKind::String), Codicon::SymbolString);
+    }
+
+    #[test]
+    fn test_symbol_icon_struct_and_string_differ() {
+        // These both used to render as "S".
+        assert_ne!(
+            symbol_icon(LspSymbolKind::Struct),
+            symbol_icon(LspSymbolKind::String)
+        );
     }
 }
