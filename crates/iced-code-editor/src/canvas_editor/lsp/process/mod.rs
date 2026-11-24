@@ -31,6 +31,7 @@ use crate::canvas_editor::lsp::{LspClient, LspDocument, LspPosition, LspRange, L
 use serde_json::json;
 use std::collections::HashMap;
 use std::io::{BufReader, Write};
+use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, mpsc};
@@ -150,14 +151,14 @@ pub struct LspDiagnostic {
 ///
 /// ```no_run
 /// use std::sync::mpsc;
-/// use iced_code_editor::{LspProcessClient, LspEvent};
+/// use iced_code_editor::{LspEvent, LspProcessClient, LspWorkspaceRoot};
 ///
 /// let (tx, rx) = mpsc::channel::<LspEvent>();
-/// let client = LspProcessClient::new_with_server(
-///     "file:///home/user/project",
-///     tx,
-///     "lua-language-server",
-/// );
+/// let root = LspWorkspaceRoot {
+///     uri: "file:///home/user/project".to_string(),
+///     path: "/home/user/project".into(),
+/// };
+/// let client = LspProcessClient::new_with_server(Some(&root), tx, "lua-language-server");
 /// ```
 ///
 /// [`CodeEditor`]: crate::CodeEditor
@@ -188,12 +189,28 @@ pub struct LspProcessClient {
     _stderr_thread: thread::JoinHandle<()>,
 }
 
+/// The folder a language server treats as its workspace.
+///
+/// The server process runs with `path` as its working directory, and the
+/// `initialize` request names the folder in `rootUri`, `rootPath` and
+/// `workspaceFolders`, so no server falls back to the editor's own working
+/// directory (which is `/` when a macOS app is launched from the Dock).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LspWorkspaceRoot {
+    /// `file://` URI of the folder, such as `"file:///home/user/project"`.
+    pub uri: String,
+    /// Local path of the same folder.
+    pub path: PathBuf,
+}
+
 impl LspProcessClient {
     /// Creates a new LSP client connected to the specified server.
     ///
     /// # Arguments
     ///
-    /// * `root_uri` — the root URI of the workspace (e.g. `"file:///home/user/project"`)
+    /// * `root` — the workspace folder, or `None` when there is none. Without
+    ///   one the server gets a null `rootUri` and keeps the editor's working
+    ///   directory.
     /// * `events` — channel to send [`LspEvent`]s back to the application
     /// * `server_key` — key identifying the LSP server (e.g. `"lua-language-server"`)
     ///
@@ -206,18 +223,18 @@ impl LspProcessClient {
     ///
     /// ```no_run
     /// use std::sync::mpsc;
-    /// use iced_code_editor::{LspProcessClient, LspEvent};
+    /// use iced_code_editor::{LspEvent, LspProcessClient, LspWorkspaceRoot};
     ///
     /// let (tx, _rx) = mpsc::channel::<LspEvent>();
-    /// let client = LspProcessClient::new_with_server(
-    ///     "file:///tmp/project",
-    ///     tx,
-    ///     "lua-language-server",
-    /// );
+    /// let root = LspWorkspaceRoot {
+    ///     uri: "file:///tmp/project".to_string(),
+    ///     path: "/tmp/project".into(),
+    /// };
+    /// let client = LspProcessClient::new_with_server(Some(&root), tx, "lua-language-server");
     /// assert!(client.is_ok());
     /// ```
     pub fn new_with_server(
-        root_uri: &str,
+        root: Option<&LspWorkspaceRoot>,
         events: mpsc::Sender<LspEvent>,
         server_key: &str,
     ) -> Result<Self, String> {
@@ -229,7 +246,7 @@ impl LspProcessClient {
         }
 
         let command = resolve_lsp_command(config)?;
-        Self::new_with_command(root_uri, events, &command, server_key)
+        Self::new_with_command(root, events, &command, server_key)
     }
 
     /// Creates a new LSP client with a specific command.
@@ -241,16 +258,12 @@ impl LspProcessClient {
     /// Returns an error string if the process cannot be spawned or if stdio
     /// handles cannot be acquired.
     fn new_with_command(
-        root_uri: &str,
+        root: Option<&LspWorkspaceRoot>,
         events: mpsc::Sender<LspEvent>,
         command: &LspCommand,
         server_key: &str,
     ) -> Result<Self, String> {
-        let mut child = Command::new(&command.program)
-            .args(&command.args)
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
+        let mut child = server_command(command, root.map(|root| root.path.as_path()))
             .spawn()
             .map_err(|e| {
                 if e.kind() == std::io::ErrorKind::NotFound {
@@ -344,7 +357,7 @@ impl LspProcessClient {
             "jsonrpc": "2.0",
             "id": client.next_id(),
             "method": "initialize",
-            "params": initialize_params(root_uri, std::process::id())
+            "params": initialize_params(root, std::process::id())
         });
         client.send_message(&initialize);
 
@@ -411,15 +424,45 @@ impl LspProcessClient {
     }
 }
 
+/// Builds the command that starts a language server, with piped stdio.
+///
+/// When `working_dir` is given the server runs there, instead of inheriting
+/// the editor's working directory.
+fn server_command(command: &LspCommand, working_dir: Option<&Path>) -> Command {
+    let mut cmd = Command::new(&command.program);
+    cmd.args(&command.args)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    if let Some(dir) = working_dir {
+        cmd.current_dir(dir);
+    }
+    cmd
+}
+
 /// Builds the `params` of the `initialize` request sent to every server.
+///
+/// `root` is sent as `rootUri`, `rootPath` and the single entry of
+/// `workspaceFolders`. Servers differ in which of these they read, and one
+/// that finds none of them falls back to its working directory. Without a
+/// root, all three are null.
 ///
 /// `textDocument.hover.contentFormat` prefers markdown: without it, servers
 /// such as pyright, rust-analyzer and clangd answer hovers with plaintext, so
 /// the signature arrives without a code fence and renders as prose.
-fn initialize_params(root_uri: &str, process_id: u32) -> serde_json::Value {
+fn initialize_params(root: Option<&LspWorkspaceRoot>, process_id: u32) -> serde_json::Value {
+    let workspace_folders = root.map(|root| {
+        let name = root
+            .path
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_else(|| root.path.display().to_string());
+        json!([{ "uri": root.uri, "name": name }])
+    });
     json!({
         "processId": process_id,
-        "rootUri": root_uri,
+        "rootUri": root.map(|root| root.uri.as_str()),
+        "rootPath": root.map(|root| root.path.display().to_string()),
         "capabilities": {
             "textDocument": {
                 "synchronization": {
@@ -438,7 +481,7 @@ fn initialize_params(root_uri: &str, process_id: u32) -> serde_json::Value {
                 "workDoneProgress": true
             }
         },
-        "workspaceFolders": null
+        "workspaceFolders": workspace_folders
     })
 }
 
@@ -747,9 +790,16 @@ mod tests {
     // initialize_params
     // -------------------------------------------------------------------------
 
+    fn project_root() -> LspWorkspaceRoot {
+        LspWorkspaceRoot {
+            uri: "file:///tmp/my%20project".to_string(),
+            path: PathBuf::from("/tmp/my project"),
+        }
+    }
+
     #[test]
     fn test_initialize_params_requests_markdown_hover() {
-        let params = initialize_params("file:///tmp/project", 42);
+        let params = initialize_params(Some(&project_root()), 42);
 
         let hover = &params["capabilities"]["textDocument"]["hover"];
         assert_eq!(hover["contentFormat"][0], "markdown");
@@ -757,13 +807,60 @@ mod tests {
 
         // The rest of the request is unchanged by the hover capability.
         assert_eq!(params["processId"], 42);
-        assert_eq!(params["rootUri"], "file:///tmp/project");
         assert_eq!(
             params["capabilities"]["textDocument"]["documentSymbol"]["hierarchicalDocumentSymbolSupport"],
             true
         );
         assert_eq!(params["capabilities"]["window"]["workDoneProgress"], true);
+    }
+
+    #[test]
+    fn test_initialize_params_with_root_names_it_everywhere() {
+        let params = initialize_params(Some(&project_root()), 42);
+
+        assert_eq!(params["rootUri"], "file:///tmp/my%20project");
+        assert_eq!(params["rootPath"], "/tmp/my project");
+        assert_eq!(
+            params["workspaceFolders"][0]["uri"],
+            "file:///tmp/my%20project"
+        );
+        assert_eq!(params["workspaceFolders"][0]["name"], "my project");
+        assert_eq!(params["workspaceFolders"].as_array().map(Vec::len), Some(1));
+    }
+
+    #[test]
+    fn test_initialize_params_without_root_is_null() {
+        let params = initialize_params(None, 42);
+
+        assert!(params["rootUri"].is_null());
+        assert!(params["rootPath"].is_null());
         assert!(params["workspaceFolders"].is_null());
+    }
+
+    // -------------------------------------------------------------------------
+    // server_command
+    // -------------------------------------------------------------------------
+
+    fn stub_command() -> LspCommand {
+        LspCommand {
+            program: "stub-server".to_string(),
+            args: vec!["--stdio".to_string()],
+        }
+    }
+
+    #[test]
+    fn test_server_command_runs_in_root() {
+        let cmd = server_command(&stub_command(), Some(Path::new("/tmp/my project")));
+
+        assert_eq!(cmd.get_current_dir(), Some(Path::new("/tmp/my project")));
+        assert_eq!(cmd.get_program(), "stub-server");
+    }
+
+    #[test]
+    fn test_server_command_without_root_keeps_working_dir() {
+        let cmd = server_command(&stub_command(), None);
+
+        assert_eq!(cmd.get_current_dir(), None);
     }
 
     // -------------------------------------------------------------------------

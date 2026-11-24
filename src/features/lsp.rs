@@ -8,7 +8,7 @@ use std::{
     sync::mpsc,
 };
 
-use iced_code_editor::{LspClient, LspEvent, LspProcessClient};
+use iced_code_editor::{LspClient, LspEvent, LspProcessClient, LspWorkspaceRoot};
 
 /// Files and folders whose presence marks a directory as a project root.
 const ROOT_MARKERS: &[&str] = &[
@@ -50,9 +50,13 @@ impl LspManager {
         server_key: &str,
         root_hint: Option<&Path>,
     ) -> Result<Box<dyn LspClient>, String> {
-        let root_uri = self.root_uri(root_hint);
-        let client = LspProcessClient::new_with_server(&root_uri, self.sender.clone(), server_key)
-            .map_err(|e| format!("Failed to start LSP server '{}': {}", server_key, e))?;
+        let root = self.root_dir(root_hint).map(|path| LspWorkspaceRoot {
+            uri: document_uri(&path),
+            path,
+        });
+        let client =
+            LspProcessClient::new_with_server(root.as_ref(), self.sender.clone(), server_key)
+                .map_err(|e| format!("Failed to start LSP server '{}': {}", server_key, e))?;
         Ok(Box::new(client))
     }
 
@@ -73,7 +77,10 @@ impl LspManager {
         events
     }
 
-    fn root_uri(&self, root_hint: Option<&Path>) -> String {
+    /// The workspace folder for a server started for a file in `root_hint`
+    /// (or for the opened folder when there is no hint). `None` when there is
+    /// no usable folder, so the server is never told to index `/`.
+    fn root_dir(&self, root_hint: Option<&Path>) -> Option<PathBuf> {
         let hint_dir = root_hint.and_then(|path| {
             if path.is_dir() {
                 Some(path)
@@ -82,19 +89,15 @@ impl LspManager {
             }
         });
         let root_dir = match hint_dir {
-            Some(dir) => Some(project_root(
+            Some(dir) => project_root(
                 dir,
                 self.workspace_root.as_deref(),
                 dirs::home_dir().as_deref(),
                 &has_root_marker,
-            )),
-            None => self.workspace_root.clone(),
+            ),
+            None => self.workspace_root.clone()?,
         };
-
-        match root_dir {
-            Some(dir) => document_uri(&dir),
-            None => "file:///".to_string(),
-        }
+        usable_root(root_dir)
     }
 }
 
@@ -108,6 +111,14 @@ impl Default for LspManager {
 /// than `is_file()` because `.git` is a file in worktrees and submodules.
 fn has_root_marker(dir: &Path) -> bool {
     ROOT_MARKERS.iter().any(|marker| dir.join(marker).exists())
+}
+
+/// Returns `dir` if a language server can use it as its workspace: an
+/// existing directory other than the filesystem root. The server runs in this
+/// directory and indexes it, so `/` (from a file at the top of the disk or a
+/// folder opened at `/`) is rejected rather than indexed.
+fn usable_root(dir: PathBuf) -> Option<PathBuf> {
+    (dir.parent().is_some() && dir.is_dir()).then_some(dir)
 }
 
 /// Whether `dir` is too broad to be a project root: the filesystem root (a
@@ -391,6 +402,72 @@ mod tests {
         let root = project_root(Path::new("/srv/files"), None, None, &has_marker);
 
         assert_eq!(root, PathBuf::from("/srv/files"));
+        Ok(())
+    }
+
+    #[test]
+    fn test_usable_root_existing_dir_is_kept() -> Result<(), Box<dyn Error>> {
+        let dir = tempfile::tempdir()?;
+
+        assert_eq!(
+            usable_root(dir.path().to_path_buf()),
+            Some(dir.path().to_path_buf())
+        );
+        Ok(())
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_usable_root_filesystem_root_is_none() -> Result<(), Box<dyn Error>> {
+        assert_eq!(usable_root(PathBuf::from("/")), None);
+        Ok(())
+    }
+
+    #[test]
+    fn test_usable_root_missing_dir_is_none() -> Result<(), Box<dyn Error>> {
+        let dir = tempfile::tempdir()?;
+        let missing = dir.path().join("deleted");
+
+        assert_eq!(usable_root(missing), None);
+        Ok(())
+    }
+
+    #[test]
+    fn test_root_dir_file_in_opened_folder_is_opened_folder() -> Result<(), Box<dyn Error>> {
+        let workspace = tempfile::tempdir()?;
+        let src = workspace.path().join("src");
+        std::fs::create_dir(&src)?;
+        let mut manager = LspManager::new();
+        manager.set_workspace_root(workspace.path().to_path_buf());
+
+        let root = manager.root_dir(Some(&src.join("main.py")));
+
+        assert_eq!(root, Some(workspace.path().to_path_buf()));
+        Ok(())
+    }
+
+    #[test]
+    fn test_root_dir_no_hint_is_opened_folder() -> Result<(), Box<dyn Error>> {
+        let workspace = tempfile::tempdir()?;
+        let mut manager = LspManager::new();
+        manager.set_workspace_root(workspace.path().to_path_buf());
+
+        assert_eq!(manager.root_dir(None), Some(workspace.path().to_path_buf()));
+        Ok(())
+    }
+
+    #[test]
+    fn test_root_dir_nothing_open_is_none() -> Result<(), Box<dyn Error>> {
+        assert_eq!(LspManager::new().root_dir(None), None);
+        Ok(())
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_root_dir_file_at_filesystem_root_is_none() -> Result<(), Box<dyn Error>> {
+        let manager = LspManager::new();
+
+        assert_eq!(manager.root_dir(Some(Path::new("/"))), None);
         Ok(())
     }
 
