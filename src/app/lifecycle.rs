@@ -7,11 +7,19 @@ impl App {
     /// Creates the application state and schedules an initial update check.
     #[allow(dead_code)]
     pub fn new() -> (Self, iced::Task<Message>) {
-        Self::new_with_path(None)
+        Self::new_with_path(None, true)
     }
 
-    pub fn new_with_path(startup_path: Option<std::path::PathBuf>) -> (Self, iced::Task<Message>) {
+    /// Creates the application state, opening `startup_path` if given.
+    ///
+    /// When `persist_session` is false the saved session is never written,
+    /// so a throwaway window (like `pinel connect`) leaves it untouched.
+    pub fn new_with_path(
+        startup_path: Option<std::path::PathBuf>,
+        persist_session: bool,
+    ) -> (Self, iced::Task<Message>) {
         let mut app = Self::default();
+        app.persist_session = persist_session;
 
         app.update_banner = app.update_state.notification(
             crate::features::updater::CURRENT_VERSION,

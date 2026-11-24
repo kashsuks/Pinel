@@ -300,6 +300,8 @@ pub struct App {
     discord_rpc_last_sent: Option<(Option<std::path::PathBuf>, Option<String>)>,
 
     last_persisted_session: Option<crate::config::session::SessionState>,
+    /// False for windows that must not overwrite the saved session.
+    persist_session: bool,
 
     pending_active_tab_path: Option<std::path::PathBuf>,
     pending_cursor_restores: std::collections::HashMap<std::path::PathBuf, (usize, usize)>,
@@ -519,6 +521,7 @@ impl Default for App {
             discord_rpc_client: None,
             discord_rpc_last_sent: None,
             last_persisted_session: None,
+            persist_session: true,
 
             pending_active_tab_path: None,
             pending_cursor_restores: std::collections::HashMap::new(),
@@ -932,6 +935,10 @@ impl App {
     }
 
     pub(super) fn sync_session_state(&mut self) {
+        if !self.persist_session {
+            return;
+        }
+
         let current = self.current_session_state();
 
         if self.last_persisted_session.as_ref() == Some(&current) {

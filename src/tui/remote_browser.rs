@@ -158,8 +158,7 @@ impl RemoteBrowser {
 
         let current_exe =
             std::env::current_exe().context("failed to resolve current executable")?;
-        let editor_status = Command::new(current_exe)
-            .arg(&local_path)
+        let editor_status = editor_command(&current_exe, &local_path)
             .status()
             .context("failed to launch Pinel editor")?;
 
@@ -170,5 +169,27 @@ impl RemoteBrowser {
         self.session.upload_file(&local_path, remote_path)?;
         self.status = format!("saved {}", remote_path.display());
         Ok(())
+    }
+}
+
+/// Builds the command that opens a downloaded remote file in Pinel.
+///
+/// `--no-session` keeps that window from replacing the user's saved tabs
+/// with the temporary copy.
+fn editor_command(current_exe: &Path, local_path: &Path) -> Command {
+    let mut command = Command::new(current_exe);
+    command.arg("--no-session").arg(local_path);
+    command
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_editor_command_skips_session() {
+        let command = editor_command(Path::new("/usr/bin/pinel"), Path::new("/tmp/x/main.rs"));
+        let args: Vec<_> = command.get_args().collect();
+        assert_eq!(args, ["--no-session", "/tmp/x/main.rs"]);
     }
 }
