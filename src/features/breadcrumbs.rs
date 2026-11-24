@@ -2,6 +2,44 @@
 
 use std::path::Path;
 
+use iced_code_editor::LspSymbolKind;
+
+use crate::ui::codicon::Codicon;
+
+/// Returns the Codicon for an LSP symbol kind in the breadcrumb bar.
+///
+/// Kinds without a dedicated icon share the one VS Code uses for them.
+pub(crate) const fn symbol_icon(kind: LspSymbolKind) -> Codicon {
+    match kind {
+        LspSymbolKind::File => Codicon::SymbolFile,
+        LspSymbolKind::Module
+        | LspSymbolKind::Namespace
+        | LspSymbolKind::Package
+        | LspSymbolKind::Object => Codicon::SymbolNamespace,
+        LspSymbolKind::Class => Codicon::SymbolClass,
+        LspSymbolKind::Method | LspSymbolKind::Function | LspSymbolKind::Constructor => {
+            Codicon::SymbolMethod
+        },
+        LspSymbolKind::Property => Codicon::SymbolProperty,
+        LspSymbolKind::Field => Codicon::SymbolField,
+        LspSymbolKind::Enum => Codicon::SymbolEnum,
+        LspSymbolKind::Interface => Codicon::SymbolInterface,
+        LspSymbolKind::Variable => Codicon::SymbolVariable,
+        LspSymbolKind::Constant => Codicon::SymbolConstant,
+        LspSymbolKind::String => Codicon::SymbolString,
+        LspSymbolKind::Number => Codicon::SymbolNumeric,
+        LspSymbolKind::Boolean | LspSymbolKind::Null => Codicon::SymbolBoolean,
+        LspSymbolKind::Array => Codicon::SymbolArray,
+        LspSymbolKind::Key => Codicon::SymbolKey,
+        LspSymbolKind::EnumMember => Codicon::SymbolEnumMember,
+        LspSymbolKind::Struct => Codicon::SymbolStructure,
+        LspSymbolKind::Event => Codicon::SymbolEvent,
+        LspSymbolKind::Operator => Codicon::SymbolOperator,
+        LspSymbolKind::TypeParameter => Codicon::SymbolParameter,
+        LspSymbolKind::Unknown => Codicon::SymbolMisc,
+    }
+}
+
 /// Returns the path part of the breadcrumb for `path`.
 ///
 /// When `path` is inside `root`, the trail starts with the project folder
@@ -74,5 +112,23 @@ mod tests {
     fn test_path_segments_filesystem_root_uses_display_name() {
         let crumbs = path_segments(Path::new("/notes.md"), Some(Path::new("/")));
         assert_eq!(crumbs, ["/", "notes.md"]);
+    }
+
+    #[test]
+    fn test_symbol_icon_distinguishes_common_symbol_kinds() {
+        assert_eq!(symbol_icon(LspSymbolKind::Function), Codicon::SymbolMethod);
+        assert_eq!(symbol_icon(LspSymbolKind::Class), Codicon::SymbolClass);
+        assert_eq!(symbol_icon(LspSymbolKind::Object), Codicon::SymbolNamespace);
+        assert_eq!(symbol_icon(LspSymbolKind::Struct), Codicon::SymbolStructure);
+        assert_eq!(symbol_icon(LspSymbolKind::String), Codicon::SymbolString);
+    }
+
+    #[test]
+    fn test_symbol_icon_struct_and_string_differ() {
+        // These both used to render as "S".
+        assert_ne!(
+            symbol_icon(LspSymbolKind::Struct),
+            symbol_icon(LspSymbolKind::String)
+        );
     }
 }

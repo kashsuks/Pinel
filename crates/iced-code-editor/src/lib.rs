@@ -248,8 +248,8 @@ pub use canvas_editor::bench_support;
 pub use canvas_editor::features::folding::FoldRegion;
 /// LSP integration types and traits for editor clients.
 pub use canvas_editor::lsp::{
-    LspClient, LspDocument, LspPosition, LspRange, LspSymbol, LspTextChange, compute_text_change,
-    symbol_path_at,
+    LspClient, LspDocument, LspPosition, LspRange, LspSymbol, LspSymbolKind, LspTextChange,
+    compute_text_change, symbol_details_path_at, symbol_path_at,
 };
 pub use canvas_editor::{
     ArrowDirection, CodeEditor, CommandHistory, ContextMenuEntry, ContextMenuItem, IndentStyle,

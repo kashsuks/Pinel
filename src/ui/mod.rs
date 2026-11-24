@@ -1,4 +1,5 @@
 pub mod chat_panel;
+pub mod codicon;
 pub mod commit_card;
 pub mod context_menu;
 pub mod editor;

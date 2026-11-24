@@ -107,8 +107,14 @@ jobs:
             echo "RELEASE_BODY_EOF"
           } >> "$GITHUB_OUTPUT"
 
-  create-release:
+  tests:
     needs: prepare-release
+    if: needs.prepare-release.outputs.should_release == 'true'
+    uses: ./.github/workflows/test.yml
+    secrets: inherit
+
+  create-release:
+    needs: [prepare-release, tests]
     if: needs.prepare-release.outputs.should_release == 'true'
     permissions:
       contents: write
@@ -160,7 +166,8 @@ jobs:
     secrets: inherit
 
   crates:
-    needs: prepare-release
+    # Wait for every binary so a failed build never leaves an unrevokable crates.io publish behind.
+    needs: [prepare-release, linux, windows, macos]
     if: needs.prepare-release.outputs.should_release == 'true'
     uses: ./.github/workflows/release-crates.yml
     with:
