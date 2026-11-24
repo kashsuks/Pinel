@@ -72,6 +72,7 @@ fn run_gui(startup_path: Option<PathBuf>, persist_session: bool) -> iced::Result
     .font(FIRA_CODE_REGULAR)
     .font(FIRA_CODE_MEDIUM)
     .font(SF_PRO)
+    .font(ui::codicon::FONT_BYTES)
     .default_font(iced::Font {
         family: iced::font::Family::Name("SF Pro"),
         weight: iced::font::Weight::Medium,
