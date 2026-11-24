@@ -135,6 +135,104 @@ pub struct LspTextChange {
     pub text: String,
 }
 
+/// The kind of an LSP document symbol.
+///
+/// The variants correspond to the numeric values in the Language Server
+/// Protocol's `SymbolKind` type. [`Self::Unknown`] keeps responses from older
+/// or non-conforming servers usable when their kind is missing or unsupported.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LspSymbolKind {
+    /// A file.
+    File,
+    /// A module.
+    Module,
+    /// A namespace.
+    Namespace,
+    /// A package.
+    Package,
+    /// A class.
+    Class,
+    /// A method.
+    Method,
+    /// A property.
+    Property,
+    /// A field.
+    Field,
+    /// A constructor.
+    Constructor,
+    /// An enum.
+    Enum,
+    /// An interface.
+    Interface,
+    /// A function.
+    Function,
+    /// A variable.
+    Variable,
+    /// A constant.
+    Constant,
+    /// A string value.
+    String,
+    /// A numeric value.
+    Number,
+    /// A boolean value.
+    Boolean,
+    /// An array.
+    Array,
+    /// An object.
+    Object,
+    /// An object key.
+    Key,
+    /// A null value.
+    Null,
+    /// An enum member.
+    EnumMember,
+    /// A struct.
+    Struct,
+    /// An event.
+    Event,
+    /// An operator.
+    Operator,
+    /// A type parameter.
+    TypeParameter,
+    /// A missing or unsupported symbol kind.
+    Unknown,
+}
+
+impl LspSymbolKind {
+    /// Converts the numeric value used by the Language Server Protocol.
+    pub fn from_lsp_value(value: Option<u64>) -> Self {
+        match value {
+            Some(1) => Self::File,
+            Some(2) => Self::Module,
+            Some(3) => Self::Namespace,
+            Some(4) => Self::Package,
+            Some(5) => Self::Class,
+            Some(6) => Self::Method,
+            Some(7) => Self::Property,
+            Some(8) => Self::Field,
+            Some(9) => Self::Constructor,
+            Some(10) => Self::Enum,
+            Some(11) => Self::Interface,
+            Some(12) => Self::Function,
+            Some(13) => Self::Variable,
+            Some(14) => Self::Constant,
+            Some(15) => Self::String,
+            Some(16) => Self::Number,
+            Some(17) => Self::Boolean,
+            Some(18) => Self::Array,
+            Some(19) => Self::Object,
+            Some(20) => Self::Key,
+            Some(21) => Self::Null,
+            Some(22) => Self::EnumMember,
+            Some(23) => Self::Struct,
+            Some(24) => Self::Event,
+            Some(25) => Self::Operator,
+            Some(26) => Self::TypeParameter,
+            _ => Self::Unknown,
+        }
+    }
+}
+
 /// A symbol in a document's outline, as reported by `textDocument/documentSymbol`.
 ///
 /// Symbols form a tree: a method sits in the `children` of its type, which
@@ -144,10 +242,11 @@ pub struct LspTextChange {
 /// # Example
 ///
 /// ```
-/// use iced_code_editor::{LspPosition, LspRange, LspSymbol};
+/// use iced_code_editor::{LspPosition, LspRange, LspSymbol, LspSymbolKind};
 ///
 /// let symbol = LspSymbol {
 ///     name: "main".to_string(),
+///     kind: LspSymbolKind::Function,
 ///     range: LspRange {
 ///         start: LspPosition { line: 0, character: 0 },
 ///         end: LspPosition { line: 2, character: 1 },
@@ -161,6 +260,8 @@ pub struct LspTextChange {
 pub struct LspSymbol {
     /// Name shown for the symbol, such as a function or type name.
     pub name: String,
+    /// Semantic kind reported by the language server.
+    pub kind: LspSymbolKind,
     /// Full range of the symbol, including its body.
     pub range: LspRange,
     /// Symbols declared inside this one.
@@ -200,7 +301,7 @@ impl LspSymbol {
 /// # Example
 ///
 /// ```
-/// use iced_code_editor::{LspPosition, LspRange, LspSymbol, symbol_path_at};
+/// use iced_code_editor::{LspPosition, LspRange, LspSymbol, LspSymbolKind, symbol_path_at};
 ///
 /// let range = |start, end| LspRange {
 ///     start: LspPosition { line: start, character: 0 },
@@ -208,9 +309,11 @@ impl LspSymbol {
 /// };
 /// let symbols = vec![LspSymbol {
 ///     name: "Editor".to_string(),
+///     kind: LspSymbolKind::Struct,
 ///     range: range(0, 10),
 ///     children: vec![LspSymbol {
 ///         name: "render".to_string(),
+///         kind: LspSymbolKind::Method,
 ///         range: range(2, 5),
 ///         children: Vec::new(),
 ///     }],
@@ -221,10 +324,21 @@ impl LspSymbol {
 /// assert!(symbol_path_at(&symbols, 11).is_empty());
 /// ```
 pub fn symbol_path_at(symbols: &[LspSymbol], line: u32) -> Vec<String> {
+    symbol_details_path_at(symbols, line)
+        .into_iter()
+        .map(|symbol| symbol.name.clone())
+        .collect()
+}
+
+/// Returns the symbols enclosing `line`, outermost first.
+///
+/// Unlike [`symbol_path_at`], this keeps each symbol's kind and range
+/// available to callers that need richer breadcrumb presentation.
+pub fn symbol_details_path_at(symbols: &[LspSymbol], line: u32) -> Vec<&LspSymbol> {
     let mut path = Vec::new();
     let mut level = symbols;
     while let Some(symbol) = level.iter().find(|symbol| symbol.contains_line(line)) {
-        path.push(symbol.name.clone());
+        path.push(symbol);
         level = &symbol.children;
     }
     path
@@ -385,6 +499,7 @@ mod tests {
     fn symbol(name: &str, start: u32, end: u32, children: Vec<LspSymbol>) -> LspSymbol {
         LspSymbol {
             name: name.to_string(),
+            kind: LspSymbolKind::Unknown,
             range: LspRange {
                 start: LspPosition {
                     line: start,
@@ -418,6 +533,19 @@ mod tests {
         ];
         assert!(symbol_path_at(&symbols, 4).is_empty());
         assert!(symbol_path_at(&[], 0).is_empty());
+    }
+
+    #[test]
+    fn test_symbol_details_path_at_preserves_symbol_kinds() {
+        let mut outer = symbol("Editor", 0, 9, vec![symbol("render", 2, 5, Vec::new())]);
+        outer.kind = LspSymbolKind::Class;
+        outer.children[0].kind = LspSymbolKind::Method;
+
+        let symbols = [outer];
+        let path = symbol_details_path_at(&symbols, 3);
+        assert_eq!(path.len(), 2);
+        assert_eq!(path[0].kind, LspSymbolKind::Class);
+        assert_eq!(path[1].kind, LspSymbolKind::Method);
     }
 
     #[test]
