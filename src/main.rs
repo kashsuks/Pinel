@@ -39,11 +39,11 @@ fn main() -> iced::Result {
             }
             Ok(())
         },
-        None => run_gui(cli.path),
+        None => run_gui(cli.path, !cli.no_session),
     }
 }
 
-fn run_gui(startup_path: Option<PathBuf>) -> iced::Result {
+fn run_gui(startup_path: Option<PathBuf>, persist_session: bool) -> iced::Result {
     // `pinel .` passes a relative path, and language servers only attach to
     // absolute ones. If the working directory is unreadable, keep it as given.
     let startup_path = startup_path.map(|path| match std::env::current_dir() {
@@ -61,7 +61,7 @@ fn run_gui(startup_path: Option<PathBuf>) -> iced::Result {
     let window_height = prefs.window_height.max(480.0);
 
     iced::application(
-        move || app::App::new_with_path(startup_path.clone()),
+        move || app::App::new_with_path(startup_path.clone(), persist_session),
         app::App::update,
         app::App::view,
     )
