@@ -1347,11 +1347,15 @@ impl App {
                         } else {
                             theme().text_muted
                         }),
-                        text(name).size(TEXT_MD).color(if is_selected {
-                            theme().text_primary
-                        } else {
-                            theme().text_muted
-                        }),
+                        text(name)
+                            .size(TEXT_MD)
+                            .color(if is_selected {
+                                theme().text_primary
+                            } else {
+                                theme().text_muted
+                            })
+                            .width(Length::Fill),
+                        theme_swatch_dots(name),
                     ]
                     .spacing(SPACE_2)
                     .align_y(iced::Alignment::Center),
@@ -1390,46 +1394,44 @@ impl App {
         }
 
         // one segmented control so exactly one editor mode is always chosen
-        let mode_segment = |label: &'static str,
-                            selected: bool,
-                            msg: Message|
-         -> iced::Element<'_, Message> {
-            iced::widget::button(
-                container(text(label).size(TEXT_MD).color(if selected {
-                    BG_BASE
-                } else {
-                    theme().text_muted
-                }))
-                .center_x(Length::Fill),
-            )
-            .on_press(msg)
-            .style(move |_t, status| {
-                let background = if selected {
-                    Some(Background::Color(crate::theme::ACCENT_PURPLE))
-                } else if matches!(status, iced::widget::button::Status::Hovered) {
-                    Some(Background::Color(theme().bg_hover))
-                } else {
-                    None
-                };
-                iced::widget::button::Style {
-                    background,
-                    border: iced::Border {
-                        radius: 6.0.into(),
+        let mode_segment =
+            |label: &'static str, selected: bool, msg: Message| -> iced::Element<'_, Message> {
+                iced::widget::button(
+                    container(text(label).size(TEXT_MD).color(if selected {
+                        BG_BASE
+                    } else {
+                        theme().text_muted
+                    }))
+                    .center_x(Length::Fill),
+                )
+                .on_press(msg)
+                .style(move |_t, status| {
+                    let background = if selected {
+                        Some(Background::Color(crate::theme::ACCENT_PURPLE))
+                    } else if matches!(status, iced::widget::button::Status::Hovered) {
+                        Some(Background::Color(theme().bg_hover))
+                    } else {
+                        None
+                    };
+                    iced::widget::button::Style {
+                        background,
+                        border: iced::Border {
+                            radius: 6.0.into(),
+                            ..Default::default()
+                        },
+                        text_color: Color::TRANSPARENT,
                         ..Default::default()
-                    },
-                    text_color: Color::TRANSPARENT,
-                    ..Default::default()
-                }
-            })
-            .padding(iced::Padding {
-                top: SPACE_2,
-                right: SPACE_3,
-                bottom: SPACE_2,
-                left: SPACE_3,
-            })
-            .width(Length::Fill)
-            .into()
-        };
+                    }
+                })
+                .padding(iced::Padding {
+                    top: SPACE_2,
+                    right: SPACE_3,
+                    bottom: SPACE_2,
+                    left: SPACE_3,
+                })
+                .width(Length::Fill)
+                .into()
+            };
 
         let vim = self.startup_vim_mode;
         let editor_mode = column![
@@ -1574,6 +1576,36 @@ impl App {
             .height(Length::Fill)
             .into()
     }
+}
+
+/// Diameter of one colour dot on a startup theme button.
+const SWATCH_DOT_SIZE: f32 = 10.0;
+
+/// A row of colour dots showing the background, accent and a few syntax
+/// colours of the built-in theme `name`, so a theme can be judged before it
+/// is picked. Empty for a name that is not a built-in theme.
+fn theme_swatch_dots<'a>(name: &str) -> Element<'a, Message> {
+    let Some(swatches) = crate::theme::builtin_theme_swatches(name) else {
+        return iced::widget::Space::new().into();
+    };
+    let dots = swatches.into_iter().map(|color| {
+        container(iced::widget::Space::new())
+            .width(Length::Fixed(SWATCH_DOT_SIZE))
+            .height(Length::Fixed(SWATCH_DOT_SIZE))
+            .style(move |_t| container::Style {
+                background: Some(Background::Color(color)),
+                border: iced::Border {
+                    // outline so a background dot close to the button's own
+                    // colour still shows up
+                    color: theme().border_subtle,
+                    width: 1.0,
+                    radius: (SWATCH_DOT_SIZE / 2.0).into(),
+                },
+                ..Default::default()
+            })
+            .into()
+    });
+    iced::widget::Row::with_children(dots).spacing(SPACE_1).into()
 }
 
 /// Padding shared by the settings toggle buttons and number inputs, so every
