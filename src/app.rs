@@ -314,7 +314,6 @@ pub struct App {
 
     startup_page_open: bool,
     startup_vim_mode: bool,
-    startup_helix_mode: bool,
     startup_run_on_startup: bool,
     startup_selected_theme: String,
 
@@ -534,7 +533,6 @@ impl Default for App {
 
             startup_page_open: editor_preferences.first_launch,
             startup_vim_mode: false,
-            startup_helix_mode: false,
             startup_run_on_startup: true,
             startup_selected_theme: editor_preferences.theme_name.clone(),
 
