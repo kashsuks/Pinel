@@ -3656,6 +3656,8 @@ impl App {
                 crate::theme::set_theme(new_theme);
                 self.apply_editor_theme_to_tabs();
                 self.editor_preferences.theme_name = name;
+                self.editor_preferences.vim_mode_enabled = self.startup_vim_mode;
+                self.apply_vim_mode_to_tabs();
                 let _ = crate::config::preferences::save_preferences(&self.editor_preferences);
                 self.start_release_notes(false)
             },
