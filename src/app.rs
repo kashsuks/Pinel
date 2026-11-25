@@ -429,7 +429,11 @@ impl Default for App {
             all_workspace_files: Vec::new(),
             workspace_index_generation: 0, // no index started yet
             recent_files: Vec::new(),
-            recent_folders: crate::config::recent_folders::load(),
+            // Folders since moved or deleted would only fail to open.
+            recent_folders: crate::config::recent_folders::load()
+                .into_iter()
+                .filter(|path| path.is_dir())
+                .collect(),
             file_finder_input_id: iced::widget::Id::unique(),
             fuzzy_finder: FuzzyFinder::default(),
 
