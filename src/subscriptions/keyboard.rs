@@ -27,6 +27,24 @@ pub fn terminal_shortcuts() -> Subscription<Message> {
     })
 }
 
+/// Emits startup page messages while the first-launch page is shown.
+///
+/// Replaces [`shortcuts`] there, so editor shortcuts can't fire behind the page.
+pub fn startup_page() -> Subscription<Message> {
+    iced::event::listen_with(|event, _status, _id| match event {
+        Event::Keyboard(iced::keyboard::Event::KeyPressed { key, .. }) => startup_key_for(&key),
+        _ => None,
+    })
+}
+
+/// Maps a key press on the startup page to its message: Enter continues.
+pub fn startup_key_for(key: &Key) -> Option<Message> {
+    match key {
+        Key::Named(iced::keyboard::key::Named::Enter) => Some(Message::StartupPageDone),
+        _ => None,
+    }
+}
+
 /// Maps a key press to the editor shortcut message it triggers, if any.
 ///
 /// When `terminal_focused` is true, bare-Ctrl chords (used by readline and the
@@ -133,6 +151,20 @@ mod tests {
 
     fn ch(c: &str) -> Key {
         Key::Character(c.into())
+    }
+
+    #[test]
+    fn test_startup_key_for_enter_continues() {
+        assert!(matches!(
+            startup_key_for(&Key::Named(Named::Enter)),
+            Some(Message::StartupPageDone)
+        ));
+    }
+
+    #[test]
+    fn test_startup_key_for_other_keys_is_ignored() {
+        assert!(startup_key_for(&ch("j")).is_none());
+        assert!(startup_key_for(&Key::Named(Named::Escape)).is_none());
     }
 
     #[test]

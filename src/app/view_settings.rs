@@ -1549,7 +1549,16 @@ impl App {
         .width(Length::Fill);
 
         // kept outside the scrollable so it stays pinned to the bottom right
-        let footer = container(continue_btn).align_right(Length::Fill).padding(iced::Padding {
+        let footer = container(
+            row![
+                text("or press Enter").size(TEXT_XS).color(theme().text_muted),
+                continue_btn,
+            ]
+            .spacing(SPACE_3)
+            .align_y(iced::Alignment::Center),
+        )
+        .align_right(Length::Fill)
+        .padding(iced::Padding {
             top: SPACE_4,
             right: 40.0,
             bottom: 32.0,
