@@ -1490,6 +1490,8 @@ impl App {
                         .size(TEXT_MD)
                         .color(theme().text_muted),
                     iced::widget::Space::new().height(Length::Fixed(24.0)),
+                    startup_code_sample(self.editor_preferences.code_font()),
+                    iced::widget::Space::new().height(Length::Fixed(16.0)),
                     text("Choose a theme").size(14).color(theme().text_muted),
                     iced::widget::Space::new().height(Length::Fixed(8.0)),
                     column(theme_rows).spacing(SPACE_2),
@@ -1577,6 +1579,86 @@ impl App {
             .height(Length::Fill)
             .into()
     }
+}
+
+/// The snippet drawn on the startup page, one entry per line, each split
+/// into `(text, scope)` tokens. `None` draws the token in the plain text
+/// colour; a scope draws it in whatever colour the theme gives that scope.
+const STARTUP_SAMPLE: &[&[(&str, Option<&str>)]] = &[
+    &[("// a small taste of this theme", Some("comment"))],
+    &[
+        ("fn", Some("keyword")),
+        (" ", None),
+        ("greet", Some("entity.name.function")),
+        ("(name: &", None),
+        ("str", Some("entity.name.type")),
+        (") -> ", None),
+        ("String", Some("entity.name.type")),
+        (" {", None),
+    ],
+    &[
+        ("    ", None),
+        ("let", Some("keyword")),
+        (" count = ", None),
+        ("3", Some("constant.numeric")),
+        (";", None),
+    ],
+    &[
+        ("    ", None),
+        ("format!", Some("entity.name.function")),
+        ("(", None),
+        ("\"Hello, {name} x{count}\"", Some("string")),
+        (")", None),
+    ],
+    &[("}", None)],
+];
+
+/// A read-only code sample highlighted with the active theme, so picking a
+/// theme on the startup page shows what the editor will look like.
+fn startup_code_sample<'a>(font: iced::Font) -> Element<'a, Message> {
+    // read every colour up front instead of holding the theme lock while
+    // building widgets
+    let (plain, line_number, background, border) = {
+        let colors = theme();
+        (
+            colors.editor_style.text_color,
+            colors.editor_style.line_number_color,
+            colors.editor_style.background,
+            colors.border_subtle,
+        )
+    };
+
+    let lines = STARTUP_SAMPLE.iter().enumerate().map(|(index, tokens)| {
+        let spans: Vec<iced::widget::text::Span<'a, ()>> = tokens
+            .iter()
+            .map(|(token, scope)| {
+                let color = scope.map_or(plain, |scope| theme().syntax_color(scope));
+                iced::widget::text::Span::new(*token).color(color).font(font).size(TEXT_SM)
+            })
+            .collect();
+        row![
+            container(text((index + 1).to_string()).size(TEXT_SM).font(font).color(line_number))
+                .width(Length::Fixed(20.0))
+                .align_right(Length::Fixed(20.0)),
+            iced::widget::rich_text(spans),
+        ]
+        .spacing(SPACE_3)
+        .into()
+    });
+
+    container(iced::widget::Column::with_children(lines).spacing(2))
+        .padding(SPACE_4)
+        .width(Length::Fill)
+        .style(move |_t| container::Style {
+            background: Some(Background::Color(background)),
+            border: iced::Border {
+                color: border,
+                width: 1.0,
+                radius: RADIUS_LG.into(),
+            },
+            ..Default::default()
+        })
+        .into()
 }
 
 /// Diameter of one colour dot on a startup theme button.
@@ -1696,5 +1778,27 @@ fn settings_action_style(_theme: &iced::Theme, status: button::Status) -> button
             ..Default::default()
         },
         ..Default::default()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_startup_sample_every_scope_is_coloured() {
+        for name in crate::theme::BUILTIN_THEMES {
+            let colors = crate::theme::builtin_theme(name);
+            let plain = colors.editor_style.text_color;
+            for (token, scope) in STARTUP_SAMPLE.iter().flat_map(|line| line.iter()) {
+                if let Some(scope) = scope {
+                    assert_ne!(
+                        colors.syntax_color(scope),
+                        plain,
+                        "{token:?} ({scope}) is drawn as plain text in {name:?}"
+                    );
+                }
+            }
+        }
     }
 }
