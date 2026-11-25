@@ -1218,7 +1218,7 @@ impl App {
 
     pub(super) fn view_startup_page(&self) -> iced::Element<'_, Message> {
         use iced::{
-            widget::{column, container, row, scrollable, text, Space},
+            widget::{column, container, row, text, Space},
             Background, Color, Length,
         };
 
