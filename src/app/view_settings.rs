@@ -1390,46 +1390,44 @@ impl App {
         }
 
         // one segmented control so exactly one editor mode is always chosen
-        let mode_segment = |label: &'static str,
-                            selected: bool,
-                            msg: Message|
-         -> iced::Element<'_, Message> {
-            iced::widget::button(
-                container(text(label).size(TEXT_MD).color(if selected {
-                    BG_BASE
-                } else {
-                    theme().text_muted
-                }))
-                .center_x(Length::Fill),
-            )
-            .on_press(msg)
-            .style(move |_t, status| {
-                let background = if selected {
-                    Some(Background::Color(crate::theme::ACCENT_PURPLE))
-                } else if matches!(status, iced::widget::button::Status::Hovered) {
-                    Some(Background::Color(theme().bg_hover))
-                } else {
-                    None
-                };
-                iced::widget::button::Style {
-                    background,
-                    border: iced::Border {
-                        radius: 6.0.into(),
+        let mode_segment =
+            |label: &'static str, selected: bool, msg: Message| -> iced::Element<'_, Message> {
+                iced::widget::button(
+                    container(text(label).size(TEXT_MD).color(if selected {
+                        BG_BASE
+                    } else {
+                        theme().text_muted
+                    }))
+                    .center_x(Length::Fill),
+                )
+                .on_press(msg)
+                .style(move |_t, status| {
+                    let background = if selected {
+                        Some(Background::Color(crate::theme::ACCENT_PURPLE))
+                    } else if matches!(status, iced::widget::button::Status::Hovered) {
+                        Some(Background::Color(theme().bg_hover))
+                    } else {
+                        None
+                    };
+                    iced::widget::button::Style {
+                        background,
+                        border: iced::Border {
+                            radius: 6.0.into(),
+                            ..Default::default()
+                        },
+                        text_color: Color::TRANSPARENT,
                         ..Default::default()
-                    },
-                    text_color: Color::TRANSPARENT,
-                    ..Default::default()
-                }
-            })
-            .padding(iced::Padding {
-                top: SPACE_2,
-                right: SPACE_3,
-                bottom: SPACE_2,
-                left: SPACE_3,
-            })
-            .width(Length::Fill)
-            .into()
-        };
+                    }
+                })
+                .padding(iced::Padding {
+                    top: SPACE_2,
+                    right: SPACE_3,
+                    bottom: SPACE_2,
+                    left: SPACE_3,
+                })
+                .width(Length::Fill)
+                .into()
+            };
 
         let vim = self.startup_vim_mode;
         let editor_mode = column![
@@ -1461,15 +1459,22 @@ impl App {
         ]
         .spacing(SPACE_2);
 
-        let continue_btn = iced::widget::button(text("Get Started →").size(14).color(Color::WHITE))
+        // dark text on the light accent, like the vim pill in the status bar
+        let continue_btn = iced::widget::button(text("Get Started →").size(14).color(BG_BASE))
             .on_press(Message::StartupPageDone)
-            .style(|_t, _s| iced::widget::button::Style {
-                background: Some(Background::Color(crate::theme::ACCENT_PURPLE)),
+            .style(|_t, status| iced::widget::button::Style {
+                background: Some(Background::Color(
+                    if matches!(status, iced::widget::button::Status::Hovered) {
+                        crate::theme::ACCENT_SOFT_BLUE
+                    } else {
+                        crate::theme::ACCENT_PURPLE
+                    },
+                )),
                 border: iced::Border {
                     radius: 8.0.into(),
                     ..Default::default()
                 },
-                text_color: Color::WHITE,
+                text_color: BG_BASE,
                 ..Default::default()
             })
             .padding(iced::Padding {
@@ -1479,29 +1484,29 @@ impl App {
                 left: 32.0,
             });
 
-        let left_panel = container(
-            scrollable(
-                column![
-                    text("Welcome to Pinel").size(28).color(theme().text_primary),
-                    text("A lightweight editor built with Rust.")
-                        .size(TEXT_MD)
-                        .color(theme().text_muted),
-                    iced::widget::Space::new().height(Length::Fixed(24.0)),
-                    text("Choose a theme").size(14).color(theme().text_muted),
-                    iced::widget::Space::new().height(Length::Fixed(8.0)),
-                    column(theme_rows).spacing(SPACE_2),
-                ]
-                .spacing(SPACE_2)
-                .padding(iced::Padding {
-                    top: 48.0,
-                    right: 32.0,
-                    bottom: 48.0,
-                    left: 48.0,
-                })
-                .width(Length::Fill),
-            )
-            .height(Length::Fill),
-        )
+        let left_content = column![
+            text("Welcome to Pinel").size(28).color(theme().text_primary),
+            text("A lightweight editor built with Rust.")
+                .size(TEXT_MD)
+                .color(theme().text_muted),
+            Space::new().height(Length::Fixed(24.0)),
+            text("Choose a theme").size(14).color(theme().text_muted),
+            Space::new().height(Length::Fixed(8.0)),
+            column(theme_rows).spacing(SPACE_2),
+        ]
+        .spacing(SPACE_2)
+        .width(Length::Fill);
+
+        let left_panel = container(startup_centred(
+            left_content.into(),
+            STARTUP_LEFT_MAX_WIDTH,
+            iced::Padding {
+                top: 48.0,
+                right: 32.0,
+                bottom: 48.0,
+                left: 48.0,
+            },
+        ))
         .width(Length::FillPortion(3))
         .height(Length::Fill)
         .style(|_t| container::Style {
@@ -1509,59 +1514,61 @@ impl App {
             ..Default::default()
         });
 
-        let divider = container(iced::widget::Space::new())
-            .width(Length::Fixed(1.0))
-            .height(Length::Fill)
-            .style(|_t| container::Style {
-                background: Some(Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.06))),
-                ..Default::default()
-            });
+        let divider =
+            container(Space::new())
+                .width(Length::Fixed(1.0))
+                .height(Length::Fill)
+                .style(|_t| container::Style {
+                    background: Some(Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.06))),
+                    ..Default::default()
+                });
 
-        let right_panel = container(
-            scrollable(
-                column![
-                    iced::widget::Space::new().height(Length::Fixed(48.0)),
-                    text("Editor Mode").size(14).color(theme().text_muted).width(Length::Fill),
-                    editor_mode,
-                    iced::widget::Space::new().height(Length::Fixed(20.0)),
-                    text("System").size(14).color(theme().text_muted).width(Length::Fill),
-                    container(toggle(
-                        "Run on Startup",
-                        "Launch Pinel automatically at login",
-                        self.startup_run_on_startup,
-                        Message::StartupToggleRunOnStartup,
-                    ))
-                    .style(|_t| container::Style {
-                        background: Some(Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.04))),
-                        border: iced::Border {
-                            color: Color::from_rgba(1.0, 1.0, 1.0, 0.08),
-                            width: 1.0,
-                            radius: RADIUS_LG.into(),
-                        },
-                        ..Default::default()
-                    })
-                    .width(Length::Fill),
-                    iced::widget::Space::new().height(Length::Fill),
-                    container(continue_btn).width(Length::Fill).center_x(Length::Fill).padding(
-                        iced::Padding {
-                            top: 32.0,
-                            right: 0.0,
-                            bottom: 48.0,
-                            left: 0.0,
-                        }
-                    ),
-                ]
-                .spacing(SPACE_2)
-                .padding(iced::Padding {
-                    top: 0.0,
+        let right_content = column![
+            text("Editor Mode").size(14).color(theme().text_muted),
+            editor_mode,
+            Space::new().height(Length::Fixed(20.0)),
+            text("System").size(14).color(theme().text_muted),
+            container(toggle(
+                "Run on Startup",
+                "Launch Pinel automatically at login",
+                self.startup_run_on_startup,
+                Message::StartupToggleRunOnStartup,
+            ))
+            .style(|_t| container::Style {
+                background: Some(Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.04))),
+                border: iced::Border {
+                    color: Color::from_rgba(1.0, 1.0, 1.0, 0.08),
+                    width: 1.0,
+                    radius: RADIUS_LG.into(),
+                },
+                ..Default::default()
+            })
+            .width(Length::Fill),
+        ]
+        .spacing(SPACE_2)
+        .width(Length::Fill);
+
+        // kept outside the scrollable so it stays pinned to the bottom right
+        let footer = container(continue_btn).align_right(Length::Fill).padding(iced::Padding {
+            top: SPACE_4,
+            right: 40.0,
+            bottom: 32.0,
+            left: 32.0,
+        });
+
+        let right_panel = container(column![
+            startup_centred(
+                right_content.into(),
+                STARTUP_RIGHT_MAX_WIDTH,
+                iced::Padding {
+                    top: 48.0,
                     right: 40.0,
                     bottom: 0.0,
                     left: 32.0,
-                })
-                .width(Length::Fill),
-            )
-            .height(Length::Fill),
-        )
+                },
+            ),
+            footer,
+        ])
         .width(Length::FillPortion(2))
         .height(Length::Fill)
         .style(|_t| container::Style {
@@ -1574,6 +1581,30 @@ impl App {
             .height(Length::Fill)
             .into()
     }
+}
+
+/// Widest the startup page's theme list grows, so wide windows don't stretch it.
+const STARTUP_LEFT_MAX_WIDTH: f32 = 560.0;
+
+/// Widest the startup page's settings column grows.
+const STARTUP_RIGHT_MAX_WIDTH: f32 = 420.0;
+
+/// Centres startup page content in its panel, capped at `max_width`.
+///
+/// The scrollable is sized to its content, so the panel can centre it
+/// vertically and it only scrolls once the window is too short.
+fn startup_centred(
+    content: iced::Element<'_, Message>,
+    max_width: f32,
+    padding: iced::Padding,
+) -> iced::Element<'_, Message> {
+    use iced::widget::{container, scrollable};
+
+    let capped = container(content).max_width(max_width).padding(padding);
+    container(scrollable(container(capped).center_x(Length::Fill)).width(Length::Fill))
+        .center_y(Length::Fill)
+        .width(Length::Fill)
+        .into()
 }
 
 /// Padding shared by the settings toggle buttons and number inputs, so every
