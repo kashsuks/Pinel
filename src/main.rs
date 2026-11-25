@@ -8,6 +8,7 @@ use iced::window;
 
 mod app;
 mod autocomplete;
+mod autostart;
 mod cli;
 mod config;
 mod discord_rpc;

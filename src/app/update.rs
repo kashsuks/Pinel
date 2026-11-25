@@ -3659,6 +3659,13 @@ impl App {
                 self.editor_preferences.vim_mode_enabled = self.startup_vim_mode;
                 self.apply_vim_mode_to_tabs();
                 let _ = crate::config::preferences::save_preferences(&self.editor_preferences);
+                let run_on_startup = self.startup_run_on_startup;
+                // Off the UI thread: Windows shells out to reg.exe.
+                std::thread::spawn(move || {
+                    if let Err(e) = crate::autostart::set_enabled(run_on_startup) {
+                        eprintln!("[autostart] failed to update launch at login: {e}");
+                    }
+                });
                 self.start_release_notes(false)
             },
             Message::StartupThemeSelected(name) => {
