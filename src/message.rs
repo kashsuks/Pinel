@@ -198,7 +198,6 @@ pub enum Message {
     StartupPageDone,
     StartupThemeSelected(String),
     StartupToggleVimMode,
-    StartupToggleHelixMode,
     StartupToggleRunOnStartup,
 
     RefreshGitStatus,

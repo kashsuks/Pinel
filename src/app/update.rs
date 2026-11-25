@@ -3670,16 +3670,6 @@ impl App {
             },
             Message::StartupToggleVimMode => {
                 self.startup_vim_mode = !self.startup_vim_mode;
-                if self.startup_vim_mode {
-                    self.startup_helix_mode = false;
-                }
-                iced::Task::none()
-            },
-            Message::StartupToggleHelixMode => {
-                self.startup_helix_mode = !self.startup_helix_mode;
-                if self.startup_helix_mode {
-                    self.startup_vim_mode = false;
-                }
                 iced::Task::none()
             },
             Message::StartupToggleRunOnStartup => {
