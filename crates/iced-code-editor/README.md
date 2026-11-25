@@ -815,17 +815,17 @@ editor.set_lsp_enabled(false);
 
 ```rust
 use std::sync::mpsc;
-use iced_code_editor::{LspProcessClient, LspEvent, LspDocument};
+use iced_code_editor::{LspDocument, LspEvent, LspProcessClient, LspWorkspaceRoot};
 
 // Create a channel to receive LSP events
 let (tx, rx) = mpsc::channel::<LspEvent>();
 
-// Start the server (e.g., lua-language-server)
-let client = LspProcessClient::new_with_server(
-    "file:///path/to/project",
-    tx,
-    "lua-language-server",
-)?;
+// Start the server (e.g., lua-language-server) in the project folder
+let root = LspWorkspaceRoot {
+    uri: "file:///path/to/project".to_string(),
+    path: "/path/to/project".into(),
+};
+let client = LspProcessClient::new_with_server(Some(&root), tx, "lua-language-server")?;
 
 // Attach the client to an editor with a document URI
 editor.attach_lsp(
