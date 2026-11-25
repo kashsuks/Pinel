@@ -1226,6 +1226,12 @@ impl App {
 
         let themes_to_show = BUILTIN_THEMES;
 
+        // every colour below comes from the active theme so the page reads
+        // right in light themes as well as dark ones
+        let accent = theme().accent();
+        // text drawn on top of the accent
+        let on_accent = theme().bg_editor;
+
         // allow the switch helper to toggle
         let toggle = |label: &'static str,
                       sublabel: &'static str,
@@ -1269,7 +1275,7 @@ impl App {
                     let colors = theme();
                     container::Style {
                         background: Some(Background::Color(if on {
-                            crate::theme::ACCENT_PURPLE
+                            accent
                         } else {
                             colors.bg_hover
                         })),
@@ -1319,20 +1325,15 @@ impl App {
             .iter()
             .map(|&name| {
                 let is_selected = self.startup_selected_theme == name;
-                let accent = if is_selected {
-                    crate::theme::ACCENT_PURPLE
+                let border = if is_selected {
+                    accent
                 } else {
-                    Color::from_rgba(1.0, 1.0, 1.0, 0.0)
+                    Color::TRANSPARENT
                 };
                 let bg = if is_selected {
-                    Color::from_rgba(
-                        crate::theme::ACCENT_PURPLE.r,
-                        crate::theme::ACCENT_PURPLE.g,
-                        crate::theme::ACCENT_PURPLE.b,
-                        0.15,
-                    )
+                    Color { a: 0.15, ..accent }
                 } else {
-                    Color::from_rgba(1.0, 1.0, 1.0, 0.04)
+                    theme().bg_secondary
                 };
                 iced::widget::button(
                     row![
@@ -1343,7 +1344,7 @@ impl App {
                         })
                         .size(TEXT_XS)
                         .color(if is_selected {
-                            crate::theme::ACCENT_PURPLE
+                            accent
                         } else {
                             theme().text_muted
                         }),
@@ -1364,7 +1365,7 @@ impl App {
                 .style(move |_t, _s| iced::widget::button::Style {
                     background: Some(Background::Color(bg)),
                     border: iced::Border {
-                        color: accent,
+                        color: border,
                         width: 1.0,
                         radius: 8.0.into(),
                     },
@@ -1398,7 +1399,7 @@ impl App {
             |label: &'static str, selected: bool, msg: Message| -> iced::Element<'_, Message> {
                 iced::widget::button(
                     container(text(label).size(TEXT_MD).color(if selected {
-                        BG_BASE
+                        on_accent
                     } else {
                         theme().text_muted
                     }))
@@ -1407,7 +1408,7 @@ impl App {
                 .on_press(msg)
                 .style(move |_t, status| {
                     let background = if selected {
-                        Some(Background::Color(crate::theme::ACCENT_PURPLE))
+                        Some(Background::Color(accent))
                     } else if matches!(status, iced::widget::button::Status::Hovered) {
                         Some(Background::Color(theme().bg_hover))
                     } else {
@@ -1445,9 +1446,9 @@ impl App {
             .padding(SPACE_1)
             .width(Length::Fill)
             .style(|_t| container::Style {
-                background: Some(Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.04))),
+                background: Some(Background::Color(theme().bg_editor)),
                 border: iced::Border {
-                    color: Color::from_rgba(1.0, 1.0, 1.0, 0.08),
+                    color: theme().border_subtle,
                     width: 1.0,
                     radius: RADIUS_LG.into(),
                 },
@@ -1463,15 +1464,15 @@ impl App {
         ]
         .spacing(SPACE_2);
 
-        let continue_btn = iced::widget::button(text("Get Started →").size(14).color(Color::WHITE))
+        let continue_btn = iced::widget::button(text("Get Started →").size(14).color(on_accent))
             .on_press(Message::StartupPageDone)
-            .style(|_t, _s| iced::widget::button::Style {
-                background: Some(Background::Color(crate::theme::ACCENT_PURPLE)),
+            .style(move |_t, _s| iced::widget::button::Style {
+                background: Some(Background::Color(accent)),
                 border: iced::Border {
                     radius: 8.0.into(),
                     ..Default::default()
                 },
-                text_color: Color::WHITE,
+                text_color: on_accent,
                 ..Default::default()
             })
             .padding(iced::Padding {
@@ -1515,7 +1516,7 @@ impl App {
             .width(Length::Fixed(1.0))
             .height(Length::Fill)
             .style(|_t| container::Style {
-                background: Some(Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.06))),
+                background: Some(Background::Color(theme().border_very_subtle)),
                 ..Default::default()
             });
 
@@ -1534,9 +1535,9 @@ impl App {
                         Message::StartupToggleRunOnStartup,
                     ))
                     .style(|_t| container::Style {
-                        background: Some(Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.04))),
+                        background: Some(Background::Color(theme().bg_editor)),
                         border: iced::Border {
-                            color: Color::from_rgba(1.0, 1.0, 1.0, 0.08),
+                            color: theme().border_subtle,
                             width: 1.0,
                             radius: RADIUS_LG.into(),
                         },
