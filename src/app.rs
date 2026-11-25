@@ -648,6 +648,12 @@ impl App {
     #[cfg(not(feature = "unstable-comet"))]
     pub fn dev_log(&mut self, _message: String) {}
 
+    /// The iced theme for the active Pinel palette, which also sets the
+    /// window's light or dark title bar.
+    pub fn iced_theme(&self) -> iced::Theme {
+        crate::theme::iced_theme(&crate::theme::theme())
+    }
+
     /// Additional zoom applied on top of the operating system display scale.
     pub fn ui_scale(&self) -> f32 {
         self.editor_preferences.ui_scale
