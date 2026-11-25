@@ -1389,6 +1389,78 @@ impl App {
             }
         }
 
+        // one segmented control so exactly one editor mode is always chosen
+        let mode_segment = |label: &'static str,
+                            selected: bool,
+                            msg: Message|
+         -> iced::Element<'_, Message> {
+            iced::widget::button(
+                container(text(label).size(TEXT_MD).color(if selected {
+                    BG_BASE
+                } else {
+                    theme().text_muted
+                }))
+                .center_x(Length::Fill),
+            )
+            .on_press(msg)
+            .style(move |_t, status| {
+                let background = if selected {
+                    Some(Background::Color(crate::theme::ACCENT_PURPLE))
+                } else if matches!(status, iced::widget::button::Status::Hovered) {
+                    Some(Background::Color(theme().bg_hover))
+                } else {
+                    None
+                };
+                iced::widget::button::Style {
+                    background,
+                    border: iced::Border {
+                        radius: 6.0.into(),
+                        ..Default::default()
+                    },
+                    text_color: Color::TRANSPARENT,
+                    ..Default::default()
+                }
+            })
+            .padding(iced::Padding {
+                top: SPACE_2,
+                right: SPACE_3,
+                bottom: SPACE_2,
+                left: SPACE_3,
+            })
+            .width(Length::Fill)
+            .into()
+        };
+
+        let vim = self.startup_vim_mode;
+        let editor_mode = column![
+            container(
+                row![
+                    mode_segment("Standard", !vim, Message::StartupSetVimMode(false)),
+                    mode_segment("Vim", vim, Message::StartupSetVimMode(true)),
+                ]
+                .spacing(SPACE_1),
+            )
+            .padding(SPACE_1)
+            .width(Length::Fill)
+            .style(|_t| container::Style {
+                background: Some(Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.04))),
+                border: iced::Border {
+                    color: Color::from_rgba(1.0, 1.0, 1.0, 0.08),
+                    width: 1.0,
+                    radius: RADIUS_LG.into(),
+                },
+                ..Default::default()
+            }),
+            text(if vim {
+                "hjkl navigation, normal/insert modes"
+            } else {
+                "Regular keyboard editing"
+            })
+            .size(TEXT_XS)
+            .color(theme().text_muted),
+        ]
+        .spacing(SPACE_2);
+
         let continue_btn = iced::widget::button(text("Get Started →").size(14).color(Color::WHITE))
             .on_press(Message::StartupPageDone)
             .style(|_t, _s| iced::widget::button::Style {
@@ -1450,22 +1522,7 @@ impl App {
                 column![
                     iced::widget::Space::new().height(Length::Fixed(48.0)),
                     text("Editor Mode").size(14).color(theme().text_muted).width(Length::Fill),
-                    container(toggle(
-                        "Vim Mode",
-                        "hjkl navigation, normal/insert modes",
-                        self.startup_vim_mode,
-                        Message::StartupToggleVimMode,
-                    ))
-                    .style(|_t| container::Style {
-                        background: Some(Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.04))),
-                        border: iced::Border {
-                            color: Color::from_rgba(1.0, 1.0, 1.0, 0.08),
-                            width: 1.0,
-                            radius: RADIUS_LG.into(),
-                        },
-                        ..Default::default()
-                    })
-                    .width(Length::Fill),
+                    editor_mode,
                     iced::widget::Space::new().height(Length::Fixed(20.0)),
                     text("System").size(14).color(theme().text_muted).width(Length::Fill),
                     container(toggle(
