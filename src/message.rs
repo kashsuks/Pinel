@@ -170,8 +170,12 @@ pub enum Message {
     TabDragCancelled,
 
     WakaTimeApiKeyChanged(String),
-    WakaTimeApiKeyHoverStart,
-    WakaTimeApiKeyHoverEnd,
+    /// Toggle the WakaTime API key between masked and plain text.
+    WakaTimeToggleKeyVisibility,
+    /// Copy the WakaTime API key to the clipboard.
+    WakaTimeCopyKey,
+    /// Clear the "Copied" label, if no newer copy happened since (token).
+    WakaTimeCopiedReset(u64),
     WakaTimeApiUrlChanged(String),
     SaveWakaTimeSettings,
 

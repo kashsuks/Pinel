@@ -89,104 +89,71 @@ impl App {
                 ..Default::default()
             });
 
-        let api_key_field_height = 34.0;
+        let field_height = 34.0;
+        let has_key = !self.wakatime.api_key.is_empty();
 
-        let api_key_field: Element<'_, Message> = if self.wakatime_api_key_hovered {
-            text_input("waka_xxxxx", &self.wakatime.api_key)
-                .on_input(Message::WakaTimeApiKeyChanged)
-                .secure(false)
-                .size(TEXT_MD)
-                .padding(iced::Padding {
-                    top: SPACE_2,
-                    right: SPACE_3,
-                    bottom: SPACE_2,
-                    left: SPACE_3,
-                })
-                .style(search_input_style)
-                .width(Length::Fill)
-                .into()
-        } else {
-            let panel_bg = Color::from_rgba(
-                theme().bg_secondary.r * 0.94 + ACCENT_BLUE.r * 0.06,
-                theme().bg_secondary.g * 0.94 + ACCENT_BLUE.g * 0.06,
-                theme().bg_secondary.b * 0.94 + ACCENT_BLUE.b * 0.06,
-                0.96,
+        let key_input = text_input(
+            "waka_xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+            &self.wakatime.api_key,
+        )
+        .on_input(Message::WakaTimeApiKeyChanged)
+        .secure(!self.wakatime_key_visible)
+        .size(TEXT_MD)
+        .padding(iced::Padding {
+            top: SPACE_2,
+            right: SPACE_2,
+            bottom: SPACE_2,
+            left: SPACE_3,
+        })
+        .style(search_input_style)
+        .width(Length::Fill);
+
+        let action_padding = iced::Padding {
+            top: SPACE_1,
+            right: SPACE_2,
+            bottom: SPACE_1,
+            left: SPACE_2,
+        };
+
+        let visibility_btn = button(
+            text(if self.wakatime_key_visible {
+                "Hide"
+            } else {
+                "Show"
+            })
+            .size(TEXT_SM),
+        )
+        .style(tree_button_style)
+        .on_press(Message::WakaTimeToggleKeyVisibility)
+        .padding(action_padding);
+
+        let mut actions = row![visibility_btn].spacing(SPACE_1).align_y(iced::Alignment::Center);
+
+        if has_key {
+            let copy_label = if self.wakatime_key_copied {
+                text("Copied").size(TEXT_SM).color(ACCENT_GREEN)
+            } else {
+                text("Copy").size(TEXT_SM)
+            };
+            actions = actions.push(
+                button(copy_label)
+                    .style(tree_button_style)
+                    .on_press(Message::WakaTimeCopyKey)
+                    .padding(action_padding),
             );
-            let top_line = Color::from_rgba(
-                ACCENT_SOFT_BLUE.r,
-                ACCENT_SOFT_BLUE.g,
-                ACCENT_SOFT_BLUE.b,
-                0.55,
-            );
-            let glow = Color::from_rgba(
-                ACCENT_SOFT_BLUE.r,
-                ACCENT_SOFT_BLUE.g,
-                ACCENT_SOFT_BLUE.b,
-                0.42,
-            );
+        }
 
-            let top_highlight = container(
-                Space::new().width(Length::Fill).height(Length::Fixed(1.0)),
-            )
-            .style(move |_theme| container::Style {
-                background: Some(Background::Color(top_line)),
-                ..Default::default()
-            });
-
-            let blur_streak = container(
-                Space::new().width(Length::Fill).height(Length::Fixed(4.0)),
-            )
-            .style(move |_theme| container::Style {
-                background: Some(Background::Color(glow)),
-                border: iced::Border {
-                    color: Color::TRANSPARENT,
-                    width: 0.0,
-                    radius: 999.0.into(),
-                },
-                shadow: iced::Shadow {
-                    color: Color::from_rgba(
-                        ACCENT_SOFT_BLUE.r,
-                        ACCENT_SOFT_BLUE.g,
-                        ACCENT_SOFT_BLUE.b,
-                        0.55,
-                    ),
-                    offset: iced::Vector::new(0.0, 0.0),
-                    blur_radius: 16.0,
-                },
-                ..Default::default()
-            });
-
-            container(
-                column![
-                    top_highlight,
-                    container(blur_streak).padding(iced::Padding {
-                        top: 0.0,
-                        right: SPACE_4,
-                        bottom: 0.0,
-                        left: SPACE_4,
-                    })
-                ]
-                .spacing(SPACE_2),
-            )
+        let api_key_field = container(row![key_input, actions].align_y(iced::Alignment::Center))
             .padding(iced::Padding {
                 top: 0.0,
-                right: SPACE_3,
-                bottom: 9.0,
-                left: SPACE_3,
+                right: SPACE_1,
+                bottom: 0.0,
+                left: 0.0,
             })
-            .style(move |_theme| container::Style {
-                background: Some(Background::Color(panel_bg)),
-                border: iced::Border {
-                    color: Color::from_rgba(ACCENT_BLUE.r, ACCENT_BLUE.g, ACCENT_BLUE.b, 0.14),
-                    width: 1.0,
-                    radius: 8.0.into(),
-                },
-                ..Default::default()
-            })
-            .height(Length::Fixed(api_key_field_height))
+            .style(settings_field_style)
+            .height(Length::Fixed(field_height))
             .width(Length::Fill)
-            .into()
-        };
+            .align_y(iced::Alignment::Center);
 
         let api_key_row = row![
             column![
@@ -197,13 +164,7 @@ impl App {
             ]
             .spacing(2)
             .width(Length::FillPortion(2)),
-            container(
-                mouse_area(api_key_field)
-                    .on_enter(Message::WakaTimeApiKeyHoverStart)
-                    .on_exit(Message::WakaTimeApiKeyHoverEnd)
-            )
-            .height(Length::Fixed(api_key_field_height))
-            .width(Length::FillPortion(3)),
+            container(api_key_field).width(Length::FillPortion(3)),
         ]
         .spacing(SPACE_4)
         .align_y(iced::Alignment::Center);
@@ -215,17 +176,23 @@ impl App {
             ]
             .spacing(2)
             .width(Length::FillPortion(2)),
-            text_input("https://api.wakatime.com/api/v1", &self.wakatime.api_url)
-                .on_input(Message::WakaTimeApiUrlChanged)
-                .size(TEXT_MD)
-                .padding(iced::Padding {
-                    top: SPACE_2,
-                    right: SPACE_3,
-                    bottom: SPACE_2,
-                    left: SPACE_3
-                })
-                .style(search_input_style)
-                .width(Length::FillPortion(3)),
+            container(
+                text_input("https://api.wakatime.com/api/v1", &self.wakatime.api_url)
+                    .on_input(Message::WakaTimeApiUrlChanged)
+                    .size(TEXT_MD)
+                    .padding(iced::Padding {
+                        top: SPACE_2,
+                        right: SPACE_3,
+                        bottom: SPACE_2,
+                        left: SPACE_3
+                    })
+                    .style(search_input_style)
+                    .width(Length::Fill),
+            )
+            .style(settings_field_style)
+            .height(Length::Fixed(field_height))
+            .width(Length::FillPortion(3))
+            .align_y(iced::Alignment::Center),
         ]
         .spacing(SPACE_4)
         .align_y(iced::Alignment::Center);
@@ -274,5 +241,18 @@ impl App {
         .spacing(SPACE_3)
         .width(Length::Fill)
         .into()
+    }
+}
+
+/// Theme-aware box for settings inputs, so fields follow the active theme instead of fixed accents.
+fn settings_field_style(_theme: &iced::Theme) -> container::Style {
+    container::Style {
+        background: Some(Background::Color(theme().bg_secondary)),
+        border: iced::Border {
+            color: theme().border_subtle,
+            width: 1.0,
+            radius: RADIUS_SM.into(),
+        },
+        ..Default::default()
     }
 }
