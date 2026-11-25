@@ -1448,32 +1448,12 @@ impl App {
                 column![
                     iced::widget::Space::new().height(Length::Fixed(48.0)),
                     text("Editor Mode").size(14).color(theme().text_muted).width(Length::Fill),
-                    container(
-                        column![
-                            toggle(
-                                "Vim Mode",
-                                "hjkl navigation, normal/insert modes",
-                                self.startup_vim_mode,
-                                Message::StartupToggleVimMode
-                            ),
-                            container(iced::widget::Space::new())
-                                .width(Length::Fill)
-                                .height(Length::Fixed(1.0))
-                                .style(|_t| container::Style {
-                                    background: Some(Background::Color(Color::from_rgba(
-                                        1.0, 1.0, 1.0, 0.05,
-                                    ))),
-                                    ..Default::default()
-                                }),
-                            toggle(
-                                "Helix Mode",
-                                "Selection-first, motion-based editing",
-                                self.startup_helix_mode,
-                                Message::StartupToggleHelixMode
-                            ),
-                        ]
-                        .spacing(0),
-                    )
+                    container(toggle(
+                        "Vim Mode",
+                        "hjkl navigation, normal/insert modes",
+                        self.startup_vim_mode,
+                        Message::StartupToggleVimMode,
+                    ))
                     .style(|_t| container::Style {
                         background: Some(Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.04))),
                         border: iced::Border {
