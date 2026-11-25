@@ -1734,6 +1734,10 @@ impl App {
                     self.git_branch_generation = self.git_branch_generation.wrapping_add(1);
                 }
                 self.file_tree = Some(FileTree::new(path.clone()));
+                crate::config::recent_folders::push(&mut self.recent_folders, &path);
+                if let Err(e) = crate::config::recent_folders::save(&self.recent_folders) {
+                    eprintln!("Failed to save recent folders: {e}");
+                }
                 self.git_changes.clear();
                 self.git_tab_changes.clear();
                 self.all_workspace_files.clear();
