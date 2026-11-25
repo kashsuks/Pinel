@@ -1218,7 +1218,7 @@ impl App {
 
     pub(super) fn view_startup_page(&self) -> iced::Element<'_, Message> {
         use iced::{
-            widget::{column, container, row, scrollable, text},
+            widget::{column, container, row, scrollable, text, Space},
             Background, Color, Length,
         };
 
@@ -1232,56 +1232,58 @@ impl App {
                       on: bool,
                       msg: Message|
          -> iced::Element<'_, Message> {
-            use crate::features::icons::{icon_handle, IconAsset, IconFormat};
+            // draw the switch as a pill track with a round knob so the
+            // on/off state reads from colour and knob position
+            const TRACK_W: f32 = 36.0;
+            const TRACK_H: f32 = 20.0;
+            const KNOB: f32 = 14.0;
+            const TRACK_PAD: f32 = (TRACK_H - KNOB) / 2.0;
 
-            // use the lucide toggle svgs directly
-            static TOGGLE_LEFT_SVG: &[u8] = include_bytes!("../assets/icons/toggle-left.svg");
-            static TOGGLE_RIGHT_SVG: &[u8] = include_bytes!("../assets/icons/toggle-right.svg");
-
-            let icon_bytes: &'static [u8] = if on {
-                TOGGLE_RIGHT_SVG
-            } else {
-                TOGGLE_LEFT_SVG
-            };
-            let icon_color = if on {
-                Color::from_rgb(0.133, 0.773, 0.369) // green when on
-            } else {
-                Color::from_rgba(1.0, 1.0, 1.0, 0.35) // dim when off
-            };
-
-            let asset = IconAsset {
-                format: IconFormat::Svg,
-                bytes: icon_bytes,
-            };
-
-            // tint the svg by drawing it inside a coloured container
-            // should use stroke="currentColor" so we wrap in a container
-            // and apply a colour titned image widget
-            let icon_widget: iced::Element<'_, Message> =
-                iced::widget::image::Image::new(icon_handle(asset, 28))
-                    .width(Length::Fixed(28.0))
-                    .height(Length::Fixed(28.0))
-                    .into();
-
-            // now wrap in a container to apply the tint
-            // via opacity/colour overlay
-            let icon_container = container(icon_widget)
-                .width(Length::Fixed(32.0))
-                .height(Length::Fixed(32.0))
-                .center_x(Length::Fixed(32.0))
-                .center_y(Length::Fixed(32.0))
+            let knob = container(Space::new())
+                .width(Length::Fixed(KNOB))
+                .height(Length::Fixed(KNOB))
                 .style(move |_t| container::Style {
-                    background: Some(Background::Color(Color::from_rgba(
-                        icon_color.r,
-                        icon_color.g,
-                        icon_color.b,
-                        0.08,
-                    ))),
+                    background: Some(Background::Color(if on {
+                        theme().bg_primary
+                    } else {
+                        theme().text_muted
+                    })),
                     border: iced::Border {
-                        radius: RADIUS_SM.into(),
+                        radius: (KNOB / 2.0).into(),
                         ..Default::default()
                     },
                     ..Default::default()
+                });
+
+            let icon_container = container(knob)
+                .width(Length::Fixed(TRACK_W))
+                .height(Length::Fixed(TRACK_H))
+                .padding(TRACK_PAD)
+                .align_x(if on {
+                    iced::alignment::Horizontal::Right
+                } else {
+                    iced::alignment::Horizontal::Left
+                })
+                .align_y(iced::alignment::Vertical::Center)
+                .style(move |_t| {
+                    let colors = theme();
+                    container::Style {
+                        background: Some(Background::Color(if on {
+                            crate::theme::ACCENT_PURPLE
+                        } else {
+                            colors.bg_hover
+                        })),
+                        border: iced::Border {
+                            radius: (TRACK_H / 2.0).into(),
+                            width: if on {
+                                0.0
+                            } else {
+                                1.0
+                            },
+                            color: colors.border_subtle,
+                        },
+                        ..Default::default()
+                    }
                 });
             iced::widget::button(
                 row![
