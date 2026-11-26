@@ -271,6 +271,9 @@ pub struct App {
     window_size_save_token: u64,
     /// The window size changed and has not been written to disk yet.
     window_size_dirty: bool,
+    /// An unsaved-changes prompt (or the save it led to) is running, so
+    /// further close requests are ignored until it finishes.
+    close_prompt_open: bool,
     preview_tab_pressed_at: Option<Instant>,
 
     chat_sessions: Vec<crate::features::chat::ChatSession>,
@@ -504,6 +507,7 @@ impl Default for App {
             git_hover_token: 0,
             window_size_save_token: 0,
             window_size_dirty: false,
+            close_prompt_open: false,
             preview_tab_pressed_at: None,
 
             chat_sessions: crate::config::chat_store::load_sessions(None),
