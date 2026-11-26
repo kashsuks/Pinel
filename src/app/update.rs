@@ -4370,6 +4370,71 @@ mod tests {
         assert!(tab_is_modified(&tabs[0]));
     }
 
+    fn saved(tab: usize, old: &str, new: &str, content: &str) -> unsaved::SavedBuffer {
+        unsaved::SavedBuffer {
+            tab,
+            old_path: PathBuf::from(old),
+            new_path: PathBuf::from(new),
+            content: content.to_string(),
+        }
+    }
+
+    #[test]
+    fn test_tab_has_unsaved_edits_only_for_modified_editors() {
+        let mut tabs = [editor_tab("untitled", "")];
+        assert!(!tab_has_unsaved_edits(tabs.first()));
+        assert!(!tab_has_unsaved_edits(None));
+        modify_tab(&mut tabs[0], "x");
+        assert!(tab_has_unsaved_edits(tabs.first()));
+    }
+
+    #[test]
+    fn test_apply_saved_buffer_renames_untitled_tab() {
+        let mut tabs = vec![editor_tab("untitled", ""), editor_tab("untitled", "")];
+        let content = modify_tab(&mut tabs[1], "hello");
+        modify_tab(&mut tabs[0], "other");
+
+        assert!(apply_saved_buffer(
+            &mut tabs,
+            &saved(1, "untitled", "/tmp/hello.txt", &content)
+        ));
+        assert_eq!(tabs[1].path, PathBuf::from("/tmp/hello.txt"));
+        assert_eq!(tabs[1].name, "hello.txt");
+        assert!(!tab_is_modified(&tabs[1]));
+        // The other untitled tab is left alone.
+        assert_eq!(tabs[0].path, PathBuf::from("untitled"));
+        assert!(tab_is_modified(&tabs[0]));
+    }
+
+    #[test]
+    fn test_apply_saved_buffer_keeps_edits_typed_during_save() {
+        let mut tabs = vec![editor_tab("/tmp/a.txt", "a")];
+        let written = modify_tab(&mut tabs[0], "b");
+        modify_tab(&mut tabs[0], "c");
+
+        assert!(apply_saved_buffer(
+            &mut tabs,
+            &saved(0, "/tmp/a.txt", "/tmp/a.txt", &written)
+        ));
+        assert!(tab_is_modified(&tabs[0]));
+    }
+
+    #[test]
+    fn test_apply_saved_buffer_ignores_moved_tabs() {
+        let mut tabs = vec![editor_tab("/tmp/b.txt", "b")];
+        let content = modify_tab(&mut tabs[0], "x");
+
+        assert!(!apply_saved_buffer(
+            &mut tabs,
+            &saved(0, "/tmp/a.txt", "/tmp/a.txt", &content)
+        ));
+        assert!(!apply_saved_buffer(
+            &mut tabs,
+            &saved(3, "/tmp/b.txt", "/tmp/b.txt", &content)
+        ));
+        assert!(tab_is_modified(&tabs[0]));
+    }
+
     #[test]
     fn test_is_media_path_text_and_unknown_files_are_not_media() {
         assert!(!App::is_media_path(Path::new("notes.txt")));
