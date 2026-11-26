@@ -5,7 +5,9 @@ use super::*;
 impl App {
     /// Registers global event listeners and maps them to [`Message`] values.
     pub fn subscription(&self) -> Subscription<Message> {
-        let shortcuts = if self.terminal_open && self.focused_pane == FocusPane::Terminal {
+        let shortcuts = if self.startup_page_open {
+            crate::subscriptions::keyboard::startup_page()
+        } else if self.terminal_open && self.focused_pane == FocusPane::Terminal {
             crate::subscriptions::keyboard::terminal_shortcuts()
         } else {
             crate::subscriptions::keyboard::shortcuts()

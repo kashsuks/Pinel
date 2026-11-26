@@ -197,7 +197,8 @@ pub enum Message {
 
     StartupPageDone,
     StartupThemeSelected(String),
-    StartupToggleVimMode,
+    /// Chooses the editor mode on the startup page: `true` for Vim, `false` for Standard.
+    StartupSetVimMode(bool),
     StartupToggleRunOnStartup,
 
     RefreshGitStatus,

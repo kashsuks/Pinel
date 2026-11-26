@@ -3679,8 +3679,8 @@ impl App {
                 self.apply_editor_theme_to_tabs();
                 iced::Task::none()
             },
-            Message::StartupToggleVimMode => {
-                self.startup_vim_mode = !self.startup_vim_mode;
+            Message::StartupSetVimMode(enabled) => {
+                self.startup_vim_mode = enabled;
                 iced::Task::none()
             },
             Message::StartupToggleRunOnStartup => {
