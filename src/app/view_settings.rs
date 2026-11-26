@@ -1226,6 +1226,12 @@ impl App {
 
         let themes_to_show = BUILTIN_THEMES;
 
+        // every colour below comes from the active theme so the page reads
+        // right in light themes as well as dark ones
+        let accent = theme().accent();
+        // text drawn on top of the accent
+        let on_accent = theme().bg_editor;
+
         // allow the switch helper to toggle
         let toggle = |label: &'static str,
                       sublabel: &'static str,
@@ -1269,7 +1275,7 @@ impl App {
                     let colors = theme();
                     container::Style {
                         background: Some(Background::Color(if on {
-                            crate::theme::ACCENT_PURPLE
+                            accent
                         } else {
                             colors.bg_hover
                         })),
@@ -1319,20 +1325,15 @@ impl App {
             .iter()
             .map(|&name| {
                 let is_selected = self.startup_selected_theme == name;
-                let accent = if is_selected {
-                    crate::theme::ACCENT_PURPLE
+                let border = if is_selected {
+                    accent
                 } else {
-                    Color::from_rgba(1.0, 1.0, 1.0, 0.0)
+                    Color::TRANSPARENT
                 };
                 let bg = if is_selected {
-                    Color::from_rgba(
-                        crate::theme::ACCENT_PURPLE.r,
-                        crate::theme::ACCENT_PURPLE.g,
-                        crate::theme::ACCENT_PURPLE.b,
-                        0.15,
-                    )
+                    Color { a: 0.15, ..accent }
                 } else {
-                    Color::from_rgba(1.0, 1.0, 1.0, 0.04)
+                    theme().bg_secondary
                 };
                 iced::widget::button(
                     row![
@@ -1343,15 +1344,22 @@ impl App {
                         })
                         .size(TEXT_XS)
                         .color(if is_selected {
-                            crate::theme::ACCENT_PURPLE
+                            accent
                         } else {
                             theme().text_muted
                         }),
-                        text(name).size(TEXT_MD).color(if is_selected {
-                            theme().text_primary
-                        } else {
-                            theme().text_muted
-                        }),
+                        // dots sit under the name so long names don't wrap
+                        // in the narrow two-column grid
+                        column![
+                            text(name).size(TEXT_MD).color(if is_selected {
+                                theme().text_primary
+                            } else {
+                                theme().text_muted
+                            }),
+                            theme_swatch_dots(name),
+                        ]
+                        .spacing(SPACE_1)
+                        .width(Length::Fill),
                     ]
                     .spacing(SPACE_2)
                     .align_y(iced::Alignment::Center),
@@ -1360,7 +1368,7 @@ impl App {
                 .style(move |_t, _s| iced::widget::button::Style {
                     background: Some(Background::Color(bg)),
                     border: iced::Border {
-                        color: accent,
+                        color: border,
                         width: 1.0,
                         radius: 8.0.into(),
                     },
@@ -1394,7 +1402,7 @@ impl App {
             |label: &'static str, selected: bool, msg: Message| -> iced::Element<'_, Message> {
                 iced::widget::button(
                     container(text(label).size(TEXT_MD).color(if selected {
-                        BG_BASE
+                        on_accent
                     } else {
                         theme().text_muted
                     }))
@@ -1403,7 +1411,7 @@ impl App {
                 .on_press(msg)
                 .style(move |_t, status| {
                     let background = if selected {
-                        Some(Background::Color(crate::theme::ACCENT_PURPLE))
+                        Some(Background::Color(accent))
                     } else if matches!(status, iced::widget::button::Status::Hovered) {
                         Some(Background::Color(theme().bg_hover))
                     } else {
@@ -1441,9 +1449,9 @@ impl App {
             .padding(SPACE_1)
             .width(Length::Fill)
             .style(|_t| container::Style {
-                background: Some(Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.04))),
+                background: Some(Background::Color(theme().bg_editor)),
                 border: iced::Border {
-                    color: Color::from_rgba(1.0, 1.0, 1.0, 0.08),
+                    color: theme().border_subtle,
                     width: 1.0,
                     radius: RADIUS_LG.into(),
                 },
@@ -1459,22 +1467,21 @@ impl App {
         ]
         .spacing(SPACE_2);
 
-        // dark text on the light accent, like the vim pill in the status bar
-        let continue_btn = iced::widget::button(text("Get Started →").size(14).color(BG_BASE))
+        let continue_btn = iced::widget::button(text("Get Started →").size(14).color(on_accent))
             .on_press(Message::StartupPageDone)
-            .style(|_t, status| iced::widget::button::Style {
+            .style(move |_t, status| iced::widget::button::Style {
                 background: Some(Background::Color(
                     if matches!(status, iced::widget::button::Status::Hovered) {
-                        crate::theme::ACCENT_SOFT_BLUE
+                        Color { a: 0.85, ..accent }
                     } else {
-                        crate::theme::ACCENT_PURPLE
+                        accent
                     },
                 )),
                 border: iced::Border {
                     radius: 8.0.into(),
                     ..Default::default()
                 },
-                text_color: BG_BASE,
+                text_color: on_accent,
                 ..Default::default()
             })
             .padding(iced::Padding {
@@ -1490,6 +1497,8 @@ impl App {
                 .size(TEXT_MD)
                 .color(theme().text_muted),
             Space::new().height(Length::Fixed(24.0)),
+            startup_code_sample(self.editor_preferences.code_font()),
+            Space::new().height(Length::Fixed(16.0)),
             text("Choose a theme").size(14).color(theme().text_muted),
             Space::new().height(Length::Fixed(8.0)),
             column(theme_rows).spacing(SPACE_2),
@@ -1519,7 +1528,7 @@ impl App {
                 .width(Length::Fixed(1.0))
                 .height(Length::Fill)
                 .style(|_t| container::Style {
-                    background: Some(Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.06))),
+                    background: Some(Background::Color(theme().border_very_subtle)),
                     ..Default::default()
                 });
 
@@ -1535,9 +1544,9 @@ impl App {
                 Message::StartupToggleRunOnStartup,
             ))
             .style(|_t| container::Style {
-                background: Some(Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.04))),
+                background: Some(Background::Color(theme().bg_editor)),
                 border: iced::Border {
-                    color: Color::from_rgba(1.0, 1.0, 1.0, 0.08),
+                    color: theme().border_subtle,
                     width: 1.0,
                     radius: RADIUS_LG.into(),
                 },
@@ -1614,6 +1623,116 @@ fn startup_centred(
         .center_y(Length::Fill)
         .width(Length::Fill)
         .into()
+}
+
+/// The snippet drawn on the startup page, one entry per line, each split
+/// into `(text, scope)` tokens. `None` draws the token in the plain text
+/// colour; a scope draws it in whatever colour the theme gives that scope.
+const STARTUP_SAMPLE: &[&[(&str, Option<&str>)]] = &[
+    &[("// a small taste of this theme", Some("comment"))],
+    &[
+        ("fn", Some("keyword")),
+        (" ", None),
+        ("greet", Some("entity.name.function")),
+        ("(name: &", None),
+        ("str", Some("entity.name.type")),
+        (") -> ", None),
+        ("String", Some("entity.name.type")),
+        (" {", None),
+    ],
+    &[
+        ("    ", None),
+        ("let", Some("keyword")),
+        (" count = ", None),
+        ("3", Some("constant.numeric")),
+        (";", None),
+    ],
+    &[
+        ("    ", None),
+        ("format!", Some("entity.name.function")),
+        ("(", None),
+        ("\"Hello, {name} x{count}\"", Some("string")),
+        (")", None),
+    ],
+    &[("}", None)],
+];
+
+/// A read-only code sample highlighted with the active theme, so picking a
+/// theme on the startup page shows what the editor will look like.
+fn startup_code_sample<'a>(font: iced::Font) -> Element<'a, Message> {
+    // read every colour up front instead of holding the theme lock while
+    // building widgets
+    let (plain, line_number, background, border) = {
+        let colors = theme();
+        (
+            colors.editor_style.text_color,
+            colors.editor_style.line_number_color,
+            colors.editor_style.background,
+            colors.border_subtle,
+        )
+    };
+
+    let lines = STARTUP_SAMPLE.iter().enumerate().map(|(index, tokens)| {
+        let spans: Vec<iced::widget::text::Span<'a, ()>> = tokens
+            .iter()
+            .map(|(token, scope)| {
+                let color = scope.map_or(plain, |scope| theme().syntax_color(scope));
+                iced::widget::text::Span::new(*token).color(color).font(font).size(TEXT_SM)
+            })
+            .collect();
+        row![
+            container(text((index + 1).to_string()).size(TEXT_SM).font(font).color(line_number))
+                .width(Length::Fixed(20.0))
+                .align_right(Length::Fixed(20.0)),
+            iced::widget::rich_text(spans),
+        ]
+        .spacing(SPACE_3)
+        .into()
+    });
+
+    container(iced::widget::Column::with_children(lines).spacing(2))
+        .padding(SPACE_4)
+        .width(Length::Fill)
+        .style(move |_t| container::Style {
+            background: Some(Background::Color(background)),
+            border: iced::Border {
+                color: border,
+                width: 1.0,
+                radius: RADIUS_LG.into(),
+            },
+            ..Default::default()
+        })
+        .into()
+}
+
+/// Diameter of one colour dot on a startup theme button.
+const SWATCH_DOT_SIZE: f32 = 10.0;
+
+/// A row of colour dots showing the background, accent and a few syntax
+/// colours of the built-in theme `name`, so a theme can be judged before it
+/// is picked. Empty for a name that is not a built-in theme.
+fn theme_swatch_dots<'a>(name: &str) -> Element<'a, Message> {
+    let Some(swatches) = crate::theme::builtin_theme_swatches(name) else {
+        return iced::widget::Space::new().into();
+    };
+    let dots = swatches.into_iter().map(|color| {
+        container(iced::widget::Space::new())
+            .width(Length::Fixed(SWATCH_DOT_SIZE))
+            .height(Length::Fixed(SWATCH_DOT_SIZE))
+            .style(move |_t| container::Style {
+                background: Some(Background::Color(color)),
+                border: iced::Border {
+                    // outline so a background dot close to the button's own
+                    // colour still shows up
+                    color: theme().border_subtle,
+                    width: 1.0,
+                    radius: (SWATCH_DOT_SIZE / 2.0).into(),
+                },
+                ..Default::default()
+            })
+            .into()
+    });
+    iced::widget::Row::with_children(dots).spacing(SPACE_1).into()
 }
 
 /// Padding shared by the settings toggle buttons and number inputs, so every
@@ -1703,5 +1822,27 @@ fn settings_action_style(_theme: &iced::Theme, status: button::Status) -> button
             ..Default::default()
         },
         ..Default::default()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_startup_sample_every_scope_is_coloured() {
+        for name in crate::theme::BUILTIN_THEMES {
+            let colors = crate::theme::builtin_theme(name);
+            let plain = colors.editor_style.text_color;
+            for (token, scope) in STARTUP_SAMPLE.iter().flat_map(|line| line.iter()) {
+                if let Some(scope) = scope {
+                    assert_ne!(
+                        colors.syntax_color(scope),
+                        plain,
+                        "{token:?} ({scope}) is drawn as plain text in {name:?}"
+                    );
+                }
+            }
+        }
     }
 }

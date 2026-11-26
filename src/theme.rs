@@ -3,9 +3,12 @@ use std::{str::FromStr, sync::RwLock};
 use iced::Color;
 use iced_code_editor::{theme::Style as CodeEditorStyle, CodeEditor};
 use once_cell::sync::Lazy;
-use syntect::highlighting::{
-    Color as SynColor, FontStyle, ScopeSelectors, StyleModifier, Theme as SynTheme, ThemeItem,
-    ThemeSettings,
+use syntect::{
+    highlighting::{
+        Color as SynColor, FontStyle, Highlighter, ScopeSelectors, StyleModifier,
+        Theme as SynTheme, ThemeItem, ThemeSettings,
+    },
+    parsing::Scope,
 };
 
 // Layout Constants
@@ -450,6 +453,53 @@ impl ThemeColors {
             syntax_theme: syn,
         }
     }
+}
+
+impl ThemeColors {
+    /// Foreground colour this theme's syntax highlighting gives `scope`
+    /// (for example `"keyword"` or `"string"`), or the editor text colour
+    /// when `scope` is not a valid scope name.
+    pub fn syntax_color(&self, scope: &str) -> Color {
+        let Ok(scope) = Scope::new(scope) else {
+            return self.editor_style.text_color;
+        };
+        let fg = Highlighter::new(&self.syntax_theme).style_for_stack(&[scope]).foreground;
+        Color::from_rgba8(fg.r, fg.g, fg.b, f32::from(fg.a) / 255.0)
+    }
+
+    /// The theme's accent: its keyword colour, which every built-in theme
+    /// picks to stand out against both its backgrounds and its text.
+    pub fn accent(&self) -> Color {
+        self.syntax_color("keyword")
+    }
+
+    /// A short palette that sums the theme up at a glance: editor
+    /// background, accent, then the function, string and type colours.
+    pub fn preview_swatches(&self) -> [Color; 5] {
+        [
+            self.bg_editor,
+            self.accent(),
+            self.syntax_color("entity.name.function"),
+            self.syntax_color("string"),
+            self.syntax_color("entity.name.type"),
+        ]
+    }
+}
+
+/// Preview swatches for every entry of [`BUILTIN_THEMES`], built once since
+/// each lookup would otherwise rebuild the whole theme.
+static BUILTIN_SWATCHES: Lazy<Vec<[Color; 5]>> = Lazy::new(|| {
+    BUILTIN_THEMES
+        .iter()
+        .map(|name| builtin_theme(name).preview_swatches())
+        .collect()
+});
+
+/// [`ThemeColors::preview_swatches`] for the built-in theme `name`, or
+/// `None` when `name` is not in [`BUILTIN_THEMES`].
+pub fn builtin_theme_swatches(name: &str) -> Option<[Color; 5]> {
+    let index = BUILTIN_THEMES.iter().position(|builtin| *builtin == name)?;
+    BUILTIN_SWATCHES.get(index).copied()
 }
 
 pub static THEME: Lazy<RwLock<ThemeColors>> = Lazy::new(|| RwLock::new(ThemeColors::default()));
@@ -1338,6 +1388,67 @@ mod tests {
                 theme.syntax_theme.name.as_deref(),
                 Some("Pinel Blueberry Dark"),
                 "built-in theme {name:?} fell back to Pinel Blueberry Dark"
+            );
+        }
+    }
+
+    #[test]
+    fn test_syntax_color_reads_keyword_scope() {
+        let theme = builtin_theme("Pinel Blueberry Dark");
+        assert!(close(theme.syntax_color("keyword"), ACCENT_PURPLE));
+    }
+
+    #[test]
+    fn test_syntax_color_unstyled_scope_uses_text_colour() {
+        let theme = builtin_theme("Nord");
+        assert!(close(
+            theme.syntax_color("markup.nothing.here"),
+            theme.editor_style.text_color
+        ));
+    }
+
+    #[test]
+    fn test_syntax_color_invalid_scope_falls_back_to_text() {
+        let theme = builtin_theme("Nord");
+        let too_many_atoms = "a.b.c.d.e.f.g.h.i.j";
+        assert_eq!(
+            theme.syntax_color(too_many_atoms),
+            theme.editor_style.text_color
+        );
+    }
+
+    /// syntect stores channels as bytes, so colours come back rounded.
+    fn close(a: Color, b: Color) -> bool {
+        [a.r - b.r, a.g - b.g, a.b - b.b, a.a - b.a]
+            .iter()
+            .all(|d| d.abs() < 2.0 / 255.0)
+    }
+
+    #[test]
+    fn test_builtin_theme_swatches_unknown_name() {
+        assert!(builtin_theme_swatches("Not A Theme").is_none());
+    }
+
+    #[test]
+    fn test_builtin_theme_swatches_differ_between_themes() {
+        let swatches: Vec<[Color; 5]> =
+            BUILTIN_THEMES.iter().filter_map(|name| builtin_theme_swatches(name)).collect();
+        assert_eq!(swatches.len(), BUILTIN_THEMES.len());
+        for (i, a) in swatches.iter().enumerate() {
+            for b in &swatches[i + 1..] {
+                assert_ne!(a, b, "two built-in themes share a preview palette");
+            }
+        }
+    }
+
+    #[test]
+    fn test_accent_stands_out_from_editor_background() {
+        for name in BUILTIN_THEMES {
+            let theme = builtin_theme(name);
+            assert_ne!(
+                theme.accent(),
+                theme.bg_editor,
+                "{name:?} accent matches its background"
             );
         }
     }
