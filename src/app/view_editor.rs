@@ -926,25 +926,231 @@ impl App {
         .into()
     }
 
+    /// The editor area when no tab is open: a way in when no folder is open,
+    /// the folders opened before, and the shortcuts worth knowing first.
     pub(super) fn view_welcome_screen(&self) -> iced::widget::Container<'_, Message> {
-        let folder_name = self
-            .file_tree
-            .as_ref()
-            .map(|t| t.root.file_name().unwrap_or_default().to_string_lossy().to_string())
-            .unwrap_or_else(|| String::from("No folder open"));
+        let open_root = self.file_tree.as_ref().map(|tree| tree.root.as_path());
 
-        container(
+        let mut content =
+            column![].spacing(WELCOME_SECTION_GAP).width(Length::Fixed(WELCOME_WIDTH));
+
+        let (title, subtitle) = match open_root {
+            Some(root) => (
+                root.file_name().unwrap_or_default().to_string_lossy().to_string(),
+                "Select a file from the sidebar to begin editing",
+            ),
+            None => (
+                String::from("No folder open"),
+                "Open a folder to browse its files, or open a single file",
+            ),
+        };
+        content = content.push(
             column![
-                text(folder_name).size(24).color(theme().text_muted),
-                text("Select a file from the sidebar to begin editing")
-                    .size(TEXT_MD)
-                    .color(theme().text_muted),
+                text(title).size(24).color(theme().text_primary),
+                text(subtitle).size(TEXT_MD).color(theme().text_muted),
             ]
-            .spacing(SPACE_3)
+            .spacing(SPACE_2)
+            .width(Length::Fill)
             .align_x(iced::Alignment::Center),
-        )
-        .center_x(Length::Fill)
-        .center_y(Length::Fill)
+        );
+
+        if open_root.is_none() {
+            content = content.push(
+                container(
+                    row![
+                        welcome_button("Open Folder…", true, Message::OpenFolderDialog),
+                        welcome_button("Open File…", false, Message::OpenFileOrFolder),
+                    ]
+                    .spacing(SPACE_3),
+                )
+                .center_x(Length::Fill),
+            );
+        }
+
+        let recent: Vec<&PathBuf> = self
+            .recent_folders
+            .iter()
+            .filter(|path| Some(path.as_path()) != open_root)
+            .take(RECENT_FOLDERS_SHOWN)
+            .collect();
+        if !recent.is_empty() {
+            let home = dirs::home_dir();
+            let rows = recent.into_iter().map(|path| {
+                let name = path.file_name().unwrap_or(path.as_os_str()).to_string_lossy();
+                let location = path
+                    .parent()
+                    .map(|parent| display_path(parent, home.as_deref()))
+                    .unwrap_or_default();
+                welcome_row(
+                    text(name.to_string()).size(TEXT_MD).color(theme().text_primary),
+                    location,
+                    Message::FolderOpened(path.clone()),
+                )
+            });
+            content = content.push(welcome_section("Recent", rows));
+        }
+
+        let is_mac = cfg!(target_os = "macos");
+        let shortcuts = [
+            (
+                "Command Palette",
+                shortcut_label(is_mac, true, 'P'),
+                Message::ToggleCommandPalette,
+            ),
+            (
+                "Go to File",
+                shortcut_label(is_mac, false, 'T'),
+                Message::ToggleFileFinder,
+            ),
+            (
+                "Settings",
+                shortcut_label(is_mac, true, 'S'),
+                Message::ToggleSettings,
+            ),
+        ]
+        .into_iter()
+        .map(|(label, keys, message)| {
+            welcome_row(
+                text(label).size(TEXT_MD).color(theme().text_secondary),
+                keys,
+                message,
+            )
+        });
+        content = content.push(welcome_section("Shortcuts", shortcuts));
+
+        container(content).center_x(Length::Fill).center_y(Length::Fill)
+    }
+}
+
+/// Width of the welcome screen's column of content.
+const WELCOME_WIDTH: f32 = 420.0;
+
+/// Space between the welcome screen's sections.
+const WELCOME_SECTION_GAP: f32 = 28.0;
+
+/// How many recent folders the welcome screen lists.
+const RECENT_FOLDERS_SHOWN: usize = 5;
+
+/// A titled block of clickable rows on the welcome screen.
+fn welcome_section<'a>(
+    title: &'a str,
+    rows: impl Iterator<Item = Element<'a, Message>>,
+) -> Element<'a, Message> {
+    column![
+        container(text(title).size(TEXT_XS).color(theme().text_muted)).padding([0.0, SPACE_2]),
+        column(rows).spacing(SPACE_1),
+    ]
+    .spacing(SPACE_2)
+    .width(Length::Fill)
+    .into()
+}
+
+/// One clickable row on the welcome screen: a label on the left and muted
+/// detail (a path or a shortcut) on the right, clipped if it runs long.
+fn welcome_row<'a>(
+    label: iced::widget::Text<'a>,
+    detail: String,
+    on_press: Message,
+) -> Element<'a, Message> {
+    let detail = container(
+        text(detail)
+            .size(TEXT_SM)
+            .color(theme().text_muted)
+            .wrapping(iced::widget::text::Wrapping::None),
+    )
+    .width(Length::Fill)
+    .align_x(iced::alignment::Horizontal::Right)
+    .clip(true);
+
+    button(row![label, detail].spacing(SPACE_4).align_y(iced::Alignment::Center))
+        .on_press(on_press)
+        .width(Length::Fill)
+        .padding([SPACE_1 + 2.0, SPACE_2])
+        .style(welcome_row_style)
+        .into()
+}
+
+/// A welcome screen action button; the primary one is filled with the accent,
+/// matching the startup page's Get Started button.
+fn welcome_button(label: &str, primary: bool, on_press: Message) -> Element<'_, Message> {
+    button(text(label).size(TEXT_MD))
+        .on_press(on_press)
+        .padding([SPACE_2 + 2.0, SPACE_4 + 4.0])
+        .style(move |_theme, status| {
+            let pressed = matches!(
+                status,
+                iced::widget::button::Status::Hovered | iced::widget::button::Status::Pressed
+            );
+            let (background, text_color, border_color) = if primary {
+                let fill = if pressed {
+                    Color {
+                        a: 0.85,
+                        ..ACCENT_PURPLE
+                    }
+                } else {
+                    ACCENT_PURPLE
+                };
+                (fill, Color::WHITE, fill)
+            } else {
+                let fill = if pressed {
+                    theme().bg_pressed
+                } else {
+                    theme().bg_hover
+                };
+                (fill, theme().text_primary, theme().border_subtle)
+            };
+            iced::widget::button::Style {
+                background: Some(Background::Color(background)),
+                text_color,
+                border: iced::Border {
+                    color: border_color,
+                    width: 1.0,
+                    radius: 8.0.into(),
+                },
+                ..Default::default()
+            }
+        })
+        .into()
+}
+
+/// Rows on the welcome screen: no background until hovered.
+fn welcome_row_style(
+    _theme: &iced::Theme,
+    status: iced::widget::button::Status,
+) -> iced::widget::button::Style {
+    let background = match status {
+        iced::widget::button::Status::Hovered => Some(Background::Color(theme().bg_hover)),
+        iced::widget::button::Status::Pressed => Some(Background::Color(theme().bg_pressed)),
+        _ => None,
+    };
+    iced::widget::button::Style {
+        background,
+        text_color: theme().text_primary,
+        border: iced::Border {
+            radius: RADIUS_SM.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+/// How a primary-key shortcut reads on this platform: `⌘⇧P` on macOS,
+/// `Ctrl+Shift+P` elsewhere.
+fn shortcut_label(is_mac: bool, shift: bool, key: char) -> String {
+    match (is_mac, shift) {
+        (true, true) => format!("⌘⇧{key}"),
+        (true, false) => format!("⌘{key}"),
+        (false, true) => format!("Ctrl+Shift+{key}"),
+        (false, false) => format!("Ctrl+{key}"),
+    }
+}
+
+/// A path for display, with the home directory shortened to `~`.
+fn display_path(path: &std::path::Path, home: Option<&std::path::Path>) -> String {
+    match home.and_then(|home| path.strip_prefix(home).ok()) {
+        Some(rest) if rest.as_os_str().is_empty() => String::from("~"),
+        Some(rest) => format!("~/{}", rest.display()),
+        None => path.display().to_string(),
     }
 }
 
@@ -1151,6 +1357,34 @@ mod tests {
     use crate::features::lsp::InlineDiagnostic;
     use iced_code_editor::{IndentStyle, VimMode};
     use std::path::Path;
+
+    #[test]
+    fn test_shortcut_label_on_each_platform() {
+        assert_eq!(shortcut_label(true, true, 'P'), "⌘⇧P");
+        assert_eq!(shortcut_label(true, false, 'T'), "⌘T");
+        assert_eq!(shortcut_label(false, true, 'P'), "Ctrl+Shift+P");
+        assert_eq!(shortcut_label(false, false, 'T'), "Ctrl+T");
+    }
+
+    #[test]
+    fn test_display_path_shortens_the_home_directory() {
+        let home = Path::new("/Users/me");
+        assert_eq!(
+            display_path(Path::new("/Users/me/code"), Some(home)),
+            "~/code"
+        );
+        assert_eq!(display_path(Path::new("/Users/me"), Some(home)), "~");
+    }
+
+    #[test]
+    fn test_display_path_keeps_paths_outside_home() {
+        let home = Path::new("/Users/me");
+        assert_eq!(
+            display_path(Path::new("/Users/meow/code"), Some(home)),
+            "/Users/meow/code"
+        );
+        assert_eq!(display_path(Path::new("/opt/work"), None), "/opt/work");
+    }
 
     const ALL_MODES: [VimMode; 4] = [
         VimMode::Normal,

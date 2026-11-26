@@ -210,6 +210,9 @@ pub struct App {
     /// with an older generation are stale and dropped.
     workspace_index_generation: u64,
     recent_files: Vec<PathBuf>,
+    /// Folders opened before, most recent first, offered on the empty-editor
+    /// screen. Saved to disk each time a folder is opened.
+    recent_folders: Vec<PathBuf>,
 
     file_finder_input_id: iced::widget::Id,
     fuzzy_finder: FuzzyFinder,
@@ -425,6 +428,11 @@ impl Default for App {
             all_workspace_files: Vec::new(),
             workspace_index_generation: 0, // no index started yet
             recent_files: Vec::new(),
+            // Folders since moved or deleted would only fail to open.
+            recent_folders: crate::config::recent_folders::load()
+                .into_iter()
+                .filter(|path| path.is_dir())
+                .collect(),
             file_finder_input_id: iced::widget::Id::unique(),
             fuzzy_finder: FuzzyFinder::default(),
 
