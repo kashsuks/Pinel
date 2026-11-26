@@ -513,6 +513,26 @@ pub fn set_theme(t: ThemeColors) {
     *w = t;
 }
 
+/// Builds the iced theme that matches a Pinel palette.
+///
+/// iced picks the window's light or dark appearance from this theme, so a
+/// dark palette gets a dark title bar on macOS. Widgets Pinel doesn't style
+/// itself fall back to these colours too.
+pub fn iced_theme(colors: &ThemeColors) -> iced::Theme {
+    let name = format!("Pinel {:?} {:?}", colors.bg_primary, colors.text_primary);
+    iced::Theme::custom(
+        name,
+        iced::theme::Palette {
+            background: colors.bg_primary,
+            text: colors.text_primary,
+            primary: ACCENT_PURPLE,
+            success: ACCENT_GREEN,
+            warning: ACCENT_YELLOW,
+            danger: ACCENT_RED,
+        },
+    )
+}
+
 pub fn parse_hex_color(input: &str) -> Result<Color, String> {
     let hex = input.trim().trim_start_matches('#');
 
@@ -1340,6 +1360,19 @@ fn build_syntax_theme(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use iced::theme::{Base, Mode};
+
+    #[test]
+    fn test_iced_theme_dark_palette_is_dark() {
+        let theme = iced_theme(&builtin_theme("Pinel Blueberry Dark"));
+        assert_eq!(theme.mode(), Mode::Dark);
+    }
+
+    #[test]
+    fn test_iced_theme_light_palette_is_light() {
+        let theme = iced_theme(&builtin_theme("Pinel Blueberry Light"));
+        assert_eq!(theme.mode(), Mode::Light);
+    }
 
     #[test]
     fn test_builtin_theme_catppuccin_mocha_not_fallback() {
