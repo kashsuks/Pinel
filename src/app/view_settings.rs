@@ -1348,15 +1348,18 @@ impl App {
                         } else {
                             theme().text_muted
                         }),
-                        text(name)
-                            .size(TEXT_MD)
-                            .color(if is_selected {
+                        // dots sit under the name so long names don't wrap
+                        // in the narrow two-column grid
+                        column![
+                            text(name).size(TEXT_MD).color(if is_selected {
                                 theme().text_primary
                             } else {
                                 theme().text_muted
-                            })
-                            .width(Length::Fill),
-                        theme_swatch_dots(name),
+                            }),
+                            theme_swatch_dots(name),
+                        ]
+                        .spacing(SPACE_1)
+                        .width(Length::Fill),
                     ]
                     .spacing(SPACE_2)
                     .align_y(iced::Alignment::Center),
