@@ -6,6 +6,7 @@ use rodio::Source;
 use super::view_tabs::scroll_editor_tabs_by;
 use super::*;
 use crate::autocomplete::engine::Autocomplete;
+use crate::features::unsaved::{self, CloseChoice};
 
 impl App {
     /// The directory used to refresh status for the workspace or the active standalone file.
@@ -457,6 +458,55 @@ impl App {
         }
 
         iced::Task::none()
+    }
+
+    /// Closes the tab at `idx` without asking about unsaved edits, then
+    /// selects the next tab if the closed one was active.
+    fn close_tab_and_select_next(&mut self, idx: usize) -> iced::Task<Message> {
+        let was_active = self.active_tab == Some(idx);
+        self.close_tab(idx, true);
+        if let Some(next) = self.active_tab.filter(|_| was_active) {
+            return self.update_message(Message::TabSelected(next));
+        }
+        iced::Task::none()
+    }
+
+    /// Saves the window size and session, then closes the window without
+    /// asking about unsaved edits.
+    fn close_window(&mut self, id: iced::window::Id) -> iced::Task<Message> {
+        self.flush_window_size();
+        if self.editor_preferences.restore_session_enabled {
+            self.sync_session_state();
+        }
+        iced::window::close(id)
+    }
+
+    /// The buffer to write for the tab at `idx`, if it has unsaved edits.
+    fn pending_save(&self, idx: usize) -> Option<unsaved::PendingSave> {
+        let tab = self.tabs.get(idx)?;
+        let TabKind::Editor { code_editor, .. } = &tab.kind else {
+            return None;
+        };
+        if !code_editor.is_modified() {
+            return None;
+        }
+        Some(unsaved::PendingSave {
+            tab: idx,
+            path: tab.path.clone(),
+            name: tab.name.clone(),
+            content: code_editor.content(),
+        })
+    }
+
+    /// Points each saved tab at the file it was written to and marks it saved.
+    fn apply_saved_buffers(&mut self, saved: &[unsaved::SavedBuffer]) {
+        for buffer in saved {
+            if apply_saved_buffer(&mut self.tabs, buffer) && buffer.new_path != buffer.old_path {
+                self.recent_files.retain(|p| p != &buffer.new_path);
+                self.recent_files.insert(0, buffer.new_path.clone());
+                self.recent_files.truncate(20);
+            }
+        }
     }
 
     /// Closes the tab at `idx`, releasing its resources and keeping
@@ -1120,10 +1170,58 @@ impl App {
                 },
             ),
             Message::TabClosed(idx) => {
-                let was_active = self.active_tab == Some(idx);
-                self.close_tab(idx, true);
-                if let Some(next) = self.active_tab.filter(|_| was_active) {
-                    return self.update_message(Message::TabSelected(next));
+                if !tab_has_unsaved_edits(self.tabs.get(idx)) {
+                    return self.close_tab_and_select_next(idx);
+                }
+                if self.close_prompt_open {
+                    return iced::Task::none();
+                }
+                self.close_prompt_open = true;
+                let path = self.tabs[idx].path.clone();
+                let names = vec![self.tabs[idx].name.clone()];
+                iced::Task::perform(unsaved::ask(names), move |choice| {
+                    Message::TabCloseChoice(idx, path.clone(), choice)
+                })
+            },
+            Message::TabCloseChoice(idx, path, choice) => {
+                // The tabs may have moved while the prompt was open; only act
+                // on the tab the prompt was about.
+                if self.tabs.get(idx).is_none_or(|tab| tab.path != path) {
+                    self.close_prompt_open = false;
+                    return iced::Task::none();
+                }
+                match choice {
+                    CloseChoice::Cancel => {
+                        self.close_prompt_open = false;
+                        iced::Task::none()
+                    },
+                    CloseChoice::Discard => {
+                        self.close_prompt_open = false;
+                        self.close_tab_and_select_next(idx)
+                    },
+                    CloseChoice::Save => {
+                        let pending: Vec<_> = self.pending_save(idx).into_iter().collect();
+                        iced::Task::perform(unsaved::save_all(pending), move |result| {
+                            Message::TabCloseSaved(idx, path.clone(), result)
+                        })
+                    },
+                }
+            },
+            Message::TabCloseSaved(idx, path, result) => {
+                self.close_prompt_open = false;
+                let saved = match result {
+                    Ok(saved) => saved,
+                    Err(e) => {
+                        eprintln!("{e}");
+                        return iced::Task::none();
+                    },
+                };
+                self.apply_saved_buffers(&saved);
+                let new_path = saved.first().map_or(path, |buffer| buffer.new_path.clone());
+                // Edits typed while the save ran keep the tab open.
+                let still_there = self.tabs.get(idx).is_some_and(|tab| tab.path == new_path);
+                if still_there && !tab_has_unsaved_edits(self.tabs.get(idx)) {
+                    return self.close_tab_and_select_next(idx);
                 }
                 iced::Task::none()
             },
@@ -3099,11 +3197,56 @@ impl App {
                 iced::Task::none()
             },
             Message::WindowCloseRequested(id) => {
-                self.flush_window_size();
-                if self.editor_preferences.restore_session_enabled {
-                    self.sync_session_state();
+                if self.close_prompt_open {
+                    return iced::Task::none();
                 }
-                iced::window::close(id)
+                let names: Vec<String> = self
+                    .tabs
+                    .iter()
+                    .filter(|tab| tab_has_unsaved_edits(Some(tab)))
+                    .map(|tab| tab.name.clone())
+                    .collect();
+                if names.is_empty() {
+                    return self.close_window(id);
+                }
+                self.close_prompt_open = true;
+                iced::Task::perform(unsaved::ask(names), move |choice| {
+                    Message::WindowCloseChoice(id, choice)
+                })
+            },
+            Message::WindowCloseChoice(id, choice) => match choice {
+                CloseChoice::Cancel => {
+                    self.close_prompt_open = false;
+                    iced::Task::none()
+                },
+                CloseChoice::Discard => {
+                    self.close_prompt_open = false;
+                    self.close_window(id)
+                },
+                CloseChoice::Save => {
+                    let pending: Vec<_> =
+                        (0..self.tabs.len()).filter_map(|idx| self.pending_save(idx)).collect();
+                    iced::Task::perform(unsaved::save_all(pending), move |result| {
+                        Message::WindowCloseSaved(id, result)
+                    })
+                },
+            },
+            Message::WindowCloseSaved(id, result) => {
+                self.close_prompt_open = false;
+                match result {
+                    Ok(saved) => {
+                        self.apply_saved_buffers(&saved);
+                        // Edits typed while the save ran get their own prompt.
+                        if self.tabs.iter().any(|tab| tab_has_unsaved_edits(Some(tab))) {
+                            return self.update_message(Message::WindowCloseRequested(id));
+                        }
+                        self.close_window(id)
+                    },
+                    Err(e) => {
+                        eprintln!("{e}");
+                        iced::Task::none()
+                    },
+                }
             },
             Message::NewFile => {
                 let new_path = PathBuf::from("untitled");
@@ -4047,6 +4190,36 @@ fn tab_index_for_path<'a>(
     paths.into_iter().position(|path| path == target)
 }
 
+/// Whether `tab` is an editor whose buffer has unsaved edits.
+fn tab_has_unsaved_edits(tab: Option<&Tab>) -> bool {
+    matches!(tab.map(|t| &t.kind), Some(TabKind::Editor { code_editor, .. }) if code_editor.is_modified())
+}
+
+/// Updates the tab a close-time save wrote: moves it to the new path and
+/// marks it saved when its content still matches what was written.
+///
+/// Does nothing if the tab at `buffer.tab` no longer has `buffer.old_path`,
+/// since the tabs moved while the save ran. Returns `true` if the tab was
+/// found.
+fn apply_saved_buffer(tabs: &mut [Tab], buffer: &unsaved::SavedBuffer) -> bool {
+    let Some(tab) = tabs.get_mut(buffer.tab).filter(|tab| tab.path == buffer.old_path) else {
+        return false;
+    };
+    if buffer.new_path != buffer.old_path {
+        tab.name = buffer.new_path.file_name().unwrap_or_default().to_string_lossy().to_string();
+        tab.path = buffer.new_path.clone();
+    }
+    tab.autosave_in_flight = false;
+    if let TabKind::Editor { code_editor, .. } = &mut tab.kind {
+        if code_editor.content() == buffer.content {
+            code_editor.mark_saved();
+            code_editor.lsp_did_save();
+            tab.autosave_requested_at = None;
+        }
+    }
+    true
+}
+
 /// Marks the first tab at `path` as saved after a manual save wrote
 /// `saved_content` to disk.
 ///
@@ -4193,6 +4366,71 @@ mod tests {
             &mut tabs,
             Path::new("/tmp/missing.txt"),
             "xaaa"
+        ));
+        assert!(tab_is_modified(&tabs[0]));
+    }
+
+    fn saved(tab: usize, old: &str, new: &str, content: &str) -> unsaved::SavedBuffer {
+        unsaved::SavedBuffer {
+            tab,
+            old_path: PathBuf::from(old),
+            new_path: PathBuf::from(new),
+            content: content.to_string(),
+        }
+    }
+
+    #[test]
+    fn test_tab_has_unsaved_edits_only_for_modified_editors() {
+        let mut tabs = [editor_tab("untitled", "")];
+        assert!(!tab_has_unsaved_edits(tabs.first()));
+        assert!(!tab_has_unsaved_edits(None));
+        modify_tab(&mut tabs[0], "x");
+        assert!(tab_has_unsaved_edits(tabs.first()));
+    }
+
+    #[test]
+    fn test_apply_saved_buffer_renames_untitled_tab() {
+        let mut tabs = vec![editor_tab("untitled", ""), editor_tab("untitled", "")];
+        let content = modify_tab(&mut tabs[1], "hello");
+        modify_tab(&mut tabs[0], "other");
+
+        assert!(apply_saved_buffer(
+            &mut tabs,
+            &saved(1, "untitled", "/tmp/hello.txt", &content)
+        ));
+        assert_eq!(tabs[1].path, PathBuf::from("/tmp/hello.txt"));
+        assert_eq!(tabs[1].name, "hello.txt");
+        assert!(!tab_is_modified(&tabs[1]));
+        // The other untitled tab is left alone.
+        assert_eq!(tabs[0].path, PathBuf::from("untitled"));
+        assert!(tab_is_modified(&tabs[0]));
+    }
+
+    #[test]
+    fn test_apply_saved_buffer_keeps_edits_typed_during_save() {
+        let mut tabs = vec![editor_tab("/tmp/a.txt", "a")];
+        let written = modify_tab(&mut tabs[0], "b");
+        modify_tab(&mut tabs[0], "c");
+
+        assert!(apply_saved_buffer(
+            &mut tabs,
+            &saved(0, "/tmp/a.txt", "/tmp/a.txt", &written)
+        ));
+        assert!(tab_is_modified(&tabs[0]));
+    }
+
+    #[test]
+    fn test_apply_saved_buffer_ignores_moved_tabs() {
+        let mut tabs = vec![editor_tab("/tmp/b.txt", "b")];
+        let content = modify_tab(&mut tabs[0], "x");
+
+        assert!(!apply_saved_buffer(
+            &mut tabs,
+            &saved(0, "/tmp/a.txt", "/tmp/a.txt", &content)
+        ));
+        assert!(!apply_saved_buffer(
+            &mut tabs,
+            &saved(3, "/tmp/b.txt", "/tmp/b.txt", &content)
         ));
         assert!(tab_is_modified(&tabs[0]));
     }

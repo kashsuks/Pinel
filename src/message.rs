@@ -7,6 +7,7 @@ use iced_term::Event as TerminalEvent;
 /// Used to send internal flags and data transfer to trigger
 /// Other instances of Message types.
 use crate::features::search::SearchResult;
+use crate::features::unsaved::{CloseChoice, SavedBuffer};
 
 /// The two file lists a background workspace index produces: the search
 /// list (relative display path, absolute path) and the fuzzy finder entries.
@@ -68,6 +69,12 @@ pub enum Message {
 
     TabSelected(usize),
     TabClosed(usize),
+    /// The user answered the unsaved-changes prompt for the tab at this
+    /// index, which had this path when the prompt opened.
+    TabCloseChoice(usize, PathBuf, CloseChoice),
+    /// The tab's edits were written (or the save failed or was cancelled)
+    /// before closing it.
+    TabCloseSaved(usize, PathBuf, Result<Vec<SavedBuffer>, String>),
     ReopenClosedTab,
     CloseActiveTab,
 
@@ -153,6 +160,11 @@ pub enum Message {
     /// The window size save delay ran out. The number says which resize it was for.
     WindowSizeSave(u64),
     WindowCloseRequested(iced::window::Id),
+    /// The user answered the unsaved-changes prompt shown on window close.
+    WindowCloseChoice(iced::window::Id, CloseChoice),
+    /// Every modified tab was written (or a save failed or was cancelled)
+    /// before closing the window.
+    WindowCloseSaved(iced::window::Id, Result<Vec<SavedBuffer>, String>),
 
     NewFile,
     SaveAs,
