@@ -271,6 +271,8 @@ pub enum Message {
     /// Switches which provider's models are shown in the open picker's
     /// right-hand list. Does not commit anything to the session yet.
     ChatPickerProviderSelected(String),
+    /// Refreshes the current provider’s model list.
+    ChatRefreshModels(String),
     ChatModelSearchChanged(String),
     /// Commits a (provider, model) pair to the active session and closes
     /// the picker.
@@ -288,20 +290,24 @@ pub enum Message {
     ChatRenameSubmit,
     ChatRenameCancel,
 
-    /// A model list fetch for a provider (by stable id) finished, either
-    /// from the chat picker or the Providers settings panel.
-    ProviderModelsFetched(String, Result<Vec<String>, String>),
+    /// A chat picker model lookup finished for a provider and request ID.
+    ProviderModelsFetched(String, u64, Result<Vec<String>, String>),
     /// Switches which provider's credential form is shown in the Providers
     /// settings panel.
     ProvidersSelect(String),
     ProvidersApiKeyChanged(String),
     ProvidersToggleKeyVisibility,
-    /// Saves the current form's provider id/key as a credential.
+    /// Edits the server URL field, shown only for locally-hosted providers
+    /// (Ollama, LM Studio, Custom) whose host/port is user-specific.
+    ProvidersBaseUrlChanged(String),
+    /// Saves the current form's provider id/key/base-url as a credential.
     ProvidersSave,
     /// Clears a saved credential for the given provider id.
     ProvidersRemove(String),
-    /// Re-fetches the model list for a provider to confirm its key works.
-    ProvidersTestConnection(String),
+    /// Tests the URL and credentials in the current settings form.
+    ProvidersTestConnection,
+    /// A connection test completed for the given request ID.
+    ProviderConnectionTested(u64, Result<Vec<String>, String>),
     /// Jumps straight to Settings → Providers, e.g. from the chat tab's
     /// "no providers set up" prompt.
     OpenProviderSettings,

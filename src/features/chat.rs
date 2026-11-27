@@ -49,6 +49,9 @@ pub struct ChatSession {
     pub title: String,
     pub provider: String,
     pub model: String,
+    /// Local API base URL the user selected for this conversation.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub local_base_url: Option<String>,
     pub messages: Vec<ChatMessage>,
     pub created_at: u64,
     pub updated_at: u64,
@@ -63,6 +66,7 @@ impl ChatSession {
             title: "New Chat".to_string(),
             provider: provider.into(),
             model: model.into(),
+            local_base_url: None,
             messages: Vec::new(),
             created_at: now,
             updated_at: now,
@@ -94,6 +98,28 @@ fn generate_id() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_chat_session_deserialize_legacy_history_without_endpoint(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let session: ChatSession = serde_json::from_str(
+            r#"{"id":"chat-1","title":"Example","provider":"Ollama","model":"gemma",
+                "messages":[],"created_at":0,"updated_at":0}"#,
+        )?;
+        assert_eq!(session.local_base_url, None);
+        assert_eq!(session.model, "gemma");
+        Ok(())
+    }
+
+    #[test]
+    fn test_chat_session_persists_selected_endpoint() -> Result<(), Box<dyn std::error::Error>> {
+        let mut session = ChatSession::new("Ollama", "gemma");
+        session.local_base_url = Some("http://localhost:11434/v1".into());
+        let stored = serde_json::to_string(&session)?;
+        let restored: ChatSession = serde_json::from_str(&stored)?;
+        assert_eq!(restored, session);
+        Ok(())
+    }
 
     #[test]
     fn new_session_starts_empty_with_default_title() {

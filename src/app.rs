@@ -289,9 +289,12 @@ pub struct App {
 
     provider_credentials: Vec<crate::config::provider_store::ProviderCredential>,
     provider_model_state: HashMap<String, crate::features::ai_client::ModelFetchState>,
+    provider_connection_test: Option<crate::features::ai_client::ModelFetchState>,
+    provider_request_id: u64,
     providers_selected: String,
     providers_key_input: String,
     providers_key_visible: bool,
+    providers_base_url_input: String,
 
     last_cursor_position: iced::Point,
     context_menu: Option<crate::features::file_tree::ContextMenuTarget>,
@@ -519,9 +522,14 @@ impl Default for App {
 
             provider_credentials: crate::config::provider_store::load(),
             provider_model_state: HashMap::new(),
+            provider_connection_test: None,
+            provider_request_id: 0,
             providers_selected: crate::features::chat_providers::PROVIDERS[0].id.to_string(),
             providers_key_input: String::new(),
             providers_key_visible: false,
+            providers_base_url_input: crate::features::chat_providers::PROVIDERS[0]
+                .base_url
+                .to_string(),
 
             last_cursor_position: iced::Point::ORIGIN,
             context_menu: None,
@@ -1004,52 +1012,85 @@ impl App {
         let _ = crate::config::provider_store::save(&self.provider_credentials);
     }
 
-    /// Reloads the Providers settings form's key field from whatever is
-    /// saved for the currently selected provider, so switching into the
-    /// panel always reflects the on-disk state.
-    pub(super) fn refresh_providers_key_input(&mut self) {
-        let selected = self.providers_selected.clone();
-        self.providers_key_input = self.provider_api_key(&selected).unwrap_or_default().to_string();
+    /// Returns the saved local endpoint or the provider's default endpoint.
+    fn provider_base_url(&self, provider: &crate::features::chat_providers::ProviderInfo) -> &str {
+        if provider.requires_api_key {
+            return provider.base_url;
+        }
+        self.provider_credentials
+            .iter()
+            .find(|credential| credential.provider_id == provider.id)
+            .and_then(|credential| credential.base_url.as_deref())
+            .unwrap_or(provider.base_url)
     }
 
-    /// Kicks off (or reuses a cached) model list fetch for the given
-    /// provider name, as shown in the chat model picker. No-ops if the
-    /// provider has no saved key, or a fetch for it is already in flight
-    /// or done.
-    pub(super) fn ensure_models_fetched(&mut self, provider_name: &str) -> iced::Task<Message> {
+    /// Returns the endpoint shown in the settings form, using the default for a blank URL.
+    fn provider_form_base_url(
+        &self,
+        provider: &crate::features::chat_providers::ProviderInfo,
+    ) -> Result<String, String> {
+        let input = self.providers_base_url_input.trim();
+        if provider.requires_api_key || input.is_empty() {
+            return Ok(provider.base_url.to_string());
+        }
+        crate::features::ai_client::normalize_base_url(input)
+    }
+
+    /// Reloads the Providers settings form from the saved configuration.
+    fn refresh_providers_key_input(&mut self) {
+        let selected = &self.providers_selected;
+        self.providers_key_input = self.provider_api_key(selected).unwrap_or_default().to_string();
+        self.providers_base_url_input = crate::features::chat_providers::by_id(selected)
+            .map(|provider| self.provider_base_url(provider).to_string())
+            .unwrap_or_default();
+        self.provider_connection_test = None;
+    }
+
+    fn next_provider_request_id(&mut self) -> u64 {
+        self.provider_request_id = self.provider_request_id.wrapping_add(1);
+        self.provider_request_id
+    }
+
+    /// Fetches models for the picker, reusing a successful or pending lookup.
+    fn ensure_models_fetched(&mut self, provider_name: &str, refresh: bool) -> iced::Task<Message> {
+        use crate::features::ai_client::{list_models, ModelFetchState};
         let Some(provider) = crate::features::chat_providers::by_name(provider_name) else {
             return iced::Task::none();
         };
 
-        if self.provider_model_state.contains_key(provider.id) {
+        if matches!(
+            self.provider_model_state.get(provider.id),
+            Some(ModelFetchState::Loading(_))
+        ) || (!refresh
+            && matches!(
+                self.provider_model_state.get(provider.id),
+                Some(ModelFetchState::Loaded(_))
+            ))
+        {
             return iced::Task::none();
         }
 
-        let Some(api_key) = self.provider_api_key(provider.id) else {
+        let api_key = self.provider_api_key(provider.id).unwrap_or_default().to_string();
+        if provider.requires_api_key && api_key.is_empty() {
             self.provider_model_state.insert(
                 provider.id.to_string(),
-                crate::features::ai_client::ModelFetchState::Error(
-                    "no API key attached".to_string(),
-                ),
+                ModelFetchState::Error("Add an API key in Settings → Providers.".to_string()),
             );
             return iced::Task::none();
-        };
+        }
 
-        let api_key = api_key.to_string();
-        let provider_id = provider.id.to_string();
+        let base_url = self.provider_base_url(provider).to_string();
+        let request_id = self.next_provider_request_id();
         self.provider_model_state.insert(
-            provider_id.clone(),
-            crate::features::ai_client::ModelFetchState::Loading,
+            provider.id.to_string(),
+            ModelFetchState::Loading(request_id),
         );
 
         iced::Task::perform(
-            async move {
-                let provider = crate::features::chat_providers::by_id(&provider_id)
-                    .expect("provider id was resolved just before spawning this task");
-                let result = crate::features::ai_client::list_models(provider, &api_key).await;
-                (provider_id, result)
+            async move { list_models(provider.api, &base_url, &api_key).await },
+            move |result| {
+                Message::ProviderModelsFetched(provider.id.to_string(), request_id, result)
             },
-            |(provider_id, result)| Message::ProviderModelsFetched(provider_id, result),
         )
     }
 

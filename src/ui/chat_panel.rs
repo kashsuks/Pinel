@@ -441,15 +441,14 @@ fn model_picker<'a>(
     let state =
         chat_providers::by_name(browse_provider).and_then(|p| provider_model_state.get(p.id));
 
+    let loading = matches!(state, Some(ModelFetchState::Loading(_)));
     let model_list: Element<'a, Message> = match state {
         None => container(
-            text("No API key attached. Add one in Settings → Providers.")
-                .size(TEXT_XS)
-                .color(theme().text_muted),
+            text("Model list hasn’t been loaded.").size(TEXT_XS).color(theme().text_muted),
         )
         .padding(ROW_PADDING)
         .into(),
-        Some(ModelFetchState::Loading) => {
+        Some(ModelFetchState::Loading(_)) => {
             container(text("Loading models...").size(TEXT_XS).color(theme().text_muted))
                 .padding(ROW_PADDING)
                 .into()
@@ -505,7 +504,12 @@ fn model_picker<'a>(
         .style(rename_input_style)
         .width(Length::Fill);
 
-    let right_column = column![search_box, model_list].spacing(6).width(Length::Fill);
+    let refresh = button(text("Refresh").size(TEXT_XS))
+        .style(tree_button_style)
+        .on_press_maybe((!loading).then(|| Message::ChatRefreshModels(browse_provider.to_string())))
+        .padding(ROW_PADDING);
+    let search_row = row![search_box, refresh].spacing(SPACE_1).align_y(iced::Alignment::Center);
+    let right_column = column![search_row, model_list].spacing(6).width(Length::Fill);
 
     let picker_body = row![column(provider_column).spacing(2), right_column].spacing(SPACE_2);
 
